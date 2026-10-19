@@ -252,10 +252,10 @@ def main() -> int:
                 stale.append(path.relative_to(ROOT))
         if stale:
             for path in stale:
-                print(f"오래된 자산: {path}", file=sys.stderr)
-            print("python tools/make_assets.py로 다시 생성하세요.", file=sys.stderr)
+                print(f"stale asset: {path}", file=sys.stderr)
+            print("run python tools/make_assets.py to regenerate.", file=sys.stderr)
             return 1
-        print(f"자산 {len(files)}개가 최신이다.")
+        print(f"{len(files)} assets are up to date.")
         return 0
 
     for path, data in files.items():
