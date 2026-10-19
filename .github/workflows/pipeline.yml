@@ -1,0 +1,149 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A cancelled merge-queue check reads as a failure and ejects the pull
+  # request from the queue, so those runs always finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' &&
+    !startsWith(github.ref, 'refs/tags/v') &&
+    github.event_name != 'merge_group' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  format:
+    name: Format
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    name: Test
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --all-targets
+
+  build:
+    name: Build
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release
+      - name: Smoke test the diagnostics
+        # The tray app itself needs a desktop session, so only the diagnostics run here.
+        run: |
+          .\target\release\tray-monitor.exe --help
+          .\target\release\tray-monitor.exe --interfaces
+          .\target\release\tray-monitor.exe --dump
+      - name: Check the rendered icons
+        run: |
+          $expected = @(
+            "out/dark_px16_CPU@16x.bmp",
+            "out/dark_px16_MEM@16x.bmp",
+            "out/dark_px16_NET@16x.bmp",
+            "out/light_px16_CPU@16x.bmp",
+            "out/light_px16_MEM@16x.bmp",
+            "out/light_px16_NET@16x.bmp"
+          )
+          foreach ($path in $expected) {
+            if (-not (Test-Path $path)) { throw "missing $path" }
+            if ((Get-Item $path).Length -le 0) { throw "empty $path" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tray-monitor-windows-x64
+          path: target/release/tray-monitor.exe
+
+  quality-gate:
+    name: Quality Gate
+    # The single required check for `main`. Branch protection and the merge
+    # queue both gate on this job, so it has to report on every pull request
+    # and every merge-queue run, including when a job it needs fails.
+    if: always() && (github.event_name == 'pull_request' ||
+      github.event_name == 'merge_group')
+    needs:
+      - format
+      - clippy
+      - test
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every quality job to succeed
+        env:
+          QUALITY_RESULTS: ${{ toJSON(needs) }}
+        run: jq -e 'all(.[]; .result == "success")' <<< "$QUALITY_RESULTS"
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - format
+      - clippy
+      - test
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release
+      - name: Package the archive
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $name = "tray-monitor-$version-windows-x64"
+          $stage = "dist/$name"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item target/release/tray-monitor.exe $stage/
+          Copy-Item README.md LICENSE $stage/
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/$name.zip"
+      - name: Write checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -Filter *.zip | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          } | Set-Content dist/SHA256SUMS -Encoding utf8
+          Get-Content dist/SHA256SUMS
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$env:GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS --generate-notes
