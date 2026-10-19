@@ -112,8 +112,8 @@ pub fn inform(title: &str, text: &str) {
 pub mod dialog {
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT, WPARAM};
     use windows::Win32::Graphics::Gdi::{
-        DeleteObject, GetMonitorInfoW, HBITMAP, HGDIOBJ, HMONITOR, MONITOR_DEFAULTTONEAREST,
-        MONITORINFO, MonitorFromPoint,
+        DeleteObject, GetMonitorInfoW, HBITMAP, HGDIOBJ, HMONITOR, InvalidateRect,
+        MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::Controls::{
@@ -273,6 +273,11 @@ pub mod dialog {
         };
     }
 
+    /// 창을 다시 칠하게 한다. 테마가 바뀌었을 때 쓴다.
+    pub fn invalidate(hwnd: HWND) {
+        let _ = unsafe { InvalidateRect(Some(hwnd), None, true) };
+    }
+
     /// 대화상자를 앞으로 가져온다. 트레이 클릭으로 열면 이미 활성 상태다.
     pub fn bring_to_front(hwnd: HWND) {
         let _ = unsafe { SetForegroundWindow(hwnd) };
@@ -347,6 +352,168 @@ pub mod window {
     /// 프로시저가 처리하지 않은 메시지를 기본 처리로 넘긴다.
     pub fn default_procedure(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
+    }
+}
+
+/// 설정 창과 트레이 메뉴의 다크 모드.
+///
+/// Windows에는 공개 API가 없다. `uxtheme.dll`의 **비공식 ordinal**을 쓴다(실측: Windows 11 26H2
+/// build 26300에 133/135/136이 그대로 있다). 하나라도 없으면 아무것도 하지 않고 라이트로 남는다.
+pub mod dark {
+    use core::ffi::c_void;
+    use std::cell::{Cell, RefCell};
+
+    use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, WPARAM};
+    use windows::Win32::Graphics::Gdi::{
+        CreateSolidBrush, DeleteObject, HBRUSH, HDC, HGDIOBJ, SetBkColor, SetBkMode, SetTextColor,
+        TRANSPARENT,
+    };
+    use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
+    use windows::Win32::UI::Controls::SetWindowTheme;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumChildWindows, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX,
+        WM_CTLCOLORSTATIC,
+    };
+    use windows::core::{BOOL, PCSTR, PCWSTR, w};
+
+    /// `PreferredAppMode`. ForceDark면 앱의 메뉴까지 어두워진다.
+    const FORCE_DARK: i32 = 2;
+    const FORCE_LIGHT: i32 = 3;
+
+    /// COLORREF는 `0x00BBGGRR`이다. 작업 표시줄 배경(32,32,32)과 같은 색을 쓴다.
+    const BACKGROUND: u32 = 0x0020_2020;
+    const TEXT: u32 = 0x00F0_F0F0;
+
+    type SetPreferredAppMode = unsafe extern "system" fn(i32) -> i32;
+    type AllowDarkModeForWindow = unsafe extern "system" fn(HWND, i32) -> i32;
+    type FlushMenuThemes = unsafe extern "system" fn();
+
+    thread_local! {
+        /// 배경 브러시. 하나만 만들어 돌려 쓴다.
+        static BRUSH: RefCell<Option<HBRUSH>> = const { RefCell::new(None) };
+        /// 자식을 훑는 동안 쓸 함수. 열거 콜백은 인자를 하나밖에 못 받는다.
+        static ALLOW: Cell<Option<AllowDarkModeForWindow>> = const { Cell::new(None) };
+    }
+
+    /// uxtheme의 비공식 ordinal을 함수 포인터로 바꾼다. 반환 타입은 부르는 쪽이 정한다.
+    fn uxtheme<T: Copy>(ordinal: usize) -> Option<T> {
+        let module = unsafe { GetModuleHandleW(w!("uxtheme.dll")) }
+            .or_else(|_| unsafe { LoadLibraryW(w!("uxtheme.dll")) })
+            .ok()?;
+        // ordinal은 문자열이 아니라 정수 포인터로 넘긴다(MAKEINTRESOURCE).
+        let address = unsafe { GetProcAddress(module, PCSTR(ordinal as *const u8)) }?;
+        Some(unsafe { std::mem::transmute_copy::<_, T>(&address) })
+    }
+
+    /// 다크 모드에 필요한 함수가 모두 있는가. 진단용.
+    pub fn available() -> bool {
+        uxtheme::<AllowDarkModeForWindow>(133).is_some()
+            && uxtheme::<SetPreferredAppMode>(135).is_some()
+            && uxtheme::<FlushMenuThemes>(136).is_some()
+    }
+
+    /// 앱 전체를 지금 테마에 맞춘다.
+    ///
+    /// 메뉴는 창이 아니라 앱 단위로 칠해지므로 여기서 한 번 정한다(트레이 우클릭 메뉴 포함).
+    pub fn set_app_mode(dark: bool) {
+        let Some(set_mode) = uxtheme::<SetPreferredAppMode>(135) else {
+            return;
+        };
+        unsafe { set_mode(if dark { FORCE_DARK } else { FORCE_LIGHT }) };
+
+        // 이미 떠 있는 메뉴에도 반영한다.
+        if let Some(flush) = uxtheme::<FlushMenuThemes>(136) {
+            unsafe { flush() };
+        }
+    }
+
+    /// 창과 그 자식 컨트롤에 테마를 입힌다.
+    pub fn apply_to_window(hwnd: HWND, dark: bool) {
+        let allow = uxtheme::<AllowDarkModeForWindow>(133);
+        if let Some(allow) = allow {
+            unsafe { allow(hwnd, i32::from(dark)) };
+        }
+        paint_theme(hwnd, dark);
+
+        // 자식 컨트롤은 각자 테마를 갖는다. 하나씩 입혀 준다.
+        ALLOW.with(|slot| slot.set(if dark { allow } else { None }));
+        let _ = unsafe { EnumChildWindows(Some(hwnd), Some(theme_child), LPARAM(0)) };
+        ALLOW.with(|slot| slot.set(None));
+
+        if !dark {
+            forget();
+        }
+    }
+
+    /// 다크 모드를 그만 쓸 때 배경 브러시를 돌려준다.
+    pub fn forget() {
+        BRUSH.with(|cell| {
+            if let Some(brush) = cell.borrow_mut().take() {
+                let _ = unsafe { DeleteObject(HGDIOBJ(brush.0)) };
+            }
+        });
+    }
+
+    /// `WM_CTLCOLOR*` 처리. 다크일 때만 색을 바꾸고 배경 브러시를 돌려준다.
+    ///
+    /// `None`이면 시스템 기본 처리를 따른다.
+    pub fn paint(dark: bool, message: u32, wparam: WPARAM) -> Option<isize> {
+        if !dark || !is_color_message(message) {
+            return None;
+        }
+
+        let device = HDC(wparam.0 as *mut c_void);
+        let brush = brush();
+
+        unsafe {
+            SetTextColor(device, COLORREF(TEXT));
+            SetBkColor(device, COLORREF(BACKGROUND));
+            // 정적 컨트롤과 버튼은 배경을 비워야 대화상자 배경이 비친다.
+            if message == WM_CTLCOLORSTATIC || message == WM_CTLCOLORBTN {
+                SetBkMode(device, TRANSPARENT);
+            }
+        }
+
+        Some(brush.0 as isize)
+    }
+
+    /// 이 메시지가 색을 돌려주는 메시지인가.
+    pub fn is_color_message(message: u32) -> bool {
+        matches!(
+            message,
+            WM_CTLCOLORDLG
+                | WM_CTLCOLORSTATIC
+                | WM_CTLCOLORBTN
+                | WM_CTLCOLOREDIT
+                | WM_CTLCOLORLISTBOX
+        )
+    }
+
+    extern "system" fn theme_child(child: HWND, _: LPARAM) -> BOOL {
+        ALLOW.with(|slot| {
+            if let Some(allow) = slot.get() {
+                unsafe { allow(child, 1) };
+            }
+        });
+        paint_theme(child, true);
+        true.into()
+    }
+
+    fn paint_theme(hwnd: HWND, dark: bool) {
+        let application = if dark {
+            w!("DarkMode_Explorer")
+        } else {
+            PCWSTR::null()
+        };
+        let _ = unsafe { SetWindowTheme(hwnd, application, PCWSTR::null()) };
+    }
+
+    /// 배경 브러시. 없으면 만든다.
+    fn brush() -> HBRUSH {
+        BRUSH.with(|cell| {
+            let mut slot = cell.borrow_mut();
+            *slot.get_or_insert_with(|| unsafe { CreateSolidBrush(COLORREF(BACKGROUND)) })
+        })
     }
 }
 

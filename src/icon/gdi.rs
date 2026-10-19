@@ -286,11 +286,7 @@ mod tests {
         for i in 0..200 {
             let _ = rasterize(&format!("{i}"), 64);
         }
-        let after = gdi_handle_count();
-        assert!(
-            after <= before + 5,
-            "GDI 핸들이 증가했다: before={before} after={after}"
-        );
+        assert_no_handle_growth(before);
     }
 
     #[test]
@@ -312,10 +308,23 @@ mod tests {
             let bitmap = bitmap_from_rgba(2, 2, &rgba).expect("bitmap");
             let _ = unsafe { DeleteObject(HGDIOBJ(bitmap.0)) };
         }
-        let after = gdi_handle_count();
-        assert!(
-            after <= before + 5,
-            "GDI 핸들이 증가했다: before={before} after={after}"
+        assert_no_handle_growth(before);
+    }
+
+    /// GDI 핸들 수가 늘지 않았는지 본다.
+    ///
+    /// 핸들 수는 프로세스 전체 값이라 다른 테스트가 병렬로 글리프를 그리면 잠깐 늘어난다.
+    /// 몇 번 다시 재서 계속 높을 때만 실패로 본다(테스트가 서로를 깨지 않게).
+    fn assert_no_handle_growth(before: u32) {
+        for _ in 0..50 {
+            if gdi_handle_count() <= before + 5 {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!(
+            "GDI 핸들이 증가했다: before={before} after={}",
+            gdi_handle_count()
         );
     }
 

@@ -48,6 +48,7 @@ usage:
   tray-monitor --probe        print metrics every second (no tray)
   tray-monitor --interfaces   list network interfaces and what is counted
   tray-monitor --dump         dump icon renderings and layout measurements
+  tray-monitor --theme        print the taskbar theme and dark mode support
   tray-monitor --help         show this message
 ";
 
@@ -57,8 +58,12 @@ fn main() {
     let wants_settings = has("--settings");
 
     // 진단 명령은 릴리스 빌드에도 콘솔이 없으므로 부모 콘솔에 붙는다.
-    if has("--dump") || has("--probe") || has("--interfaces") || has("--help") {
+    if has("--dump") || has("--probe") || has("--interfaces") || has("--theme") || has("--help") {
         devtools::attach_console();
+    }
+    if has("--theme") {
+        devtools::theme();
+        return;
     }
     if has("--dump") {
         devtools::dump();

@@ -15,6 +15,34 @@ pub fn attach_console() {
     }
 }
 
+/// 트레이가 따르는 테마와 다크 모드 API 지원 여부. 데스크톱이 없어도 된다.
+pub fn theme() {
+    let palette = theme::current();
+    println!(
+        "taskbar theme : {}",
+        if palette.light { "light" } else { "dark" }
+    );
+    println!(
+        "dark mode API : {}",
+        if crate::win32::dark::available() {
+            "available (uxtheme ordinals 133/135/136)"
+        } else {
+            "missing (uxtheme ordinals not found)"
+        }
+    );
+
+    // 실제로 걸어 봐서 예외 없이 지나가는지까지 본다. 프로세스는 곧 끝난다.
+    crate::win32::dark::set_app_mode(!palette.light);
+    println!(
+        "app mode      : {}",
+        if palette.light {
+            "ForceLight"
+        } else {
+            "ForceDark"
+        }
+    );
+}
+
 /// RGBA 비트맵을 BMP로 저장한다. `zoom`은 정수 배율, 배경색 위에 합성한다.
 pub fn write_bmp(path: &str, bitmap: &Bitmap, zoom: i32, background: Color) -> std::io::Result<()> {
     let zoom = zoom.max(1);

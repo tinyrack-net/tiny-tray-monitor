@@ -44,6 +44,8 @@ impl App {
 
         let palette = theme::current();
         let autostart = startup::is_enabled();
+        // 트레이 메뉴도 작업 표시줄 테마를 따른다(메뉴는 창이 아니라 앱 단위로 칠해진다).
+        crate::win32::dark::set_app_mode(!palette.light);
         logging::info(format!(
             "설정 poll={}ms show={:?} color={:?} exclude_virtual={} autostart={autostart}",
             store.config.poll_interval_ms,
@@ -119,6 +121,7 @@ impl App {
                 });
                 self.palette = palette;
                 self.tray.set_style(palette, self.store.config.color_mode);
+                crate::win32::dark::set_app_mode(!palette.light);
             }
         }
 
