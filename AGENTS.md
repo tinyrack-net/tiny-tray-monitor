@@ -36,7 +36,7 @@ Run the validation loop after changes:
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
 | `src/settings/` | The settings window: a pure model, the Win32 dialog and the icon preview |
 | `src/ipc.rs` | Hidden window that hands a second launch over to the running instance |
-| `src/win32.rs` | The remaining `unsafe` helpers |
+| `src/win32.rs` | The remaining `unsafe` helpers, including the unofficial dark-mode calls |
 | `src/devtools.rs` | `--probe`, `--interfaces`, `--dump` |
 | `build.rs` | Compiles `resources/app.rc` so the exe carries `VERSIONINFO` and the manifest |
 | `resources/` | `app.rc` (version info, manifest reference) and `app.manifest` (comctl32 v6, PerMonitorV2, asInvoker) |
@@ -86,6 +86,10 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
 12. **A read-only registry handle cannot delete a value.** `CURRENT_USER.open()` hands back a
     key opened for reading, so `remove_value` fails with `Access is denied`. Use `create()` for
     the removal path too.
+13. **Applying the theme sends theme messages again.** `SetPreferredAppMode` and
+    `SetWindowTheme` re-post `WM_SETTINGCHANGE`/`WM_THEMECHANGED`; handling those messages by
+    re-applying the theme recurses until the stack overflows (`c00000fd` in ntdll, measured on
+    build 26300). `settings/dialog.rs` guards the re-entry with a thread-local flag.
 
 ## Merging
 

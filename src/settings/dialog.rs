@@ -5,11 +5,12 @@
 //!
 //! Win32 호출은 [crate::win32::dialog]에 모아 두었다. 이 모듈은 배치와 규칙만 다룬다.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CBN_SELCHANGE, EN_KILLFOCUS, WM_CLOSE, WM_COMMAND, WM_INITDIALOG,
+    CBN_SELCHANGE, EN_KILLFOCUS, WM_CLOSE, WM_COMMAND, WM_INITDIALOG, WM_SETTINGCHANGE,
+    WM_THEMECHANGED,
 };
 
 use crate::config::{ColorMode, Config};
@@ -57,6 +58,11 @@ pub const SHOW_CONTROLS: [(i32, Metric); 4] = [
 thread_local! {
     /// 미리보기 글리프 캐시. 트레이 캐시를 공유하면 하트비트 로그의 히트율이 흐려진다.
     static PREVIEW: RefCell<Preview> = RefCell::new(Preview::default());
+    /// 테마를 입히는 중인가.
+    ///
+    /// `SetPreferredAppMode`와 `SetWindowTheme`은 다시 테마 메시지를 보낸다. 그 메시지를
+    /// 그대로 처리하면 끝없이 되돌아 스택이 넘친다(실측: build 26300에서 스택 오버플로).
+    static APPLYING: Cell<bool> = const { Cell::new(false) };
 }
 
 /// `Custom…`은 프리셋 뒤에 붙는다.
@@ -75,6 +81,11 @@ pub fn open() {
 }
 
 extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, _lparam: LPARAM) -> isize {
+    // 색을 돌려주는 메시지는 다크 모드일 때만 가로챈다.
+    if win32::dark::is_color_message(message) {
+        return win32::dark::paint(dark(), message, wparam).unwrap_or(0);
+    }
+
     match message {
         WM_INITDIALOG => {
             on_init(hwnd);
@@ -84,17 +95,55 @@ extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, _lparam: 
             on_command(hwnd, wparam);
             1
         }
+        // 작업 표시줄 테마가 바뀌면 창과 미리보기를 다시 맞춘다.
+        WM_THEMECHANGED | WM_SETTINGCHANGE => {
+            apply_theme(hwnd);
+            1
+        }
         WM_CLOSE => {
-            win32::dialog::end(hwnd);
+            finish(hwnd);
             1
         }
         _ => 0,
     }
 }
 
+/// 작업 표시줄이 어두운가.
+fn dark() -> bool {
+    !theme::current().light
+}
+
+/// 창을 닫는다. 다크 모드용 GDI 자원도 함께 돌려준다.
+fn finish(hwnd: HWND) {
+    win32::dark::forget();
+    win32::dialog::end(hwnd);
+}
+
+/// 테마를 맞춘다. 이 과정에서 다시 들어오는 테마 메시지는 무시한다.
+///
+/// `SetPreferredAppMode`와 `SetWindowTheme`이 테마 메시지를 다시 보내므로, 가드가 없으면
+/// 재진입이 끝없이 쌓여 스택이 넘친다.
+fn apply_theme(hwnd: HWND) {
+    if APPLYING.with(|flag| flag.replace(true)) {
+        return;
+    }
+
+    let dark = dark();
+    win32::dark::set_app_mode(dark);
+    win32::dark::apply_to_window(hwnd, dark);
+
+    if let Some(draft) = current() {
+        sync_preview(hwnd, &draft);
+    }
+    win32::dialog::invalidate(hwnd);
+
+    APPLYING.with(|flag| flag.set(false));
+}
+
 fn on_init(hwnd: HWND) {
     win32::dialog::center_on_cursor_monitor(hwnd);
     win32::dialog::bring_to_front(hwnd);
+    apply_theme(hwnd);
 
     for ms in model::INTERVAL_PRESETS {
         win32::dialog::combo_add(hwnd, IDC_INTERVAL, &model::interval_label(ms));
@@ -121,7 +170,7 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
     }
 
     match id {
-        IDC_CLOSE => win32::dialog::end(hwnd),
+        IDC_CLOSE => finish(hwnd),
         IDC_OPEN_CONFIG => tray::open_config_file(),
         IDC_OPEN_LOG => open_log_file(hwnd),
         IDC_RESET => reset(hwnd),

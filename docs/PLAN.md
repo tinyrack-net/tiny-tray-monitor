@@ -576,3 +576,20 @@ pub fn diff(current: &Config, autostart: bool, next: &SettingsDraft) -> Vec<Effe
    (SPIKE.md §11-4). 둘 다 v0.2.0에 있던 것이라 트레이 메뉴 경로도 같이 고쳐졌다.
 4. **`Tray::is_visible`과 `Slot::visible`을 지웠다.** 표시 여부는 `config.show` 하나로
    충분해져 중복 상태가 사라졌다.
+
+### 12.13 G6 ~ G8 진행 결과
+
+| 단계 | 결과 |
+| --- | --- |
+| G6 다크 모드 | `win32::dark`(uxtheme 비공식 ordinal 133/135/136) + `WM_CTLCOLOR*` + `WM_THEMECHANGED`. 트레이 우클릭 메뉴도 함께 어두워진다. 실측은 [SPIKE.md](SPIKE.md) §11-5 |
+| G8 문서·릴리스 | README에 설정 창 절과 `--theme`, AGENTS.md에 구조와 함정 2개 추가, 0.3.0 범프 |
+
+계획과 달라진 점:
+
+1. **다크 모드는 `src/settings/dark.rs`가 아니라 `src/win32.rs`의 `dark` 모듈에 있다.** 전부
+   `unsafe` Win32 호출이라 "`unsafe`는 `gdi.rs`와 `win32.rs`에만" 규칙을 지키려면 그쪽이 맞다.
+2. **`--theme` 진단을 넣고 CI 스모크 테스트에 추가했다.** ordinal이 빌드마다 있는지 확인할 수
+   있고, 다른 Windows 빌드에서 도는 러너에서도 검증된다.
+3. **다크 모드에 스택 오버플로 함정이 있었다.** `SetPreferredAppMode`와 `SetWindowTheme`이
+   테마 메시지를 다시 보내는데, 그 메시지에서 다시 테마를 입히면 재진입이 끝없이 쌓여
+   프로세스가 죽는다(build 26300에서 실측). 재진입 가드를 두어 해결했다(SPIKE.md §11-5).

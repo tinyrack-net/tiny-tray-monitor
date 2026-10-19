@@ -69,6 +69,7 @@ jobs:
         run: |
           .\target\release\tray-monitor.exe --help
           .\target\release\tray-monitor.exe --interfaces
+          .\target\release\tray-monitor.exe --theme
           .\target\release\tray-monitor.exe --dump
       - name: Check the rendered icons
         # 이름을 나열하지 않는다. 지표를 늘리면 dump 파일 이름도 바뀌므로

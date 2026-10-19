@@ -70,6 +70,8 @@ already running.
 There is no OK button: every change applies immediately and is written to `config.toml` at
 once, so the tray icons are the preview. Close the window with the button or `Escape`.
 
+With a dark taskbar the window opens dark, and the tray menu follows the same setting.
+
 ## Configuration
 
 `%APPDATA%\tray-monitor\config.toml` is created on first run.
@@ -101,6 +103,7 @@ Logs are written to `%LOCALAPPDATA%\tray-monitor\log.txt`.
 | `tray-monitor --probe` | Print the metrics every second, without any tray icon |
 | `tray-monitor --interfaces` | List network interfaces and mark which ones are counted |
 | `tray-monitor --dump` | Render the icons and print the layout measurements |
+| `tray-monitor --theme` | Print the taskbar theme and whether the dark mode API is available |
 | `tray-monitor --help` | Usage |
 
 The settings window is also reachable from the tray menu; `--settings` is for scripts and
@@ -140,6 +143,8 @@ also use different colours. Measurements for every candidate are in
 ## Limitations
 
 - The taskbar decides the order of the icons. Drag them to reorder.
+- Dark mode uses the unofficial `uxtheme` ordinals (133/135/136). If a future Windows build
+  drops them, the window stays light; `tray-monitor --theme` says which case you are in.
 - The icons are rendered for the display scaling that was active at startup. Changing the
   scaling keeps the existing bitmaps; the taskbar scales them.
 - Requires Windows 11 or Windows 10 (build 17063 or later for `GetIfTable2`).

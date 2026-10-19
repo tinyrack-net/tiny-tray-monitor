@@ -277,3 +277,25 @@ Win32 대화상자로 만든 설정 창을 띄워 컨트롤을 조작하며 확�
    Windows는 다른 프로세스의 컨트롤 텍스트를 캐시된 값으로 돌려주고, 그 상태에서 보낸 쓰기는
    반영되지 않는다. 검증은 UIA(`set_value`)나 실제 입력으로 해야 한다. 이 함정 때문에 처음에는
    "입력 칸이 동작하지 않는다"고 잘못 판단했다.
+
+### 11-5. 다크 모드 (uxtheme 비공식 API)
+
+| 항목 | 결과 |
+| --- | --- |
+| ordinal 133 `AllowDarkModeForWindow` | 있음 |
+| ordinal 135 `SetPreferredAppMode` | 있음 |
+| ordinal 136 `FlushMenuThemes` | 있음 |
+| 결과 | 창 배경·라벨·체크박스·라디오·입력 칸·버튼이 모두 어두워진다. 미리보기는 작업 표시줄 배경색 위에 합성되므로 대화상자 배경이 같은 색일 때 아이콘만 떠 있는 것처럼 보인다 |
+
+**함정: 테마를 입히면 테마 메시지가 다시 온다.** `SetPreferredAppMode`와 `SetWindowTheme`은
+`WM_SETTINGCHANGE`/`WM_THEMECHANGED`를 다시 보낸다. 그 메시지에서 다시 테마를 입히면 재진입이
+끝없이 쌓여 **스택 오버플로(`c00000fd`, ntdll)로 프로세스가 죽는다**(build 26300에서 실측).
+스레드 지역 플래그로 한 번만 처리하게 했다.
+
+`--theme`로 지금 상태를 볼 수 있다.
+
+```
+taskbar theme : dark
+dark mode API : available (uxtheme ordinals 133/135/136)
+app mode      : ForceDark
+```
