@@ -121,9 +121,9 @@ pub mod dialog {
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, DialogBoxParamW,
-        EndDialog, GetCursorPos, GetDlgItemTextW, GetWindowRect, IMAGE_BITMAP, STM_SETIMAGE,
-        SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SendDlgItemMessageW, SetDlgItemTextW,
-        SetForegroundWindow, SetWindowPos,
+        EndDialog, GetCursorPos, GetDlgItemTextW, GetWindowRect, IMAGE_BITMAP, PostMessageW,
+        STM_SETIMAGE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SendDlgItemMessageW,
+        SetDlgItemTextW, SetForegroundWindow, SetWindowPos,
     };
     use windows::core::PCWSTR;
 
@@ -157,6 +157,12 @@ pub mod dialog {
     /// 대화상자를 닫는다.
     pub fn end(hwnd: HWND) {
         let _ = unsafe { EndDialog(hwnd, 0) };
+    }
+
+    /// 처리되지 않은 메시지를 창 큐에 넣는다. input-synchronous 핸들러에서
+    /// WinRT 호출을 피할 때 쓴다.
+    pub fn post(hwnd: HWND, message: u32) {
+        let _ = unsafe { PostMessageW(Some(hwnd), message, WPARAM(0), LPARAM(0)) };
     }
 
     /// 체크박스·라디오의 체크 상태를 바꾼다.

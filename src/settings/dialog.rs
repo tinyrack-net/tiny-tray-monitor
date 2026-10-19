@@ -65,6 +65,9 @@ thread_local! {
     static APPLYING: Cell<bool> = const { Cell::new(false) };
 }
 
+/// 자동 시작 토글을 미룰 때 쓰는 창 메시지. `WM_APP` 영역.
+const WM_APP_AUTOSTART: u32 = 0x8000 + 2;
+
 /// `Custom…`은 프리셋 뒤에 붙는다.
 fn custom_index() -> i32 {
     model::INTERVAL_PRESETS.len() as i32
@@ -93,6 +96,13 @@ extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, _lparam: 
         }
         WM_COMMAND => {
             on_command(hwnd, wparam);
+            1
+        }
+        WM_APP_AUTOSTART => {
+            commit(hwnd, |draft| {
+                draft.autostart = !draft.autostart;
+                Ok(())
+            });
             1
         }
         // 작업 표시줄 테마가 바뀌면 창과 미리보기를 다시 맞춘다.
@@ -188,10 +198,12 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
             draft.count_virtual = !draft.count_virtual;
             Ok(())
         }),
-        IDC_AUTOSTART => commit(hwnd, |draft| {
-            draft.autostart = !draft.autostart;
-            Ok(())
-        }),
+        IDC_AUTOSTART => {
+            // WM_COMMAND은 input-synchronous 호출이다. 여기서 StartupTask의
+            // RequestEnableAsync를 부르면 RPC_E_CANTCALLOUT_ININPUTSYNCCALL로
+            // 실패하므로(실측), 같은 스레드의 다음 메시지로 미룬다.
+            win32::dialog::post(hwnd, WM_APP_AUTOSTART);
+        }
         _ => {}
     }
 }

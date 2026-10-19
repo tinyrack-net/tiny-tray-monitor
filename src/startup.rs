@@ -34,7 +34,8 @@ fn command_line() -> Option<String> {
 /// 현재 실행 파일로 자동 실행이 등록되어 있는지.
 pub fn is_enabled() -> bool {
     if platform::packaged() {
-        return task_state()
+        return get_task()
+            .and_then(|task| task.State().map_err(|e| e.to_string()))
             .map(|state| enabled_state(state.0))
             .unwrap_or(false);
     }
@@ -81,11 +82,6 @@ fn set_named(name: &str, enabled: bool) -> Result<(), String> {
 /// `StartupTaskState`의 값. `EnabledByPolicy`도 켜진 상태로 본다.
 fn enabled_state(state: i32) -> bool {
     matches!(state, 2 | 4)
-}
-
-fn task_state() -> Result<windows::ApplicationModel::StartupTaskState, String> {
-    let task = get_task()?;
-    task.State().map_err(|e| e.to_string())
 }
 
 fn get_task() -> Result<StartupTask, String> {
