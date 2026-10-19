@@ -120,8 +120,10 @@ jobs:
 
           $exe = Join-Path $dir 'tray-monitor.exe'
           if (-not (Test-Path $exe)) { throw 'installed executable missing' }
-          & $exe --help
-          if ($LASTEXITCODE -ne 0) { throw "installed executable exited with $LASTEXITCODE" }
+          # GUI subsystem exe does not set $LASTEXITCODE. Start-Process waits and
+          # gives the real exit code.
+          $run = Start-Process -FilePath $exe -ArgumentList '--help' -Wait -PassThru
+          if ($run.ExitCode -ne 0) { throw "installed executable exited with $($run.ExitCode)" }
 
           $uninstall = Start-Process -FilePath (Join-Path $dir 'unins000.exe') `
             -ArgumentList '/VERYSILENT' -Wait -PassThru
