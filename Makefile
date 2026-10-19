@@ -3,7 +3,7 @@
 # make validate : 커밋 전 필수 검사 (CI 의 Quality Gate 와 같은 검사)
 # make dump     : 아이콘 렌더 결과를 덤프하고 비교 시트를 만든다
 
-.PHONY: validate fmt clippy test run build install probe interfaces dump clean
+.PHONY: validate fmt clippy test run build install probe interfaces dump assets installer msix package clean
 
 validate: fmt clippy test
 
@@ -34,6 +34,19 @@ dump:
 	python tools/icon_sheet.py out/sheet-dark.bmp 16 dark_px16 dark_px24 dark_px32
 	python tools/icon_sheet.py out/sheet-light.bmp 16 light_px16 light_px24 light_px32
 
+# 아이콘/타일 자산을 다시 만든다. 결과는 커밋한다.
+assets:
+	python tools/make_assets.py
+
+# installer와 MSIX는 미리 빌드된 exe에서 버전을 읽는다.
+installer: build
+	pwsh -NoProfile -File packaging/windows/build-installer.ps1 -Exe target/release/tray-monitor.exe -OutputDir dist
+
+msix: build
+	pwsh -NoProfile -File packaging/windows/build-msix.ps1 -Exe target/release/tray-monitor.exe -OutputDir dist
+
+package: installer msix
+
 clean:
 	cargo clean
-	rm -rf out shots
+	rm -rf out shots dist

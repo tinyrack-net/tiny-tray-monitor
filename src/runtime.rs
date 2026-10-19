@@ -46,6 +46,11 @@ pub fn request_settings() {
     with(|app| app.request_settings());
 }
 
+/// 종료를 요청한다. installer가 업그레이드 전에 IPC 창으로 보낸다.
+pub fn request_exit() {
+    with(|app| app.request_exit());
+}
+
 /// 요청이 있으면 가져가고 지운다.
 pub fn take_settings_request() -> bool {
     with(|app| app.take_settings_request()).unwrap_or(false)

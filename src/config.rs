@@ -147,13 +147,9 @@ pub struct State {
     pub last_version: String,
 }
 
-/// `%APPDATA%\tray-monitor`
+/// `%APPDATA%\tray-monitor` (패키지에서는 `LocalState`)
 pub fn config_dir() -> PathBuf {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
-        .unwrap_or_else(std::env::temp_dir);
-    base.join("tray-monitor")
+    crate::platform::config_dir()
 }
 
 /// 설정과 상태를 함께 들고 있는다.
@@ -166,6 +162,8 @@ pub struct Store {
 
 impl Store {
     pub fn load() -> Self {
+        // 패키지 첫 실행이면 이전 설치의 설정을 LocalState로 옮긴다.
+        crate::platform::migrate_legacy_data();
         Self::load_from(config_dir())
     }
 

@@ -152,9 +152,10 @@ tray-monitor/
 
 ### M7. 릴리스 파이프라인 (1일)
 
-- 태그 `v*.*.*` → 빌드 → 포터블 zip + `SHA256SUMS` → `gh release create --generate-notes`
+- 태그 `v*.*.*` → 빌드 → 포터블 zip + Inno Setup installer + MSIX + `SHA256SUMS` → `gh release create --generate-notes`
+- 세부 설계와 실측은 [PACKAGING.md](PACKAGING.md)
 - winget / scoop 매니페스트는 후속 (조직에 `setup_winget` 롤이 있다)
-- **완료 조건**: `v0.1.0` 태그로 릴리스가 자동 생성되고 산출물이 실행된다
+- **완료 조건**: 태그로 릴리스가 자동 생성되고 세 산출물이 모두 실행된다
 
 ### M8. 문서 (0.5일)
 
@@ -282,7 +283,7 @@ M1~M3 사이에 실험으로 닫아야 한다. 설계를 바꿀 수 있는 것�
 
 ### 남은 일
 
-- 설치 프로그램(MSIX 또는 zip 포터블 유지)과 winget/scoop 매니페스트
+- 설치 프로그램과 MSIX는 v0.4.0에서 추가했다([PACKAGING.md](PACKAGING.md)). winget/scoop 매니페스트는 남아 있다.
 - 자동 업데이트: 릴리스 확인 후 알림, 필요하면 제자리 교체
 - CPU 온도: 관리자 헬퍼 + IPC로 분리해 옵션으로
 - 배율 변경 시 아이콘 재렌더 (승격 설정을 유지한 채 크기만 바꾸는 경로 필요)
@@ -511,15 +512,17 @@ pub fn diff(current: &Config, autostart: bool, next: &SettingsDraft) -> Vec<Effe
 - 아이콘 순서 변경(셸이 관리한다)
 - 모델리스 창(항상 떠 있는 창)
 - 설정 파일 외부 편집 감지·실시간 리로드
-- 다국어 UI, 설치 프로그램(MSIX)
+- 다국어 UI
+
+설치 프로그램(MSIX)은 v0.4.0에서 범위에 들어왔고 [PACKAGING.md](PACKAGING.md)에서 다룬다.
 
 ### 12.10 열려 있는 결정
 
 1. **폴링 주기 입력 방식** — 프리셋 콤보(250/500/1000/2000/5000/10000) + `Custom…`일 때 edit·스피너를
    권한다. G3에서 확정
 2. **`Open config file`을 트레이 메뉴에 남길지** — 권장: 유지(파워유저 경로) + 창에도 버튼
-3. **exe 아이콘 디자인** — 기존 렌더러로 만드는 안과 별도 디자인의 두 후보. G8까지 미룰 수 있고,
-   그전까지 `ICON` 리소스만 비워 둔다
+3. **exe 아이콘 디자인** — G8까지 미룰 수 있고, 그전까지 `ICON` 리소스만 비워 둔다. v0.4.0에서
+   임시 마크를 넣었고 디자인은 후속에서 교체한다(`tools/make_assets.py`).
 4. **설정 파일 저장 원자화** — `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`를 쓰려면
    `Win32_Storage_FileSystem` 기능이 하나 더 필요하다. G2에서 비용 보고 결정
 
@@ -593,3 +596,20 @@ pub fn diff(current: &Config, autostart: bool, next: &SettingsDraft) -> Vec<Effe
 3. **다크 모드에 스택 오버플로 함정이 있었다.** `SetPreferredAppMode`와 `SetWindowTheme`이
    테마 메시지를 다시 보내는데, 그 메시지에서 다시 테마를 입히면 재진입이 끝없이 쌓여
    프로세스가 죽는다(build 26300에서 실측). 재진입 가드를 두어 해결했다(SPIKE.md §11-5).
+
+---
+
+## 13. 패키징 (v0.4.0)
+
+- **Installer:** Inno Setup 6, 사용자 단위 설치(`%LOCALAPPDATA%\Programs\tray-monitor`),
+  `/ALLUSERS`로 per-machine 전환. 업그레이드 전에 IPC 창에 `WM_CLOSE`를 보내 실행 중인 앱을
+  정상 종료시킨다.
+- **MSIX:** full-trust(`runFullTrust`), `uap5:startupTask`, 자산은 `resources/msix/`.
+  서명은 아직 없다. Store identity는 `Tinyrack.TrayMonitor` / `CN=Tinyrack` 기본값을 환경
+  변수로 덮어쓴다.
+- **CI:** `package` 잡이 installer 무인 설치·제거와 `makeappx` 왕복을 검증하고, Quality Gate가
+  이를 요구한다. 릴리스는 zip + setup.exe + msix + `SHA256SUMS`를 올린다.
+- **런타임:** 패키지에서는 설정/로그를 `LocalState`에 쓰고(`src/platform.rs`) 자동 시작을
+  `StartupTask`로 처리한다. 승격 경로는 `\WindowsApps\` 뒤만 비교한다.
+
+실측 근거, 위험, 검증 절차는 [PACKAGING.md](PACKAGING.md)에 있다.

@@ -1,12 +1,25 @@
 //! Windows 시작 시 자동 실행 등록.
 //!
-//! `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`에 값을 넣는다.
-//! exe 경로가 바뀌면 값을 갱신해야 하므로, "등록되어 있는가"는 현재 경로와 비교해 판단한다.
+//! 비패키지 빌드는 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`에 값을 넣는다.
+//! MSIX 패키지 빌드에서는 레지스트리 쓰기가 가상화되어 실제 `Run` 키에 남지 않으므로
+//! `StartupTask` API를 쓴다(실측은 docs/PACKAGING.md).
 
+use std::time::{Duration, Instant};
+
+use windows::ApplicationModel::StartupTask;
+use windows::core::{HSTRING, Interface, RuntimeType};
+use windows_future::{AsyncStatus, IAsyncInfo, IAsyncOperation};
 use windows_registry::CURRENT_USER;
+
+use crate::platform;
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const VALUE_NAME: &str = "tray-monitor";
+
+/// AppxManifest.xml의 `uap5:StartupTask TaskId`와 같아야 한다.
+const TASK_ID: &str = "TrayMonitorStartup";
+/// 비동기 작업을 기다리는 최대 시간. 넘으면 실패로 보고 UI를 막지 않는다.
+const TASK_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// 경로에 공백이 있으면 인용해야 한다.
 pub fn quote_command(path: &str) -> String {
@@ -20,11 +33,20 @@ fn command_line() -> Option<String> {
 
 /// 현재 실행 파일로 자동 실행이 등록되어 있는지.
 pub fn is_enabled() -> bool {
+    if platform::packaged() {
+        return get_task()
+            .and_then(|task| task.State().map_err(|e| e.to_string()))
+            .map(|state| enabled_state(state.0))
+            .unwrap_or(false);
+    }
     is_enabled_named(VALUE_NAME)
 }
 
 /// 자동 실행 등록/해제.
 pub fn set(enabled: bool) -> Result<(), String> {
+    if platform::packaged() {
+        return set_task(enabled);
+    }
     set_named(VALUE_NAME, enabled)
 }
 
@@ -57,6 +79,65 @@ fn set_named(name: &str, enabled: bool) -> Result<(), String> {
     key.remove_value(name).map_err(|e| e.to_string())
 }
 
+/// `StartupTaskState`의 값. `EnabledByPolicy`도 켜진 상태로 본다.
+fn enabled_state(state: i32) -> bool {
+    matches!(state, 2 | 4)
+}
+
+fn get_task() -> Result<StartupTask, String> {
+    let operation = StartupTask::GetAsync(&HSTRING::from(TASK_ID))
+        .map_err(|e| format!("자동 시작 작업을 열 수 없다: {e}"))?;
+    wait(&operation)
+}
+
+fn set_task(enabled: bool) -> Result<(), String> {
+    let task = get_task()?;
+    if !enabled {
+        return task.Disable().map_err(|e| e.to_string());
+    }
+
+    let operation = task.RequestEnableAsync().map_err(|e| e.to_string())?;
+    let state = wait(&operation)?;
+    if enabled_state(state.0) {
+        return Ok(());
+    }
+
+    Err(match state.0 {
+        1 => "Windows Settings has disabled startup for tray-monitor. \
+              Turn it on in Settings > Apps > Startup."
+            .to_string(),
+        3 => "Startup is disabled by policy.".to_string(),
+        _ => "Windows did not enable startup.".to_string(),
+    })
+}
+
+/// `IAsyncOperation`을 폴링해 결과를 기다린다.
+///
+/// `windows-future`의 `Async::join`은 공개 API가 아니고 `get()`도 없어서,
+/// `IAsyncInfo::Status()`를 직접 확인한다(SPIKE §11).
+fn wait<T: RuntimeType + 'static>(operation: &IAsyncOperation<T>) -> Result<T, String> {
+    let info: IAsyncInfo = operation.cast().map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + TASK_TIMEOUT;
+
+    loop {
+        let status = info.Status().map_err(|e| e.to_string())?;
+        match status {
+            AsyncStatus::Completed => return operation.GetResults().map_err(|e| e.to_string()),
+            AsyncStatus::Canceled => return Err("자동 시작 요청이 취소되었다".to_string()),
+            AsyncStatus::Error => {
+                let code = info.ErrorCode().map(|code| code.0).unwrap_or(0);
+                return Err(format!("자동 시작 요청이 실패했다 (0x{code:08X})"));
+            }
+            _ => {}
+        }
+
+        if Instant::now() >= deadline {
+            return Err("자동 시작 요청이 시간 안에 끝나지 않았다".to_string());
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,6 +154,16 @@ mod tests {
     #[test]
     fn is_enabled_is_readable() {
         let _ = is_enabled();
+    }
+
+    /// 정책으로 켜진 상태도 켜짐이다.
+    #[test]
+    fn startup_state_mapping() {
+        assert!(!enabled_state(0), "Disabled");
+        assert!(!enabled_state(1), "DisabledByUser");
+        assert!(enabled_state(2), "Enabled");
+        assert!(!enabled_state(3), "DisabledByPolicy");
+        assert!(enabled_state(4), "EnabledByPolicy");
     }
 
     /// 시험용 이름으로 넣었다 뺄 수 있어야 한다.

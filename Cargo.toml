@@ -1,6 +1,6 @@
 [package]
 name = "tray-monitor"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 description = "CPU, memory and network readouts in the Windows system tray"
@@ -12,6 +12,7 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 tray-icon = "0.26"
+windows-future = "0.3"
 windows-registry = "0.100"
 
 [build-dependencies]
@@ -21,12 +22,14 @@ embed-resource = "3"
 [dependencies.windows]
 version = "0.62"
 features = [
+    "ApplicationModel",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",
     "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_Storage_Packaging_Appx",
     "Win32_System_Console",
     "Win32_System_LibraryLoader",
     "Win32_System_SystemInformation",
@@ -43,3 +46,8 @@ codegen-units = 1
 opt-level = "z"
 panic = "abort"
 strip = true
+
+# CI는 RUSTFLAGS로 경고를 막지 않는다. RUSTFLAGS는 .cargo/config.toml의
+# rustflags(정적 CRT)를 덮어쓰기 때문이다.
+[lints.rust]
+warnings = "deny"

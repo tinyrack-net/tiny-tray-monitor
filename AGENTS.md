@@ -4,9 +4,11 @@
 
 **tray-monitor** shows CPU, memory and network readouts in the Windows system tray.
 
-- **Main technologies:** Rust (edition 2024), `windows`, `tray-icon`, `windows-registry`,
-  `serde` + `toml`. All dependencies come from crates.io; there are no git dependencies.
-- **Architecture:** a single binary crate rooted at the repository (`src`, `tools`, `docs`).
+- **Main technologies:** Rust (edition 2024), `windows`, `windows-future`, `tray-icon`,
+  `windows-registry`, `serde` + `toml`. All dependencies come from crates.io; there are no git
+  dependencies.
+- **Architecture:** a single binary crate rooted at the repository (`src`, `resources`,
+  `packaging`, `tools`, `docs`).
   There is no workspace and no library target: the modules under `src` are wired together by
   `main.rs` and exercised by `#[cfg(test)]` modules in place.
 - **Platform:** Windows only. Metrics come from Win32 APIs and icons are rendered with GDI.
@@ -20,6 +22,10 @@ Run the validation loop after changes:
 - **Icon or layout changes:** `make dump` regenerates icon renderings and prints the measured
   glyph heights; `tools/icon_sheet.py` joins them into a comparison sheet. Judge the sheet
   before and after the change, at every icon size and on both taskbar backgrounds.
+- **Icon assets:** after editing `tools/make_assets.py`, run it and commit the results;
+  `python tools/make_assets.py --check` is part of the package job.
+- **Packaging changes:** `make package` and then run the installer and MSIX checks in
+  [docs/PACKAGING.md](docs/PACKAGING.md) §5. CI builds both on every pull request.
 
 ## Project Structure
 
@@ -33,15 +39,17 @@ Run the validation loop after changes:
 | `src/icon/` | GDI rasteriser, downsampling, layout policy and the glyph cache |
 | `src/tray/` | Tray slots, the context menu and the first-run onboarding |
 | `src/config.rs` | `config.toml` / `state.toml` |
+| `src/platform.rs` | Package detection and the config/data locations (`LocalState` for MSIX) |
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
 | `src/settings/` | The settings window: a pure model, the Win32 dialog and the icon preview |
 | `src/ipc.rs` | Hidden window that hands a second launch over to the running instance |
 | `src/win32.rs` | The remaining `unsafe` helpers, including the unofficial dark-mode calls |
 | `src/devtools.rs` | `--probe`, `--interfaces`, `--dump` |
-| `build.rs` | Compiles `resources/app.rc` so the exe carries `VERSIONINFO` and the manifest |
-| `resources/` | `app.rc` (version info, manifest reference) and `app.manifest` (comctl32 v6, PerMonitorV2, asInvoker) |
-| `docs/` | [PLAN.md](docs/PLAN.md), [SPIKE.md](docs/SPIKE.md) |
-| `tools/` | Python helpers for icon sheets, screenshots, tray keys |
+| `build.rs` | Compiles `resources/app.rc` so the exe carries `VERSIONINFO`, the manifest and the icon |
+| `resources/` | `app.rc`, `app.manifest`, `app.ico`, and the MSIX tiles under `msix/` |
+| `packaging/windows/` | Inno Setup script, MSIX manifest template and the PowerShell build scripts |
+| `docs/` | [PLAN.md](docs/PLAN.md), [SPIKE.md](docs/SPIKE.md), [PACKAGING.md](docs/PACKAGING.md) |
+| `tools/` | Python helpers for icon sheets, screenshots, tray keys and `make_assets.py` |
 
 ## Windows Details That Will Bite
 
@@ -90,6 +98,25 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     `SetWindowTheme` re-post `WM_SETTINGCHANGE`/`WM_THEMECHANGED`; handling those messages by
     re-applying the theme recurses until the stack overflows (`c00000fd` in ntdll, measured on
     build 26300). `settings/dialog.rs` guards the re-entry with a thread-local flag.
+14. **A package cannot write the Run key.** MSIX registry writes land in a virtual hive, so the
+    `Run at sign-in` entry never reaches the real `HKCU`. `startup.rs` uses
+    `StartupTask::RequestEnableAsync` when `platform::packaged()` is true.
+15. **A package must not rely on `%APPDATA%`.** New folders are redirected to
+    `LocalCache\Roaming`, while existing ones are not, so the location depends on install
+    history. `platform.rs` writes config/state/log to `LocalState` and copies an existing
+    `%APPDATA%\tray-monitor` config on the first packaged run.
+16. **Do not call `StartupTask` from an input-synchronous handler.** Calling
+    `RequestEnableAsync` inside `WM_COMMAND` fails with `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`.
+    The settings dialog posts `WM_APP_AUTOSTART` to itself and commits in that message instead.
+17. **A package update changes the executable path.** `NotifyIconSettings` keys are per path, so
+    the promotion is lost after every version update. `onboard.rs` detects this and prompts
+    again; compare paths after `\WindowsApps\` because packaged paths start with a known-folder
+    GUID.
+18. **A quit request must close modal dialogs first.** The installer posts `WM_CLOSE` to the IPC
+    window, but the settings dialog or the onboarding `MB_YESNO` box keeps the main loop in a
+    nested loop. `win32::window::close_dialogs` posts `WM_CLOSE` to every `#32770` window in the
+    process, and `run_onboarding`/`settings::open` skip showing a new dialog when an exit is
+    already pending.
 
 ## Merging
 
@@ -113,9 +140,11 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   git push origin v0.1.0
   ```
 
-- The `release` job in `.github/workflows/pipeline.yml` builds the Windows binary, packages a zip
-  with `README.md` and `LICENSE`, writes `SHA256SUMS` and publishes a GitHub release with
-  generated notes.
+- The `release` job downloads the artifacts from the `package` job, checks that the tag matches
+  the binary's `VERSIONINFO`, and publishes `tray-monitor-<version>-windows-x64.zip`,
+  `...-setup.exe`, `...msix` and `SHA256SUMS` (LF).
+- The installer and MSIX defaults are documented in [docs/PACKAGING.md](docs/PACKAGING.md).
+  Store identity and signing are not configured yet; the MSIX is unsigned.
 - Assume the archive is extracted in place: an update must not change the path of
   `tray-monitor.exe`, or every user loses their tray setting.
 
@@ -129,3 +158,5 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
 - The tray itself has no automated test. Use `make run`, then check the readouts, the context
   menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. The log records a heartbeat every 60 updates
   with the current values and the glyph cache hit rate.
+- The installer and MSIX need a desktop session for their end-to-end checks; CI covers the
+  silent install/uninstall and the `makeappx` round trip.

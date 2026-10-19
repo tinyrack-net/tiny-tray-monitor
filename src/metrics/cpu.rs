@@ -112,7 +112,13 @@ mod tests {
 
     #[test]
     fn meter_needs_two_samples() {
-        let mut meter = CpuMeter::new();
+        // new()는 첫 샘플을 이미 읽는다. 테스트가 두 번 읽는 사이에 틱이 지나가면
+        // 델타가 생겨 실패할 수 있으므로, 이전 샘플이 없는 상태를 직접 만든다.
+        let mut meter = CpuMeter { prev: None };
         assert!(meter.sample().is_none(), "첫 샘플은 델타가 없다");
+        // GetSystemTimes는 스케줄러 틱마다 갱신된다. 두 호출이 같은 틱에 들어가면
+        // 델타가 0이라 두 번째도 None이므로, 한 틱 이상 기다린다.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(meter.sample().is_some(), "두 번째 샘플은 델타가 있다");
     }
 }

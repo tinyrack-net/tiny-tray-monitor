@@ -93,6 +93,11 @@ impl App {
         self.exiting
     }
 
+    /// 종료 요청. installer가 업그레이드 전에 보내거나 메뉴의 Quit이 쓴다.
+    pub fn request_exit(&mut self) {
+        self.exiting = true;
+    }
+
     /// 샘플링 주기마다 호출된다.
     pub fn tick(&mut self) {
         let now = Instant::now();
@@ -350,9 +355,13 @@ impl App {
     }
 
     fn run_onboarding(&mut self) {
-        let promotion = onboard::promotion_state();
-        if promotion != onboard::Promotion::All {
-            onboard::show_onboarding(promotion);
+        // 종료 요청이 먼저 왔으면 모달 안내를 띄우지 않는다. installer가 이 창을
+        // 닫지 못하면 업그레이드가 5초 뒤 실패한다.
+        if !self.exiting {
+            let promotion = onboard::promotion_state();
+            if promotion != onboard::Promotion::All {
+                onboard::show_onboarding(promotion);
+            }
         }
         self.store.state.onboarding_shown = true;
         self.store.state.last_version = env!("CARGO_PKG_VERSION").to_string();

@@ -13,5 +13,9 @@ pub mod preview;
 /// 재진입하는데 대여 중이면 그 틱이 전부 버려져 트레이가 멈춘다. 그래서 메뉴와 IPC는
 /// 요청 플래그만 세우고 메시지 루프가 대여 밖에서 이 함수를 부른다.
 pub fn open() {
+    // IPC의 WM_CLOSE가 먼저 도착했으면 모달 창을 새로 띄우지 않는다.
+    if crate::runtime::should_exit() {
+        return;
+    }
     dialog::open();
 }
