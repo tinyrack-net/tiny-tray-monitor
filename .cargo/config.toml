@@ -1,0 +1,7 @@
+# CI(RUSTFLAGS)와 무관하게 로컬 빌드도 정적 CRT를 쓴다.
+#
+# MSIX와 installer가 VC++ 재배포 패키지를 요구하지 않게 하고, Windows 10/11
+# 기본 설치 상태에서 바로 실행되도록 한다. Rust의 기본 동적 CRT는
+# VCRUNTIME140.dll을 요구하며, 이 DLL이 없는 PC에서는 실행되지 않는다.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

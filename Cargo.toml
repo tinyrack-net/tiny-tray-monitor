@@ -43,3 +43,8 @@ codegen-units = 1
 opt-level = "z"
 panic = "abort"
 strip = true
+
+# CI는 RUSTFLAGS로 경고를 막지 않는다. RUSTFLAGS는 .cargo/config.toml의
+# rustflags(정적 CRT)를 덮어쓰기 때문이다.
+[lints.rust]
+warnings = "deny"
