@@ -132,8 +132,8 @@ jobs:
           $name = "tray-monitor-$version-windows-x64"
           $stage = "dist/$name"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item target/release/tray-monitor.exe $stage/
-          Copy-Item README.md LICENSE $stage/
+          Copy-Item -Path target/release/tray-monitor.exe -Destination $stage
+          Copy-Item -Path README.md, LICENSE -Destination $stage
           Compress-Archive -Path "$stage/*" -DestinationPath "dist/$name.zip"
       - name: Write checksums
         shell: pwsh
@@ -144,6 +144,11 @@ jobs:
           } | Set-Content dist/SHA256SUMS -Encoding utf8
           Get-Content dist/SHA256SUMS
       - name: Publish the GitHub release
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$env:GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS --generate-notes
+        run: |
+          # 네이티브 명령은 PowerShell이 와일드카드를 펼쳐 주지 않으므로 경로를 직접 만든다.
+          $assets = @(Get-ChildItem dist -Filter *.zip | Select-Object -ExpandProperty FullName)
+          $assets += (Resolve-Path dist/SHA256SUMS).Path
+          gh release create $env:GITHUB_REF_NAME @assets --generate-notes
