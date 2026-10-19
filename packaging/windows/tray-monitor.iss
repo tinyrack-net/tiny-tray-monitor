@@ -79,6 +79,7 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; F
 [Code]
 const
   WM_CLOSE = $0010;
+  WM_COMMAND = $0111;
   IPC_CLASS = 'tray-monitor-ipc';
   SETTINGS_CAPTION = 'tray-monitor settings';
 
@@ -101,10 +102,14 @@ begin
   if Hwnd <> 0 then
     PostMessageW(Hwnd, WM_CLOSE, 0, 0);
 
-  { 이전 버전은 첫 실행 안내/오류를 같은 제목의 메시지 상자로 띄운다. }
+  { 이전 버전은 첫 실행 안내/오류를 같은 제목의 메시지 상자로 띄운다.
+    MB_YESNO 안내는 WM_CLOSE를 무시하므로 IDNO(7)를 먼저 보낸다. }
   Hwnd := FindWindowW('#32770', '{#AppName}');
   if Hwnd <> 0 then
+  begin
+    PostMessageW(Hwnd, WM_COMMAND, 7, 0);
     PostMessageW(Hwnd, WM_CLOSE, 0, 0);
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
