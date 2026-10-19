@@ -135,10 +135,13 @@ jobs:
       - name: Write checksums
         shell: pwsh
         run: |
-          Get-ChildItem dist -Filter *.zip | ForEach-Object {
+          $lines = Get-ChildItem dist -Filter *.zip | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)"
-          } | Set-Content dist/SHA256SUMS -Encoding utf8
+          }
+          # LF로만 쓴다. CRLF로 쓰면 Linux/macOS의 sha256sum이 CR을 파일 이름의 일부로 보고
+          # `FAILED open or read`로 떨어진다(실측: v0.3.0 배포본).
+          [IO.File]::WriteAllText("$PWD/dist/SHA256SUMS", ($lines -join "`n") + "`n")
           Get-Content dist/SHA256SUMS
       - name: Publish the GitHub release
         shell: pwsh
