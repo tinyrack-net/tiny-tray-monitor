@@ -154,3 +154,79 @@ BMP를 읽는 도구들은 BMP가 bottom-up이라는 점을 반영해 행 순서
 | 아이콘 1개 + 플라이아웃 패널 | 상세 그래프를 팝업에서 보여줄 때 | 트레이에는 숫자가 안 보임 |
 | 온도/팬/전압 지표 | LibreHardwareMonitor / HWiNFO 연동 | 관리자 권한 + 커널 드라이버 필요 |
 | OpenGL/Direct2D 렌더링 | 아이콘에 그래프를 그릴 때 | 현재 요구에는 과함 |
+
+## 10. 리소스 파이프라인과 매니페스트 (설정 GUI G0)
+
+설정 GUI를 Win32 대화상자로 만들기로 했고([PLAN.md](PLAN.md) §12), 그 전제인 `rc.exe` ·
+매니페스트 · DPI 선언을 먼저 실측했다. 환경은 Windows 11 26H2 (build 26300), MSVC 툴체인
+(호스트 `x86_64-pc-windows-msvc`), Windows Kits 10.0.26100.0.
+
+### 10-1. rc.exe에는 기본 include 경로가 없다
+
+`rc.exe`는 PATH에 없다(`C:\Program Files (x86)\Windows Kits\10\bin\<sdk>\x64\rc.exe`).
+`build.rs`는 탐색을 `embed-resource`에 맡긴다.
+
+**함정**: `rc.exe`를 직접 호출하면 `#include <windows.h>`에서 죽는다.
+
+```
+probe.rc(1) : fatal error RC1015: cannot open include file 'windows.h'
+```
+
+VS 개발자 프롬프트 밖에서는 `%INCLUDE%`가 비어 있고 rc.exe에 기본 경로가 없다.
+SDK의 `Include\<version>\{um,shared}`를 `/I`로 넘기면 컴파일된다(실측).
+`embed-resource`는 Windows Kits의 `Include\<version>\*`를 `%INCLUDE%`에 채워 주므로
+`build.rs`에서 경로를 다룰 필요가 없다. 리소스 컴파일을 직접 스크립트로 부르지 않는 이유다.
+
+### 10-2. 리소스가 exe에 들어갔는지 확인하는 방법
+
+| 대상 | 확인 명령 |
+| --- | --- |
+| `VERSIONINFO` | `[System.Diagnostics.FileVersionInfo]::GetVersionInfo(exe)` |
+| 매니페스트 | `mt.exe -inputresource:tray-monitor.exe;#1 -out:manifest.xml` |
+| comctl32 v6 활성 | 실행 중 프로세스의 로드된 모듈 경로 |
+| DPI 선언 적용 | 앱 로그 |
+
+`VERSIONINFO` 실측값: `FileVersion 0.2.0`, `ProductVersion 0.2.0`, `FileDescription`,
+`CompanyName`, `LegalCopyright`, `OriginalFilename`, `ProductName` — 모두 `Cargo.toml`과
+`build.rs`가 만든 `version_defines.rc`에서 온 값이다.
+
+**함정**: comctl32 v6가 활성화되어 있어도 로드된 `comctl32.dll`의 **파일 버전 문자열은
+`5.82 (WinBuild.160101.0800)`로 나온다.** 판별은 경로로 해야 한다.
+
+```
+C:\Windows\WinSxS\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.26100.9711_none_...\comctl32.dll
+```
+
+SxS 어셈블리 이름의 `6.0.26100.9711`이 v6의 증거다. 파일 버전만 보고 "v6가 안 붙었다"고
+판단하면 멀쩡한 매니페스트를 고치게 된다.
+
+### 10-3. DPI 선언은 매니페스트와 런타임 호출 중 하나만 살아 있다
+
+`resources/app.manifest`가 `PerMonitorV2`를 선언하면 `SetProcessDpiAwarenessContext(...)`는
+"이미 설정됨"으로 실패한다. 그래서 앱은 그 반환값을 로그로 남긴다.
+
+```
+DPI: 매니페스트의 PerMonitorV2 선언을 사용한다
+```
+
+이 줄이 나오면 매니페스트가 실제로 링크된 것이고, `DPI: 런타임 호출로 PerMonitorV2를
+설정했다(매니페스트 없음)`이 나오면 리소스가 빠진 빌드다. 리소스는 링크 단계의 문제라
+컴파일 성공만으로는 확인할 수 없다.
+
+### 10-4. 비용
+
+| 항목 | 값 |
+| --- | --- |
+| exe | 505,344 → **508,928 bytes** (+3,584) |
+| `Cargo.lock` 패키지 | 131 → **138** (`cc`, `embed-resource`, `find-msvc-tools`, `shlex`, `vswhom`, `vswhom-sys`, `winreg`) |
+| 런타임 의존성 | **변화 없음** (전부 build-dependency) |
+| 로컬 크레이트 재빌드 | 12초 (리소스 컴파일 포함) |
+| 품질 검사 | `fmt` · `clippy -D warnings` · `test` 97개 · `--dump` BMP 36개 그대로 통과 |
+
+### 10-5. 아직 재지 않은 것
+
+- **PMv2의 대화상자 자동 스케일**: G0에는 대화상자가 없다. 100 / 150 / 200% 모니터를 오가며
+  창 크기와 컨트롤 배치를 재는 일은 G3의 실제 설정 창에서 한다. 지금 확인한 것은 매니페스트의
+  DPI 선언이 실제로 적용된다는 것까지다.
+- **비주얼 스타일이 적용된 컨트롤의 모양**: 컨트롤을 만드는 코드가 G3에 있다.
+- **아이콘 리소스**: 디자인 미정이라 G8로 미뤘다.

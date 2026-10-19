@@ -319,3 +319,234 @@ M1~M3 사이에 실험으로 닫아야 한다. 설계를 바꿀 수 있는 것�
 
 v0.1.0의 `[show] network = true`를 `network_down` / `network_up`으로 옮기고 legacy 항목은
 다시 쓰지 않는다(`#[serde(skip_serializing)]`).
+---
+
+## 12. 설정 GUI (v0.3.0)
+
+설정을 바꾸는 길이 지금 둘뿐이다: 트레이 메뉴 토글, 그리고 `config.toml` 직접 편집.
+항목이 늘었고(`color_mode`, `exclude_virtual_adapters`, 지표 4종) 파일 편집을 안내하는 것은
+일반 사용자에게 요구가 높다. 설정 창 하나로 모은다.
+
+### 12.1 확정된 결정
+
+| 항목 | 결정 | 근거 |
+| --- | --- | --- |
+| 구현 방식 | **Win32 대화상자 + `.rc` 리소스** (`embed-resource`) | §12.2 |
+| 반영 시점 | **즉시 적용 + 닫기** (`OK`/`Cancel` 없음) | 되돌리기 경로가 필요 없고 트레이 메뉴 토글과 동작이 같다. 바꾼 결과를 그 자리에서 본다. 되돌리기 수단은 `Reset to defaults` |
+| 범위 | 핵심 설정 5종 + 아이콘 미리보기 + 바로가기·기본값 복원 + 다크 모드 | §12.4 |
+| 진입 | 트레이 메뉴 `Settings…`, `--settings`, **exe 재실행 시 설정 창** | 메뉴에서만 열면 exe를 다시 실행하는 사용자를 놓친다 |
+| 스레드 | 메인 스레드 **모달** 대화상자 | 앱이 단일 스레드 + 스레드 지역 `App`이다. 별도 스레드는 `App` 공유 모델부터 다시 설계해야 한다 |
+| 다크 모드 | 작업 표시줄 테마를 따라간다. 실패하면 라이트로 조용히 폴백 | 이미 `theme::is_light()`가 있다. 비공식 API는 한 모듈에 격리 |
+
+### 12.2 방식 선택 근거
+
+| 후보 | 판단 |
+| --- | --- |
+| **Win32 대화상자 + `.rc`** | **채택.** 프로세스가 이미 `PER_MONITOR_AWARE_V2`라 대화상자·메시지 박스의 자동 스케일링을 시스템이 처리한다. 모달 루프에서 타이머가 계속 도는 문제는 트레이 메뉴를 고치면서 이미 풀었다. `.rc` 하나로 대화상자 + 매니페스트(comctl32 v6 · DPI) + `VERSIONINFO` + exe 아이콘을 함께 얻는데, 지금 넷 다 없다 |
+| `DLGTEMPLATE`을 Rust로 조립 | 빌드 도구는 줄지만 비주얼 스타일에는 매니페스트와 `build.rs`가 어차피 필요하다. 정렬에 민감한 200줄을 리뷰·유지할 이유가 약하다 |
+| `native-windows-gui` | 최신 릴리스 1.0.13(2022-09), 저장소 마지막 push 2024-05, 열린 이슈 72개. `winapi` 바인딩을 한 벌 더 들이고, 자체 스케일링이라 모니터 3대 혼합 DPI에서 가장 불리하다 |
+| `egui`/`eframe` | 창 하나 때문에 그래픽·폰트 스택이 두 벌이 되고 상주 자원과 exe 크기가 커진다. 490 KB / 18.7 MB / 0.41% 로 기록한 비용 프로필과 충돌한다 |
+
+### 12.3 구조
+
+| 파일 | 상태 | 역할 |
+| --- | --- | --- |
+| `build.rs` | 신규 | `embed_resource::compile("resources/app.rc")`. `$OUT_DIR/version.rc.gen`에 `CARGO_PKG_VERSION`을 써서 `.rc`가 include |
+| `resources/app.rc` | 신규 | `VERSIONINFO` + 매니페스트 참조. `DIALOGEX`는 G3에서 추가 |
+| `resources/app.manifest` | 신규 | comctl32 v6 의존성, `PerMonitorV2` DPI, `asInvoker` |
+| `src/settings/mod.rs` | 신규 | 진입점, 요청 플래그, 대화상자 수명 |
+| `src/settings/model.rs` | 신규 | **순수**: `SettingsDraft`, `Effect`, `validate`, `diff`, 주기 프리셋/표기 |
+| `src/settings/dialog.rs` | 신규 | `DialogBoxParamW`, `WM_INITDIALOG`/`WM_COMMAND`/`WM_CTLCOLOR*`, 컨트롤 id 상수 |
+| `src/settings/preview.rs` | 신규 | 아이콘 미리보기 스트립(별도 `GlyphCache`, 배경 합성) |
+| `src/settings/dark.rs` | 신규 | uxtheme 비공식 API 격리, 브러시, 폴백 |
+| `src/ipc.rs` | 신규 | 숨은 최상위 창 + `WM_APP_SETTINGS`. 두 번째 실행을 실행 중 인스턴스로 넘긴다 |
+| `src/app.rs` | 변경 | `apply_effects`, `sync_menu_checks`, 대화상자 요청 플래그 |
+| `src/main.rs` | 변경 | `--settings`, 요청 플래그 소비, ipc 창 생성·해제 |
+| `src/timer.rs` | 변경 | `set_interval` (같은 id로 `SetTimer` 재호출) |
+| `src/tray/mod.rs` | 변경 | 메뉴에 `Settings…` 추가, 체크 상태를 한 곳에서 동기화 |
+| `src/config.rs` | 변경 | 저장 원자화(임시 파일 + 교체) 권장, 주기 상수 공유 |
+| `Cargo.toml` | 변경 | `[build-dependencies] embed-resource`, `Win32_UI_Controls` 기능 추가 |
+| `AGENTS.md`, `README.md`, `docs/SPIKE.md` | 변경 | 구조표·메뉴표·실측 기록 갱신 |
+
+**변경 흐름** — 대화상자는 `App`을 빌린 채 열지 않는다.
+
+```
+트레이 메뉴 Settings…  ─┐
+--settings              ─┼─→ 요청 플래그 → 메시지 루프 → settings::open()
+두 번째 실행 (PostMessage) ─┘   (thread local)   (App 대여 없음)
+                                                         │
+                                          DialogBoxParamW (중첩 루프,
+                                          그 안에서 WM_TIMER가 계속 돈다)
+                                                         │ WM_COMMAND 1건
+                              SettingsDraft → validate → diff → Vec<Effect>
+                                                         │ 짧은 runtime::with
+                              App::apply_effects → config · 타이머 · 트레이 · 샘플러 · 레지스트리
+                                                         │
+                                        save_config() 1회 + sync_menu_checks()
+```
+
+```rust
+pub enum Effect {
+    Interval(u64),                 // ms, 범위로 클램프
+    Visible(Metric, bool),         // 마지막 지표 규칙은 model에서 판정
+    ColorMode(ColorMode),
+    CountVirtual(bool),            // = !exclude_virtual_adapters
+    Autostart(bool),
+}
+
+pub fn diff(current: &Config, autostart: bool, next: &SettingsDraft) -> Vec<Effect>;
+```
+
+효과를 한 곳(`App::apply_effects`)에서만 반영하면 창과 트레이 메뉴가 같은 경로를 쓴다.
+저장도 한 번만 하므로 지금 메뉴 경로(토글마다 저장)보다 쓰기가 적다.
+
+### 12.4 화면
+
+```
+┌─ tray-monitor settings ─────────────────────────────────┐
+│  Readouts                                               │
+│   [x] CPU   [x] Memory   [x] Network down   [x] Network up │
+│                                                         │
+│   preview:  ┌────┐┌────┐┌────┐┌────┐   (실제 트레이 크기와 4배 확대) │
+│             │CPU ││MEM ││ DN ││ UP │                    │
+│             │34% ││41% ││1.7K││341K│                    │
+│             └────┘└────┘└────┘└────┘                    │
+│                                                         │
+│  Update every        [ 1 second        ▼]               │
+│  Colours             (•) Per readout   ( ) Taskbar theme │
+│  Network             [x] Count virtual adapters          │
+│  Startup             [x] Run at sign-in                  │
+│                                                         │
+│  마지막 지표는 끌 수 없습니다 (상태줄)                    │
+│                                                         │
+│  [Open config file] [Open log] [Reset to defaults]       │
+│                                    v0.3.0      [ Close ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+- 제목 `tray-monitor settings`, 크기 220×150 DLU 수준, 리사이즈 없음(`WS_CAPTION | WS_SYSMENU`).
+- `Escape`와 `Close`가 닫기다. 별도 저장 버튼이 없다(즉시 적용).
+- 컨트롤: 체크박스, 콤보(주기), 라디오 2개(색 모드), 상태줄 static, 푸시버튼 3개.
+- 열 때 커서가 있는 모니터를 기준으로 배치한다(`MonitorFromPoint`). 기본 동작은 주 모니터에 뜬다.
+- 미리보기는 실제 트레이 px로 렌더한 뒤 최근접 업스케일로 확대한다. 업스케일은 순수 함수다.
+
+### 12.5 마일스톤 (예상 5.5~6일)
+
+| 단계 | 내용 | 완료 조건 |
+| --- | --- | --- |
+| **G0** 리소스 파이프라인 (0.5일, 완료) | `build.rs` + `embed-resource`, `app.rc`(`VERSIONINFO` + 매니페스트), `app.manifest`(comctl32 v6 · PerMonitorV2), 버전 생성 파일 | **완료**(§12.11). `windows.h` include와 `rc.exe` 탐색은 `embed-resource`에 맡긴다. 아이콘 리소스는 G8로 미룸 |
+| **G1** 설정 모델 (0.5일) | `model.rs`: `SettingsDraft`, `Effect`, `validate`, `diff`, 주기 프리셋과 표기 변환 | 단위 테스트: 범위 클램프, 마지막 지표 규칙, 최소 효과 diff, 주기 표기 왕복 |
+| **G2** 적용 경로 단일화 (0.5일) | `App::apply_effects`, 트레이 메뉴 핸들러를 `Effect` 경유로 변경, `timer::set_interval`, `sync_menu_checks`, 저장 원자화 | 메뉴 토글이 이전과 동일하게 동작. 주기 변경이 재시작 없이 반영. 설정 파일 저장이 1회로 줄어든다 |
+| **G3** 대화상자 (1.5일) | `dialog.rs`, `app.rc` 레이아웃, `WM_INITDIALOG` 채우기, `WM_COMMAND` → `Effect`, 대여 밖 진입 | 창에서 바꾼 값이 즉시 반영되고 메뉴 체크가 따라온다. **창이 열려 있는 동안 아이콘이 계속 갱신된다** |
+| **G4** 아이콘 미리보기 (0.5일) | `preview.rs`: 실제 px 렌더 + 4배 확대 + 배경 합성, 별도 캐시 | 테마·색 모드·표시 조합이 미리보기에 즉시 반영. 트레이 캐시 통계가 오염되지 않는다 |
+| **G5** 바로가기·복원 (0.25일) | Open config file / Open log / Reset to defaults / 버전 표시 | 복원 후 컨트롤·아이콘·파일이 모두 기본값과 일치 |
+| **G6** 다크 모드 (1일) | `dark.rs`: `SetPreferredAppMode`·`AllowDarkModeForWindow`·`SetWindowTheme`, `WM_CTLCOLOR*`, `WM_THEMECHANGED`, 트레이 메뉴 `FlushMenuThemes`, `--theme` 진단 | 26H2(26300)에서 창이 어두워지고 라이트에서 회귀 없음. API를 못 찾으면 라이트로 폴백하고 로그 1회 |
+| **G7** 진입 경로 (0.5일) | 메뉴 `Settings…`, `--settings`, `ipc.rs`로 재실행 시 창 열기 | exe 재실행 → 실행 중 인스턴스에 설정 창이 뜨고 두 번째 프로세스는 조용히 종료 |
+| **G8** 문서·릴리스 (0.5일) | README 메뉴표·설정 절, AGENTS.md 구조표·검증 루프, SPIKE.md에 DPI·다크 모드 실측, PLAN.md §12 결과 기록, 0.3.0 범프 | 태그 `v0.3.0` 릴리스가 자동 생성 |
+
+### 12.6 구현 제약 (어기면 바로 버그)
+
+1. **대화상자를 `runtime::with` 대여 안에서 열지 않는다.** `drain_events`가 `App`을 빌린 채
+   모달 루프에 들어가면 그동안 타이머 틱이 전부 `try_borrow_mut` 실패로 버려져 **아이콘이 멈춘다.**
+   메뉴 핸들러는 요청 플래그만 세우고, 메시지 루프가 대여 밖에서 연다.
+2. 대화상자 프로시저 안의 변경은 **짧은 `runtime::with` 한 번**으로 적용한다. 대화상자
+   프로시저가 `App`을 오래 들고 있으면 1번과 같은 정지가 다시 생긴다.
+3. **자체 대화상자 위에 `MessageBox`를 띄우지 않는다.** 중첩 모달에 테마도 깨진다. 안내는
+   상태줄 static 텍스트로 한다.
+4. **마지막 지표 규칙은 한 곳에만.** 트레이 메뉴와 설정 창이 같은 함수(`model`)를 호출한다.
+   두 곳에 규칙이 생기면 한쪽이 `config.show.count()==0`을 만들 수 있다.
+5. **컨트롤 id는 Rust 상수가 단일 출처.** `include_str!("../resources/app.rc")`로 id가 모두
+   존재하는지 테스트한다. 어긋나면 클릭이 조용히 무시된다.
+6. **트레이 아이콘을 재생성하지 않는다.** 창이 열렸다고 아이콘을 새로 만들지 않고
+   `set_visible`/`set_style`만 쓴다(승격 설정과 id 보존).
+7. **미리보기는 별도 `GlyphCache`.** 트레이 캐시를 공유하면 하트비트 로그의 히트율이
+   의미를 잃는다. 또한 미리보기는 배경에 **합성해서 불투명 비트맵**으로 만든다(알파 처리 회피).
+8. **저장은 `Effect` 묶음당 1회.** GUI 조작마다 파일을 쓰지 않는다.
+9. **비공식 API는 `settings/dark.rs`에만.** 실패는 라이트 폴백이고 조용해야 한다.
+10. `--settings`와 재실행 신호는 **두 번째 인스턴스가 즉시 종료**되어야 한다(단일 인스턴스 뮤텍스
+    획득 이전/이후 순서 주의).
+
+### 12.7 검증
+
+| 대상 | 방법 |
+| --- | --- |
+| `SettingsDraft`, `validate`, `diff`, 주기 표기 | 순수 함수 단위 테스트 (`cargo test`) |
+| `Effect` → `Config`/`Tray`/`Sampler` 반영 | `apply_to_config(&mut Config, &Effect)`를 순수 함수로 떼어 테스트, 나머지는 통합 |
+| `.rc` 컨트롤 id | `include_str!` 대조 테스트 |
+| 미리보기 업스케일 | 최근접 업스케일 순수 함수 테스트(경계 픽셀) |
+| 대화상자 스케일 | 100 / 150 / 200% 모니터를 오가며 수동 확인(모니터 3대 혼합 환경) |
+| 다크 모드 | `tray-monitor --theme` 진단 + 수동. 설정 앱에서 테마를 바꿔 `WM_THEMECHANGED` 확인 |
+| 핸들 누수 | 창 열고 닫기 10회 전후 `GetGuiResources`를 로그로 비교 |
+| 비용 | 창을 닫은 뒤 18.7 MB / 216 핸들 기준선으로 복귀하는지 확인(§10 표에 설정 창 항목 추가) |
+| 트레이·메뉴 | 기존 수동 체크리스트 + 설정 창과 체크 상태 동기화 |
+| CI | `--theme`를 스모크 테스트에 추가(데스크톱 없이 실행 가능) |
+
+수동 체크리스트(릴리스 전):
+
+- [ ] 창이 열려 있는 동안 아이콘이 계속 갱신된다
+- [ ] 체크 해제 즉시 아이콘이 사라지고 트레이 메뉴 체크도 풀린다
+- [ ] 마지막 지표를 끄려 하면 되살아나고 상태줄에 이유가 보인다
+- [ ] 주기 변경이 재시작 없이 반영된다(하트비트 로그 간격)
+- [ ] 색 모드 전환이 미리보기와 트레이에 동시에 반영된다
+- [ ] 라이트/다크 전환에서 창과 아이콘이 모두 따라간다
+- [ ] 모니터 간 이동에서 잘림·겹침이 없다
+- [ ] exe 재실행 → 설정 창이 뜨고 프로세스는 하나만 남는다
+- [ ] 설정 파일이 깨져 있어도 기존처럼 `.bak` 백업 후 기본값으로 뜬다
+
+### 12.8 리스크
+
+| 리스크 | 대응 |
+| --- | --- |
+| CI·로컬에 `rc.exe`가 없으면 빌드 실패 | G0에서 먼저 확인. `windows-2025` + MSVC 툴체인은 충족(vswhere·Windows Kits 10 확인됨). 실패 시 README에 툴체인 요구를 명시 |
+| 매니페스트 추가가 DPI 동작을 바꾼다 | 매니페스트의 `dpiAwareness`와 `win32::set_dpi_awareness()` 호출 중 하나로 단일화. G0에서 3개 배율 스크린샷 |
+| PMv2 대화상자 스케일이 26H2에서 기대와 다르다 | G3의 실제 대화상자에서 100/150/200% 모니터로 실측. G0은 매니페스트의 DPI 선언이 적용되는 것까지만 확인했다 |
+| 다크 모드 ordinal이 빌드에 따라 바뀐다 | 못 찾으면 라이트 폴백. `--theme`로 사용자 환경 상태를 로그에 남긴다 |
+| 대화상자 도중 RefCell 대여로 아이콘 정지 | 진입을 대여 밖으로(§12.6-1) + 수동 체크리스트 1번 |
+| 설정 창을 닫아도 자원이 남는다 | `GetGuiResources` 로그와 기준선 비교. 미리보기 비트맵은 `DeleteObject` |
+| 새 GUI 문자열이 영문/한글 혼재 | 창 문자열은 기존 트레이 메뉴와 같이 영문, 문서는 한국어 유지 |
+
+### 12.9 범위 밖
+
+- 지표별 색 직접 선택(색 대화상자), 폰트·여백 조정
+- 아이콘 순서 변경(셸이 관리한다)
+- 모델리스 창(항상 떠 있는 창)
+- 설정 파일 외부 편집 감지·실시간 리로드
+- 다국어 UI, 설치 프로그램(MSIX)
+
+### 12.10 열려 있는 결정
+
+1. **폴링 주기 입력 방식** — 프리셋 콤보(250/500/1000/2000/5000/10000) + `Custom…`일 때 edit·스피너를
+   권한다. G3에서 확정
+2. **`Open config file`을 트레이 메뉴에 남길지** — 권장: 유지(파워유저 경로) + 창에도 버튼
+3. **exe 아이콘 디자인** — 기존 렌더러로 만드는 안과 별도 디자인의 두 후보. G8까지 미룰 수 있고,
+   그전까지 `ICON` 리소스만 비워 둔다
+4. **설정 파일 저장 원자화** — `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`를 쓰려면
+   `Win32_Storage_FileSystem` 기능이 하나 더 필요하다. G2에서 비용 보고 결정
+
+### 12.11 G0 진행 결과
+
+`build.rs`가 `resources/app.rc`를 컴파일해 exe에 `VERSIONINFO`와 매니페스트를 링크한다.
+실측 근거와 함정은 [SPIKE.md](SPIKE.md) §10에 있다.
+
+| 항목 | 값 |
+| --- | --- |
+| exe | 505,344 → **508,928 bytes** (+3,584) |
+| `Cargo.lock` | 131 → **138** 패키지 (`cc`, `embed-resource`, `find-msvc-tools`, `shlex`, `vswhom`, `vswhom-sys`, `winreg` — 전부 빌드 전용) |
+| 런타임 의존성 | **변화 없음** |
+| 로컬 크레이트 재빌드 | 12초 (리소스 컴파일 포함) |
+| 품질 검사 | `cargo fmt --check` · `clippy -D warnings` · `test` 97개 · `--dump` BMP 36개 통과 |
+| 버전 정보 | `FileVersion 0.2.0`, `FileDescription`, `CompanyName`, `LegalCopyright`, `OriginalFilename`, `ProductName` |
+| 매니페스트 | `mt.exe -inputresource:...;#1`로 추출해 comctl32 v6 · `PerMonitorV2` · `asInvoker` 확인 |
+| comctl32 v6 | WinSxS `...common-controls_6595b64144ccf1df_6.0.26100.9711...\comctl32.dll` 로드 확인 |
+| DPI | 앱 로그가 `DPI: 매니페스트의 PerMonitorV2 선언을 사용한다`를 출력 |
+
+계획과 달라진 점:
+
+1. **`rc.exe`가 `windows.h`를 못 찾는다.** VS 개발자 프롬프트 밖에는 기본 include 경로가 없어
+   직접 호출하면 `RC1015`로 죽는다. `embed-resource`가 Windows Kits의 include 디렉터리로
+   `%INCLUDE%`를 채워 주므로 `build.rs`에는 경로 처리를 넣지 않았다(SPIKE.md §10-1).
+2. **exe 아이콘은 G8로 미뤘다.** 아이콘 디자인이 아직 정해지지 않았고(§12.10-3) 없어도 동작한다.
+   그래서 G0 완료 조건에서 아이콘 문구를 뺐다.
+3. **comctl32 v6의 파일 버전 문자열은 `5.82`다.** 경로로 판별해야 한다(SPIKE.md §10-2).
+4. **대화상자 배율 실측은 G3로 옮겼다.** G0에는 대화상자가 없다. 지금 확인한 것은 매니페스트의
+   DPI 선언이 실제로 적용된다는 것까지다(SPIKE.md §10-5).

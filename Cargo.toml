@@ -14,6 +14,10 @@ toml = "1"
 tray-icon = "0.26"
 windows-registry = "0.100"
 
+[build-dependencies]
+# resources/app.rc 를 컴파일해 VERSIONINFO 와 매니페스트를 exe 에 링크한다.
+embed-resource = "3"
+
 [dependencies.windows]
 version = "0.62"
 features = [
