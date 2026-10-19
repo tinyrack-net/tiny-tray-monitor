@@ -22,7 +22,12 @@ use crate::win32;
 pub mod onboard;
 
 /// 메뉴 항목 id. 이벤트 처리에서 문자열로 비교한다.
-pub const MENU_SHOW: [&str; 3] = ["show-cpu", "show-memory", "show-network"];
+pub const MENU_SHOW: [&str; 4] = [
+    "show-cpu",
+    "show-memory",
+    "show-network-down",
+    "show-network-up",
+];
 pub const MENU_AUTOSTART: &str = "autostart";
 pub const MENU_VIRTUAL: &str = "count-virtual-adapters";
 pub const MENU_OPEN_CONFIG: &str = "open-config";
@@ -95,6 +100,7 @@ impl MenuHandles {
             &self.show[0],
             &self.show[1],
             &self.show[2],
+            &self.show[3],
             &self.separators[1],
             &self.autostart,
             &self.virtual_adapters,
@@ -145,7 +151,7 @@ impl Tray {
             let (label_color, value_color) = colors(palette, config.color_mode, metric);
             let bitmap = icon::stacked(
                 &mut cache,
-                metric,
+                metric.label(),
                 PLACEHOLDER,
                 px,
                 spec,
@@ -251,7 +257,7 @@ impl Tray {
             let (label_color, value_color) = colors(palette, color_mode, metric);
             let bitmap = icon::stacked(
                 &mut self.cache,
-                metric,
+                metric.label(),
                 &value,
                 px,
                 spec,
@@ -329,9 +335,11 @@ mod tests {
         let palette = Palette::dark();
         let cpu = colors(palette, ColorMode::Metric, Metric::Cpu).1;
         let memory = colors(palette, ColorMode::Metric, Metric::Memory).1;
-        let network = colors(palette, ColorMode::Metric, Metric::Network).1;
+        let down = colors(palette, ColorMode::Metric, Metric::NetworkDown).1;
+        let up = colors(palette, ColorMode::Metric, Metric::NetworkUp).1;
         assert_ne!(cpu, memory);
-        assert_ne!(memory, network);
+        assert_ne!(memory, down);
+        assert_ne!(down, up);
     }
 
     #[test]

@@ -28,7 +28,8 @@ pub struct App {
     ticks: u64,
     last_cpu: Option<String>,
     last_memory: Option<String>,
-    last_network: Option<String>,
+    last_network_down: Option<String>,
+    last_network_up: Option<String>,
 }
 
 impl App {
@@ -73,7 +74,8 @@ impl App {
             ticks: 0,
             last_cpu: None,
             last_memory: None,
-            last_network: None,
+            last_network_down: None,
+            last_network_up: None,
         })
     }
 
@@ -151,16 +153,18 @@ impl App {
         }
 
         if let Some(net) = sample.net {
-            self.last_network = Some(format::rate(net.down));
-            self.tray.update(
-                Metric::Network,
-                format::rate(net.down),
-                format!(
-                    "Network down {}  up {}",
-                    format::rate_long(net.down),
-                    format::rate_long(net.up)
-                ),
+            // 방향별로 아이콘을 나눠 쓴다. 툴팁은 두 방향을 함께 보여준다.
+            let down = format::rate(net.down);
+            let up = format::rate(net.up);
+            let tooltip = format!(
+                "Network down {}  up {}",
+                format::rate_long(net.down),
+                format::rate_long(net.up)
             );
+            self.last_network_down = Some(down.clone());
+            self.last_network_up = Some(up.clone());
+            self.tray.update(Metric::NetworkDown, down, tooltip.clone());
+            self.tray.update(Metric::NetworkUp, up, tooltip);
         }
     }
 
@@ -172,11 +176,12 @@ impl App {
         }
         let stats = self.tray.cache_stats();
         logging::info(format!(
-            "{}번째 갱신: cpu {} mem {} net {} | 글리프 캐시 {:.0}% (hit {} miss {} entries {}) 아이콘 교체 {}회",
+            "{}번째 갱신: cpu {} mem {} net ↓{} ↑{} | 글리프 캐시 {:.0}% (hit {} miss {} entries {}) 아이콘 교체 {}회",
             self.ticks,
             self.last_cpu.as_deref().unwrap_or("-"),
             self.last_memory.as_deref().unwrap_or("-"),
-            self.last_network.as_deref().unwrap_or("-"),
+            self.last_network_down.as_deref().unwrap_or("-"),
+            self.last_network_up.as_deref().unwrap_or("-"),
             stats.hit_ratio(),
             stats.hits,
             stats.misses,

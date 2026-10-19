@@ -31,7 +31,11 @@ pub enum ColorMode {
 pub struct Show {
     pub cpu: bool,
     pub memory: bool,
-    pub network: bool,
+    pub network_down: bool,
+    pub network_up: bool,
+    /// v0.1.0의 단일 `network` 항목. 읽어서 아래 두 항목으로 옮기고 다시 쓰지는 않는다.
+    #[serde(default, skip_serializing)]
+    pub network: Option<bool>,
 }
 
 impl Default for Show {
@@ -39,7 +43,9 @@ impl Default for Show {
         Self {
             cpu: true,
             memory: true,
-            network: true,
+            network_down: true,
+            network_up: true,
+            network: None,
         }
     }
 }
@@ -49,7 +55,8 @@ impl Show {
         match metric {
             Metric::Cpu => self.cpu,
             Metric::Memory => self.memory,
-            Metric::Network => self.network,
+            Metric::NetworkDown => self.network_down,
+            Metric::NetworkUp => self.network_up,
         }
     }
 
@@ -57,12 +64,13 @@ impl Show {
         match metric {
             Metric::Cpu => self.cpu = value,
             Metric::Memory => self.memory = value,
-            Metric::Network => self.network = value,
+            Metric::NetworkDown => self.network_down = value,
+            Metric::NetworkUp => self.network_up = value,
         }
     }
 
     pub fn count(&self) -> usize {
-        [self.cpu, self.memory, self.network]
+        [self.cpu, self.memory, self.network_down, self.network_up]
             .into_iter()
             .filter(|enabled| *enabled)
             .count()
@@ -96,6 +104,15 @@ impl Config {
     /// 범위를 벗어난 값을 바로잡고, 바꾼 항목을 사람이 읽을 수 있게 돌려준다.
     pub fn validate(&mut self) -> Vec<String> {
         let mut notes = Vec::new();
+
+        // v0.1.0 설정 파일에는 network 항목이 하나뿐이었다.
+        if let Some(legacy) = self.show.network.take() {
+            notes.push(format!(
+                "network = {legacy} 를 network_down / network_up 으로 옮겼다"
+            ));
+            self.show.network_down = legacy;
+            self.show.network_up = legacy;
+        }
 
         if self.poll_interval_ms < MIN_POLL_INTERVAL_MS {
             notes.push(format!(
@@ -213,7 +230,7 @@ mod tests {
         let mut config = Config::default();
         assert!(config.validate().is_empty());
         assert_eq!(config.poll_interval_ms, DEFAULT_POLL_INTERVAL_MS);
-        assert_eq!(config.show.count(), 3);
+        assert_eq!(config.show.count(), 4);
         assert!(config.exclude_virtual_adapters);
     }
 
@@ -240,7 +257,9 @@ mod tests {
             show: Show {
                 cpu: false,
                 memory: false,
-                network: false,
+                network_down: false,
+                network_up: false,
+                network: None,
             },
             ..Default::default()
         };
@@ -259,7 +278,9 @@ mod tests {
             show: Show {
                 cpu: true,
                 memory: false,
-                network: true,
+                network_down: true,
+                network_up: false,
+                network: None,
             },
             color_mode: ColorMode::Theme,
             exclude_virtual_adapters: false,
@@ -269,12 +290,40 @@ mod tests {
         assert_eq!(parsed, config);
     }
 
+    /// v0.1.0 설정을 읽으면 단일 network 값이 두 방향으로 복제된다.
+    #[test]
+    fn legacy_network_setting_is_migrated() {
+        let text = "[show]
+cpu = true
+memory = true
+network = false
+";
+        let mut config: Config = toml::from_str(text).expect("v0.1.0 설정");
+        assert!(
+            config.show.network_down,
+            "마이그레이션 전에는 기본값(true)이다"
+        );
+
+        let notes = config.validate();
+        assert_eq!(notes.len(), 1, "{notes:?}");
+        assert!(!config.show.network_down);
+        assert!(!config.show.network_up);
+
+        let written = toml::to_string_pretty(&config).expect("serialize");
+        assert!(
+            !written.contains("network ="),
+            "legacy 항목은 다시 쓰지 않는다:
+{written}"
+        );
+        assert!(written.contains("network_down = false"));
+    }
+
     #[test]
     fn unknown_and_missing_fields_are_tolerated() {
         let text = "poll_interval_ms = 2000\nfuture_option = true\n";
         let config: Config = toml::from_str(text).expect("알 수 없는 키는 무시한다");
         assert_eq!(config.poll_interval_ms, 2000);
-        assert_eq!(config.show.count(), 3, "빠진 항목은 기본값");
+        assert_eq!(config.show.count(), 4, "빠진 항목은 기본값");
     }
 
     #[test]

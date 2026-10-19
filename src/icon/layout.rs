@@ -55,25 +55,37 @@ pub fn stack_spec(px: i32) -> StackSpec {
     }
 }
 
-/// 트레이에 표시하는 지표.
+/// 트레이에 표시하는 지표. 네트워크는 방향별로 아이콘을 나눈다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Metric {
     Cpu,
     Memory,
-    Network,
+    NetworkDown,
+    NetworkUp,
 }
 
 impl Metric {
     /// 아이콘 생성 순서를 고정한다. 순서가 바뀌면 Windows가 부여하는 아이콘 id가
     /// 바뀌어 사용자의 트레이 승격 설정이 어긋난다.
-    pub const ALL: [Metric; 3] = [Metric::Cpu, Metric::Memory, Metric::Network];
+    ///
+    /// v0.1.0의 세 번째 아이콘(Network)은 [Metric::NetworkDown]이 이어받는다.
+    /// 그래야 이미 승격해 둔 사용자가 다운로드 아이콘을 계속 본다.
+    pub const ALL: [Metric; 4] = [
+        Metric::Cpu,
+        Metric::Memory,
+        Metric::NetworkDown,
+        Metric::NetworkUp,
+    ];
 
-    /// 아이콘에 넣는 라벨(최대 3자).
+    /// 아이콘에 넣는 라벨. 16px에서는 3자 이하만 읽힌다.
     pub fn label(self) -> &'static str {
         match self {
             Metric::Cpu => "CPU",
             Metric::Memory => "MEM",
-            Metric::Network => "NET",
+            // 화살표(↓/↑)는 16px(라벨 5px)에서 얇은 선으로 뭉개져 구분되지 않는다.
+            // 후보 비교는 docs/PLAN.md 참고.
+            Metric::NetworkDown => "DN",
+            Metric::NetworkUp => "UP",
         }
     }
 
@@ -82,7 +94,8 @@ impl Metric {
         match self {
             Metric::Cpu => "cpu",
             Metric::Memory => "memory",
-            Metric::Network => "network",
+            Metric::NetworkDown => "network-down",
+            Metric::NetworkUp => "network-up",
         }
     }
 
@@ -90,7 +103,8 @@ impl Metric {
         match self {
             Metric::Cpu => "CPU",
             Metric::Memory => "Memory",
-            Metric::Network => "Network",
+            Metric::NetworkDown => "Network down (DN)",
+            Metric::NetworkUp => "Network up (UP)",
         }
     }
 }
@@ -147,8 +161,14 @@ mod tests {
     fn metric_order_is_stable() {
         assert_eq!(
             Metric::ALL.map(|m| m.id()),
-            ["cpu", "memory", "network"],
+            ["cpu", "memory", "network-down", "network-up"],
             "순서가 바뀌면 트레이 승격 설정이 어긋난다"
         );
+    }
+
+    /// v0.1.0 의 세 번째 아이콘을 다운로드가 이어받아야 기존 승격이 살아남는다.
+    #[test]
+    fn network_down_keeps_the_third_icon_slot() {
+        assert_eq!(Metric::ALL[2], Metric::NetworkDown);
     }
 }
