@@ -391,7 +391,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 | 단계 | 결과 |
 | --- | --- |
-| P1 | 자산 12개 생성·커밋, `app.rc` ICON, 정적 CRT, `[lints.rust]`. 테스트 **131개** 통과. exe 629,760 bytes, `VCRUNTIME140` 없음, 아이콘 32×32 확인 |
+| P1 | 자산 12개 생성·커밋, `app.rc` ICON, 정적 CRT, `[lints.rust]`. 테스트 **131개** 통과. exe 629,760 bytes(P2 기능 포함 최종 642,048), `VCRUNTIME140` 없음, 아이콘 32×32 확인 |
 | P2 | `platform`/StartupTask/승격 정규화/WM_CLOSE. 패키지 등록 후 `LocalState`에 config·state·log가 생성되고 기존 `%APPDATA%` 설정이 복사되는 것을 확인. 업그레이드 시 설정 창/첫 실행 안내를 닫고 종료하는 것도 확인 |
 | P3 | 무인 설치 → `--help` → 실행 중 업그레이드(WM_CLOSE로 종료) → 제거까지 확인. 제거 시 HKCU Run 값도 삭제됨 |
 | P4 | `makeappx pack/unpack` 왕복, 개발자 모드 등록, 트레이·설정 창·자동 시작 토글을 재시작 후까지 확인(`autostart=true/false`) |

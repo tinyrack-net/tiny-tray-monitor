@@ -37,12 +37,14 @@ Download `tray-monitor-<version>-windows-x64.zip`, unpack it anywhere and run
 
 ### MSIX (Store build)
 
-Releases also contain `tray-monitor-<version>-windows-x64.msix`. It is **unsigned**, so installing
-it yourself requires developer mode (`Add-AppxPackage -Register`); the Store signs the submitted
-package. A packaged build keeps its config, state and log in
+Releases also contain `tray-monitor-<version>-windows-x64.msix`. It is **unsigned**: Windows will
+not install the file directly. The Store signs the submitted package; for local testing, unpack it
+and run `Add-AppxPackage -Register AppxManifest.xml` in developer mode. A packaged build keeps its
+config, state and log in
 `%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState`, uses the Windows startup-task API
-instead of the `Run` key, and can lose the tray promotion when the package updates. See
-[docs/PACKAGING.md](docs/PACKAGING.md).
+instead of the `Run` key, and can lose the tray promotion when the package updates. Launching it
+from the Start menu only starts the tray; run it again or use the tray menu to open the settings.
+See [docs/PACKAGING.md](docs/PACKAGING.md).
 
 ### The readouts start hidden
 
