@@ -78,7 +78,10 @@ pub fn dump() {
         ("light", Color(243, 243, 243), theme::Palette::light()),
     ];
 
-    println!("{:<6} {:>8} {:>8} {:>8}  설명", "px", "label_h", "value_h", "block");
+    println!(
+        "{:<6} {:>8} {:>8} {:>8}  설명",
+        "px", "label_h", "value_h", "block"
+    );
     for px in [16, 20, 24, 32] {
         let spec = icon::stack_spec(px);
         println!(
