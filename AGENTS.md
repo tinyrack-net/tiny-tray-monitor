@@ -44,23 +44,28 @@ Run the validation loop after changes:
 Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence.
 
 1. **Never recreate a tray icon.** Windows assigns icon IDs in creation order and the tray
-   "promote to taskbar" setting is tied to that ID. Create all three icons in `Metric::ALL`
-   order at startup and use `set_visible(false)` to hide one.
-2. **Never pass an empty string to GDI.** `DrawTextW` dereferences the dangling pointer of an
+   "promote to taskbar" setting is tied to that ID. Create every icon in `Metric::ALL` order at
+   startup and use `set_visible(false)` to hide one. When adding a metric, append it to
+   `Metric::ALL`: inserting one shifts every later ID and silently moves the user's promoted
+   icons to different readouts.
+2. **A label gets five pixels at 16px.** Anything wider than three characters, or any glyph
+   whose meaning lives in a thin stroke (arrows), is unreadable. Compare candidates with
+   `make dump` and the sheet before choosing.
+3. **Never pass an empty string to GDI.** `DrawTextW` dereferences the dangling pointer of an
    empty slice and the process dies. `icon::gdi::rasterize` rejects empty input.
-3. **Read luminance from the red channel of a BI_RGB DIB.** GDI fills B, G and R and leaves the
+4. **Read luminance from the red channel of a BI_RGB DIB.** GDI fills B, G and R and leaves the
    reserved byte at zero, so the alpha channel is always 0.
-4. **Do not take the timer on the thread queue.** `SetTimer(None, ...)` posts `WM_TIMER` to the
+5. **Do not take the timer on the thread queue.** `SetTimer(None, ...)` posts `WM_TIMER` to the
    thread, and the modal loops of `TrackPopupMenu` and `MessageBox` drop those messages, which
    freezes the icons. `src/timer.rs` owns a message-only window instead.
-5. **A timer can re-enter.** The same modal loops run nested message loops, so the tick callback
+6. **A timer can re-enter.** The same modal loops run nested message loops, so the tick callback
    runs again while the previous call is on the stack. `timer::dispatch_tick` takes the callback
    out of its cell before running it and skips a re-entrant call.
-6. **Do not treat a failed `RefCell` borrow as a reason to exit.** `runtime::should_exit`
+7. **Do not treat a failed `RefCell` borrow as a reason to exit.** `runtime::should_exit`
    returns false when the app is borrowed.
-7. **Keep the executable path stable.** The tray setting is keyed on it, so an update that moves
+8. **Keep the executable path stable.** The tray setting is keyed on it, so an update that moves
    the binary resets the user's choice. Release archives extract in place.
-8. **Cache glyph renderings.** Recreating the font and device context every second doubles CPU
+9. **Cache glyph renderings.** Recreating the font and device context every second doubles CPU
    use. Values are a small finite set, so a per-string cache keeps the hit rate high.
 
 ## Merging

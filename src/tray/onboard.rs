@@ -86,9 +86,12 @@ pub fn promotion_state() -> Promotion {
     }
 }
 
-/// 첫 실행이거나 버전이 바뀌었으면 안내한다.
+/// 첫 실행이거나, 아이콘이 숨겨진 채로 버전이 바뀌었으면 안내한다.
+///
+/// 모두 보이면 알릴 것이 없으므로 건너뛴다. 같은 버전에서는 한 번만 안내한다.
+/// (사용자가 특정 아이콘을 트레이에 두지 않기로 한 선택을 매번 되묻지 않기 위해서다.)
 pub fn should_onboard(state: &State, promotion: Promotion) -> bool {
-    if promotion == Promotion::Unknown {
+    if promotion == Promotion::Unknown || promotion == Promotion::All {
         return false;
     }
     !state.onboarding_shown || state.last_version != env!("CARGO_PKG_VERSION")

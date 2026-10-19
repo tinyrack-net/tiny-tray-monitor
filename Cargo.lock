@@ -1073,7 +1073,7 @@ dependencies = [
 
 [[package]]
 name = "tray-monitor"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "toml 1.1.8+spec-1.1.0",

@@ -9,12 +9,12 @@
 
 </div>
 
-tray-monitor puts three live readouts in the taskbar notification area, each showing
+tray-monitor puts four live readouts in the taskbar notification area, each showing
 what it measures and its current value:
 
 ```
- NET   MEM   CPU
- 98K   42%   23%
+ UP    DN    MEM   CPU
+341K  1.7K   41%   34%
 ```
 
 No administrator rights, no kernel driver, no background service. It reads CPU time
@@ -43,7 +43,7 @@ Right-click any of the three icons.
 
 | Item | What it does |
 | --- | --- |
-| CPU / Memory / Network | Show or hide that readout. The last visible one cannot be turned off |
+| CPU / Memory / Network down (DN) / Network up (UP) | Show or hide that readout. The last visible one cannot be turned off |
 | Run at sign-in | Adds or removes the `HKCU\...\Run` entry for the current executable |
 | Count virtual adapters | Include Hyper-V, VPN and similar adapters in the network total |
 | Open config file | Opens `config.toml` in your default editor |
@@ -63,8 +63,12 @@ color_mode = "metric"            # "metric" = one colour per readout, "theme" = 
 [show]
 cpu = true
 memory = true
-network = true
+network_down = true
+network_up = true
 ```
+
+A `network = ...` setting written by v0.1.0 is migrated to `network_down` and
+`network_up` on the next start.
 
 Deleted or broken files fall back to the defaults; a broken file is kept as `config.toml.bak`.
 Logs are written to `%LOCALAPPDATA%\tray-monitor\log.txt`.
@@ -94,7 +98,7 @@ Logs are written to `%LOCALAPPDATA%\tray-monitor\log.txt`.
 | --- | --- |
 | CPU | `GetSystemTimes` deltas (kernel time includes idle time) |
 | Memory | `GlobalMemoryStatusEx` |
-| Network | `GetIfTable2` byte counters, loopback and tunnel interfaces excluded |
+| Network down / up | `GetIfTable2` byte counters, loopback and tunnel interfaces excluded |
 
 Values are formatted to fit a square icon and rendered with GDI into a 32bpp DIB, downsampled
 from an 8x supersample, then handed to `Shell_NotifyIcon` as an `HICON`. A 16px icon (100%
@@ -105,10 +109,14 @@ never longer than four characters. Measurements and the reasoning behind the lay
 Idle cost measured on a 2560x1440 100% display: about **19 MB** of working set (3 MB private,
 216 handles, all steady) and **0.4%** of one CPU core at a one second interval.
 
+The label row is 5px tall on a 16px icon, which is too small for an arrow: `↓` and `↑`
+collapse into the same thin stroke. `DN` and `UP` stay readable, and the two readouts
+also use different colours. Measurements for every candidate are in
+[docs/PLAN.md](docs/PLAN.md).
+
 ## Limitations
 
-- The taskbar decides the order of the three icons. Right-click the taskbar and use
-  *Taskbar settings* or drag them to reorder.
+- The taskbar decides the order of the icons. Drag them to reorder.
 - The icons are rendered for the display scaling that was active at startup. Changing the
   scaling keeps the existing bitmaps; the taskbar scales them.
 - Requires Windows 11 or Windows 10 (build 17063 or later for `GetIfTable2`).

@@ -19,10 +19,11 @@ pub use render::{Bitmap, Color, Fit};
 
 /// 라벨과 값을 위아래로 쌓은 트레이 아이콘.
 ///
-/// 값이 비어 있으면 값 줄은 건너뛴다.
+/// 값이 비어 있으면 값 줄은 건너뛴다. 라벨을 문자열로 받는 이유는 표기 후보를
+/// 비교해 보기 위해서다(`--dump`).
 pub fn stacked(
     cache: &mut GlyphCache,
-    metric: Metric,
+    label: &str,
     value: &str,
     px: i32,
     spec: StackSpec,
@@ -35,7 +36,7 @@ pub fn stacked(
 
     if spec.label_h > 0 {
         if let Some(bitmap) = cache.get(GlyphRequest {
-            text: metric.label().to_string(),
+            text: label.to_string(),
             box_w: px,
             box_h: spec.label_h,
             fit: Fit::Uniform,
@@ -72,7 +73,7 @@ mod tests {
         let spec = stack_spec(16);
         let bmp = stacked(
             &mut cache,
-            Metric::Cpu,
+            Metric::Cpu.label(),
             "80%",
             16,
             spec,
@@ -98,7 +99,7 @@ mod tests {
         let spec = stack_spec(16);
         let bmp = stacked(
             &mut cache,
-            Metric::Memory,
+            Metric::Memory.label(),
             "77%",
             16,
             spec,
@@ -128,7 +129,7 @@ mod tests {
         for _ in 0..20 {
             let _ = stacked(
                 &mut cache,
-                Metric::Cpu,
+                Metric::Cpu.label(),
                 "80%",
                 16,
                 spec,
@@ -151,7 +152,7 @@ mod tests {
         let spec = stack_spec(16);
         let bmp = stacked(
             &mut cache,
-            Metric::Network,
+            Metric::NetworkDown.label(),
             "",
             16,
             spec,
