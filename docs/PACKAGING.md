@@ -136,7 +136,7 @@ manifest 최소 형태(검증됨):
 - 현재 exe: `VERSIONINFO` 있음(`0.3.1`), **아이콘 리소스 없음**(`app.rc`에 `ICON` 없음).
 - Rust 기본 빌드: `VCRUNTIME140.dll` 의존.
   `target-feature=+crt-static` + `[lints.rust] warnings = "deny"` + `.cargo/config.toml`로
-  의존성이 사라지고 테스트 122개가 모두 통과한다(실측, +102KB).
+  의존성이 사라지고 테스트 131개가 모두 통과한다(실측, +103KB).
 - `resources/app.rc`에 `1 ICON "resources/app.ico"` 한 줄이면 아이콘이 링크된다(실측).
 - `embed-resource`는 `rc.exe`의 include 경로를 스스로 채운다(SPIKE §10-1).
 - `windows` crate: `GetCurrentPackageFullName`(`Win32_Storage_Packaging_Appx`),
@@ -337,7 +337,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 | installer | 무인 설치/제거, 앱 실행 중 업그레이드(WM_CLOSE 유도), 시작 메뉴 바로가기 |
 | MSIX | `makeappx pack/unpack`, 개발자 모드 `-Register`로 트레이 + 설정 창 + 자동 시작 토글 |
 | CI | PR에서 `package` 통과, 태그에서 자산 3종 + SHA256SUMS |
-| 회귀 | `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` (122개 기준) |
+| 회귀 | `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` (131개 기준) |
 
 수동 확인 체크리스트:
 
@@ -369,7 +369,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 | 단계 | 내용 | 완료 조건 |
 | --- | --- | --- |
-| P1 | 아이콘/자산 생성, `app.rc` ICON, 정적 CRT, lints, 플레이키 테스트 수정 | `cargo test` 122개 통과, exe에 아이콘·버전 표시, VC 런타임 의존 없음 |
+| P1 | 아이콘/자산 생성, `app.rc` ICON, 정적 CRT, lints, 플레이키 테스트 수정 | `cargo test` 131개 통과, exe에 아이콘·버전 표시, VC 런타임 의존 없음 |
 | P2 | `platform` 모듈, StartupTask, 승격 정규화, WM_CLOSE/`request_exit` | 단위 테스트 + 비패키지 회귀 통과 |
 | P3 | installer 스크립트/빌드 스크립트 | 무인 설치·제거·업그레이드 확인 |
 | P4 | MSIX manifest/자산/빌드 스크립트 | `makeappx pack/unpack` + `-Register` 실행 확인 |
@@ -384,3 +384,28 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 - 코드 서명 인증서(Azure Artifact Signing 권장) 도입 → installer/MSIX 서명.
 - MSIX `.msixbundle`(x64 + arm64), Store 제출 파이프라인.
 - winget/scoop 매니페스트 자동 갱신.
+
+---
+
+## 9. 진행 결과 (v0.4.0)
+
+| 단계 | 결과 |
+| --- | --- |
+| P1 | 자산 12개 생성·커밋, `app.rc` ICON, 정적 CRT, `[lints.rust]`. 테스트 **131개** 통과. exe 629,760 bytes, `VCRUNTIME140` 없음, 아이콘 32×32 확인 |
+| P2 | `platform`/StartupTask/승격 정규화/WM_CLOSE. 패키지 등록 후 `LocalState`에 config·state·log가 생성되고 기존 `%APPDATA%` 설정이 복사되는 것을 확인 |
+| P3 | 무인 설치 → `--help` → 실행 중 업그레이드(WM_CLOSE로 종료) → 제거까지 확인. 제거 시 HKCU Run 값도 삭제됨 |
+| P4 | `makeappx pack/unpack` 왕복, 개발자 모드 등록, 트레이·설정 창·자동 시작 토글을 재시작 후까지 확인(`autostart=true/false`) |
+| P5 | 워크플로 YAML 파싱, 릴리스 스크립트를 로컬에서 모의 실행해 3종 자산 + `SHA256SUMS` 생성 확인. 실제 CI는 PR에서 확인 |
+| P6 | README/AGENTS/PLAN/Makefile 갱신 |
+
+### 실행 중 바뀐 결정
+
+1. **`StartupTask`는 `WM_COMMAND` 안에서 부르면 안 된다.** `RequestEnableAsync`가
+   `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`로 실패한다(실측). 처음에는 MTA 워커 스레드로
+   우회했지만, 설정 창의 `WM_INITDIALOG` 안에서는 UI 스레드가 결과를 기다리는 동안
+   대화상자가 보이지 않고 멈췄다. 최종적으로 자동 시작 토글을 `WM_APP_AUTOSTART`
+   메시지로 미루고, UI 스레드에서 input-synchronous 호출 밖에 실행하도록 했다.
+2. **`AppExecutionAlias`는 넣지 않았다.** Store 사용자에게 CLI를 노출할 필요가 아직 없다.
+3. **아이콘은 임시 마크다.** `tools/make_assets.py`가 ICO와 MSIX 타일을 모두 만들고,
+   디자인 교체 시 이 스크립트만 고치면 된다.
+4. **로컬 Git Bash에는 `make`가 없다.** README/AGENTS에 스크립트 직접 실행 명령을 병기했다.

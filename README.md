@@ -22,9 +22,27 @@ counters, `GlobalMemoryStatusEx` and the interface table directly.
 
 ## Install
 
-Download `tray-monitor-<version>-windows-x64.zip` from
-[Releases](https://github.com/tinyrack-net/tray-monitor/releases), unpack it anywhere and run
+### Installer (recommended)
+
+Download `tray-monitor-<version>-windows-x64-setup.exe` from
+[Releases](https://github.com/tinyrack-net/tray-monitor/releases) and run it. The default is a
+per-user install under `%LOCALAPPDATA%\Programs\tray-monitor`, so no UAC prompt appears and the
+install path stays the same across upgrades. `/ALLUSERS` (or the wizard) can install it for every
+user instead. Uninstalling keeps `%APPDATA%\tray-monitor`.
+
+### Portable
+
+Download `tray-monitor-<version>-windows-x64.zip`, unpack it anywhere and run
 `tray-monitor.exe`.
+
+### MSIX (Store build)
+
+Releases also contain `tray-monitor-<version>-windows-x64.msix`. It is **unsigned**, so installing
+it yourself requires developer mode (`Add-AppxPackage -Register`); the Store signs the submitted
+package. A packaged build keeps its config, state and log in
+`%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState`, uses the Windows startup-task API
+instead of the `Run` key, and can lose the tray promotion when the package updates. See
+[docs/PACKAGING.md](docs/PACKAGING.md).
 
 ### The readouts start hidden
 
@@ -45,7 +63,7 @@ Right-click any of the icons.
 | --- | --- |
 | Settings… | Opens the settings window |
 | CPU / Memory / Network down (DN) / Network up (UP) | Show or hide that readout. The last visible one cannot be turned off |
-| Run at sign-in | Adds or removes the `HKCU\...\Run` entry for the current executable |
+| Run at sign-in | Adds or removes the `HKCU\...\Run` entry (or the package startup task) |
 | Count virtual adapters | Include Hyper-V, VPN and similar adapters in the network total |
 | Open config file | Opens `config.toml` in your default editor |
 | Exit | Stops tray-monitor |
@@ -74,7 +92,9 @@ With a dark taskbar the window opens dark, and the tray menu follows the same se
 
 ## Configuration
 
-`%APPDATA%\tray-monitor\config.toml` is created on first run.
+`%APPDATA%\tray-monitor\config.toml` is created on first run. In the MSIX package the file lives
+in `%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState\config.toml`; an existing
+config from `%APPDATA%\tray-monitor` is copied there on the first packaged run.
 
 ```toml
 poll_interval_ms = 1000          # 250 ~ 10000
@@ -150,6 +170,9 @@ also use different colours. Measurements for every candidate are in
 - Requires Windows 11 or Windows 10 (build 17063 or later for `GetIfTable2`).
 - CPU temperature, fan speed and voltages are not included: they need administrator rights
   and a kernel driver.
+- The MSIX package is unsigned (developer mode or Store signing needed), and a package update
+  changes the executable path, so Windows may hide the tray icons again. The onboarding prompt
+  returns after an update.
 
 ## Development
 
@@ -158,6 +181,16 @@ make validate    # cargo fmt --check, clippy -D warnings, cargo test
 make run         # run the tray app
 make interfaces  # network interface diagnosis
 make dump        # icon layout measurement + BMP dump, then a comparison sheet
+make assets      # regenerate resources/app.ico and the MSIX tiles
+make package     # build the installer and the MSIX into dist/
+```
+
+`make package` needs Inno Setup 6 and the Windows SDK (`makeappx.exe`). Without `make`, run the
+scripts directly:
+
+```
+pwsh -File packaging/windows/build-installer.ps1 -Exe target/release/tray-monitor.exe
+pwsh -File packaging/windows/build-msix.ps1 -Exe target/release/tray-monitor.exe
 ```
 
 Layout changes should be checked visually. `make dump` writes `out/<theme>_px<size>_<metric>@16x.bmp`
