@@ -4,9 +4,11 @@
 
 **tray-monitor** shows CPU, memory and network readouts in the Windows system tray.
 
-- **Main technologies:** Rust (edition 2024), `windows`, `tray-icon`, `windows-registry`,
-  `serde` + `toml`. All dependencies come from crates.io; there are no git dependencies.
-- **Architecture:** a single binary crate rooted at the repository (`src`, `tools`, `docs`).
+- **Main technologies:** Rust (edition 2024), `windows`, `windows-future`, `tray-icon`,
+  `windows-registry`, `serde` + `toml`. All dependencies come from crates.io; there are no git
+  dependencies.
+- **Architecture:** a single binary crate rooted at the repository (`src`, `resources`,
+  `packaging`, `tools`, `docs`).
   There is no workspace and no library target: the modules under `src` are wired together by
   `main.rs` and exercised by `#[cfg(test)]` modules in place.
 - **Platform:** Windows only. Metrics come from Win32 APIs and icons are rendered with GDI.
