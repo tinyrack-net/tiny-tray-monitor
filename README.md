@@ -42,7 +42,8 @@ not install the file directly. The Store signs the submitted package; for local 
 and run `Add-AppxPackage -Register AppxManifest.xml` in developer mode. A packaged build keeps its
 config, state and log in
 `%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState`, uses the Windows startup-task API
-instead of the `Run` key, and can lose the tray promotion when the package updates. Launching it
+instead of the `Run` key, and keeps the tray promotion across package updates because each
+readout registers with a fixed GUID that Windows keys the setting on. Launching it
 from the Start menu only starts the tray; run it again or use the tray menu to open the settings.
 See [docs/PACKAGING.md](docs/PACKAGING.md).
 
@@ -172,8 +173,9 @@ also use different colours. Measurements for every candidate are in
 - Requires Windows 11 or Windows 10 (build 17063 or later for `GetIfTable2`).
 - CPU temperature, fan speed and voltages are not included: they need administrator rights
   and a kernel driver.
-- The MSIX package is unsigned (developer mode or Store signing needed), and a package update
-  changes the executable path, so Windows may hide the tray icons again. The onboarding prompt
+- The MSIX package is unsigned (developer mode or Store signing needed). A package update
+  changes the executable path, but the fixed per-readout GUIDs keep the tray promotion. If the
+  shell rejects a GUID, the app falls back to per-path registration and the onboarding prompt
   returns after an update.
 
 ## Development

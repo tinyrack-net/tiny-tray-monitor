@@ -109,14 +109,22 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     `RequestEnableAsync` inside `WM_COMMAND` fails with `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`.
     The settings dialog posts `WM_APP_AUTOSTART` to itself and commits in that message instead.
 17. **A package update changes the executable path.** `NotifyIconSettings` keys are per path, so
-    the promotion is lost after every version update. `onboard.rs` detects this and prompts
-    again; compare paths after `\WindowsApps\` because packaged paths start with a known-folder
-    GUID.
+    the promotion used to reset after every version update. Each readout now registers with a
+    fixed per-metric GUID (`tray::TRAY_GUIDS`), and Windows keys the promotion on that GUID, so
+    the setting survives a package update. The GUIDs and the `Metric::ALL` order must never
+    change. `tray-icon` reports success even when the shell rejects a GUID, so `Tray::build`
+    waits for the `NotifyIconSettings` entry and retries without GUIDs when it never appears;
+    compare paths after `\WindowsApps\` because packaged paths start with a known-folder GUID.
 18. **A quit request must close modal dialogs first.** The installer posts `WM_CLOSE` to the IPC
     window, but the settings dialog or the onboarding `MB_YESNO` box keeps the main loop in a
     nested loop. `win32::window::close_dialogs` posts `WM_CLOSE` to every `#32770` window in the
     process, and `run_onboarding`/`settings::open` skip showing a new dialog when an exit is
     already pending.
+19. **`tray-icon` 0.26.1 drops `NIF_GUID` from `set_tooltip`.** Every tooltip update fails with
+    `E_FAIL` once an icon uses a GUID, while `set_icon` and `set_visible` still work.
+    `win32::set_guid_tooltip` sends `NIM_MODIFY` with `NIF_TIP | NIF_GUID` directly, and `Tray`
+    uses it whenever a slot has a GUID. The same call also serves as the first registration
+    probe; re-check both when the crate is upgraded.
 
 ## Merging
 

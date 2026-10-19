@@ -6,6 +6,10 @@
 //!
 //! **아이콘은 재생성하지 않는다.** Windows는 아이콘 id를 생성 순서로 부여하고 트레이 승격
 //! 설정이 그 (실행 경로, id)에 묶인다. 숨길 때는 `set_visible(false)`를 쓴다.
+//!
+//! 아이콘은 지표별 고정 GUID로 등록한다. Windows는 승격 설정을 GUID에 묶으므로,
+//! 설치 경로가 바뀌는 MSIX 업데이트에서도 사용자가 고른 설정이 유지된다. GUID 값과
+//! `Metric::ALL` 순서는 한 번 정해지면 바꾸지 않는다.
 
 use tray_icon::menu::{
     CheckMenuItem, CheckMenuItemBuilder, IsMenuItem, Menu, MenuId, MenuItem, MenuItemBuilder,
@@ -36,6 +40,16 @@ pub const MENU_EXIT: &str = "exit";
 
 /// 트레이 아이콘에 처음 등록할 때 쓰는 값. 첫 갱신 전까지 잠깐 보인다.
 const PLACEHOLDER: &str = "0";
+
+/// 트레이 아이콘의 고정 GUID. `Metric::ALL` 순서와 같아야 하고, 버전이 바뀌어도
+/// 절대 바꾸면 안 된다. Windows가 이 값으로 "작업 표시줄에 항상 표시" 설정을
+/// 저장하므로, 실행 경로가 바뀌는 MSIX 업데이트에서도 승격 설정이 유지된다.
+const TRAY_GUIDS: [u128; 4] = [
+    0x08d913012075905f3b765d99cc00e07b, // CPU
+    0x30146b445a48f8bc812370db292437b9, // MEM
+    0x512275b8e98770860fd9c119653456c1, // DN
+    0xecb03b17ed4a5b28b5f90f8642431ee3, // UP
+];
 
 /// 메뉴 아이템을 만들어 보관한다. 아이콘 수만큼 메뉴가 필요하므로 아이템을 공유한다.
 pub struct MenuHandles {
@@ -162,17 +176,15 @@ impl Tray {
         palette: Palette,
         autostart: bool,
     ) -> Result<Self, String> {
-        // 아직 고정 GUID를 켜지 않는다. 다음 변경에서 `Some(TRAY_GUIDS)`로 바꾼다.
-        let preferred: Option<[u128; 4]> = None;
-        match Self::build(px, config, palette, autostart, preferred) {
+        // 고정 GUID로 먼저 시도하고, 셸이 거부하면 GUID 없이 다시 만든다.
+        match Self::build(px, config, palette, autostart, Some(TRAY_GUIDS)) {
             Ok(tray) => Ok(tray),
-            Err(error) if preferred.is_some() => {
+            Err(error) => {
                 logging::warn(format!(
                     "고정 GUID로 트레이 아이콘을 등록하지 못해 GUID 없이 다시 시도한다: {error}"
                 ));
                 Self::build(px, config, palette, autostart, None)
             }
-            Err(error) => Err(error),
         }
     }
 
@@ -233,6 +245,15 @@ impl Tray {
             });
         }
 
+        // `tray-icon`은 셸이 GUID를 거부해도 성공으로 돌려주고, NIM_MODIFY도 성공할
+        // 수 있다. Explorer가 실제로 만든 `NotifyIconSettings` 항목을 확인해
+        // GUID가 받아들여졌는지 판단한다.
+        if let Some(guids) = guids {
+            if !Self::wait_for_guid_entries(&guids) {
+                return Err("셸이 고정 GUID를 받아들이지 않았다".to_string());
+            }
+        }
+
         // 설정에서 꺼진 지표는 등록은 유지한 채 숨긴다.
         for slot in &mut slots {
             if !config.show.get(slot.metric) {
@@ -252,6 +273,17 @@ impl Tray {
             color_mode: config.color_mode,
             renders: 0,
         })
+    }
+
+    /// Explorer가 `NotifyIconSettings` 항목을 만들 때까지 잠깐 기다린다.
+    fn wait_for_guid_entries(guids: &[u128; 4]) -> bool {
+        for _ in 0..20 {
+            if onboard::guids_present(guids) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        false
     }
 
     fn slot(&mut self, metric: Metric) -> Option<&mut Slot> {
