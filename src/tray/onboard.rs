@@ -71,6 +71,48 @@ pub fn same_executable(registered: &str, current: &str) -> bool {
     }
 }
 
+/// `NotifyIconSettings`가 쓰는 GUID 문자열(`{XXXXXXXX-XXXX-...}`)로 만든다.
+fn guid_text(guid: u128) -> String {
+    let hex = format!("{guid:032X}");
+    format!(
+        "{{{}-{}-{}-{}-{}}}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..32]
+    )
+}
+
+/// 주어진 고정 GUID가 모두 `NotifyIconSettings`에 등록되어 있는가.
+///
+/// Explorer가 아이콘을 등록할 때 이 키를 만든다. 키를 읽지 못하면 확인할 수
+/// 없으므로 `true`를 돌려주고, 호출자가 GUID를 포기하지 않게 한다.
+pub fn guids_present(guids: &[u128; 4]) -> bool {
+    let Ok(key) = CURRENT_USER.open(NOTIFY_KEY) else {
+        return true;
+    };
+    let Ok(names) = key.keys() else {
+        return true;
+    };
+    let wanted: Vec<String> = guids.iter().map(|guid| guid_text(*guid)).collect();
+    let mut seen = vec![false; wanted.len()];
+    for name in names {
+        let Ok(entry) = key.open(&name) else {
+            continue;
+        };
+        let Ok(value) = entry.get_string("IconGuid") else {
+            continue;
+        };
+        for (index, guid) in wanted.iter().enumerate() {
+            if !seen[index] && value.eq_ignore_ascii_case(guid) {
+                seen[index] = true;
+            }
+        }
+    }
+    seen.iter().all(|matched| *matched)
+}
+
 /// 이 실행 파일로 등록된 아이콘들의 승격 상태.
 pub fn promotion_state() -> Promotion {
     let Some(exe) = current_exe() else {
@@ -158,6 +200,14 @@ mod tests {
                 Promotion::All | Promotion::Some { .. } | Promotion::None | Promotion::Unknown
             ),
             "{state:?}"
+        );
+    }
+
+    #[test]
+    fn guid_text_matches_the_registry_format() {
+        assert_eq!(
+            guid_text(0xf2ac86269de9ee99441a1aef4c9406a1),
+            "{F2AC8626-9DE9-EE99-441A-1AEF4C9406A1}"
         );
     }
 

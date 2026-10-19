@@ -110,14 +110,16 @@ manifest 최소 형태(검증됨):
 
 4. **업데이트마다 경로가 바뀐다**
    - 설치 위치가 `WindowsApps\<Name>_<Version>_x64__<hash>\`라 버전이 바뀌면 exe 경로도 바뀐다.
-   - 버전만 올려 재등록한 실험에서 기존 승격 키가 재사용되지 않고
-     새 키가 `promoted=0`으로 생성됐다.
-   - AGENTS.md #8("exe 경로를 바꾸지 않는다")과 충돌한다. MSIX 채널의 구조적 한계로 문서화한다.
-   - 완화: 버전이 바뀌면 `should_onboard`가 다시 안내한다.
+   - 대응: 지표별 고정 GUID(`tray::TRAY_GUIDS`)로 등록한다. Windows가 승격 설정을 GUID에
+     묶으므로 경로가 바뀌어도 유지된다. 실측: 0.4.0.0 → 0.4.1.0(다른 폴더)로 등록을 바꿔도
+     같은 4개 키가 새 경로로 옮겨지고 `IsPromoted=1`이 유지됐다(Windows 11 build 26300).
+   - 셸이 GUID를 거부하면 `Tray::build`가 `NotifyIconSettings` 항목을 확인한 뒤 GUID 없이
+     다시 등록한다. 아이콘은 보이지만 승격은 초기화되므로 `should_onboard`가 다시 안내한다.
 
 5. **패키지 앱은 `NotifyIconSettings`에 쓸 수 없다**
    - 쓰기가 가상 하이브로 가므로 앱이 스스로 승격을 복원할 수 없다(실측).
-   - 완화: 온보딩 안내만 제공.
+   - 읽기는 된다. `onboard::promotion_state`/`guids_present`가 실제 키를 읽어 승격 상태와
+     GUID 등록 여부를 판단한다.
 
 ### 1.3 Installer는 문제 없다
 
@@ -318,7 +320,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
   - 설치 방법 3가지(installer 권장, 포터블, MSIX는 Store 제출용/unsigned 주의).
   - MSIX 사용자: 설정/로그는
     `%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState`,
-    자동 시작은 Windows 설정의 Startup apps, 업데이트 후 트레이 승격이 초기화될 수 있음.
+    자동 시작은 Windows 설정의 Startup apps, 업데이트 후에도 고정 GUID로 승격이 유지됨.
   - MSIX에서 Start 메뉴로 실행하면 창 없이 트레이만 시작되고,
     다시 실행하거나 트레이 메뉴로 설정을 연다는 점.
 - `AGENTS.md`: 구조(`packaging/`), 릴리스 산출물, `make package`,
@@ -345,7 +347,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 2. 앱 실행 중 installer 업그레이드 → 자동 종료 후 설치, 재실행.
 3. MSIX `-Register` → 트레이, 설정 창, `Run at sign-in` 토긘이 StartupTask를 켜는지.
 4. MSIX에서 설정 변경 → `LocalState`에 기록되는지, `Open config file`이 그 파일을 여는지.
-5. MSIX 버전 업데이트 → 승격 초기화 + 온보딩 재안내(문서화된 동작).
+5. MSIX 버전 업데이트 → 같은 GUID 키가 새 경로로 옮겨지고 승격 유지, 온보딩 없음.
 
 ---
 
@@ -355,7 +357,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 | --- | --- | --- |
 | unsigned MSIX는 일반 사용자 설치 불가 | MSIX 자산은 Store 제출/개발자 모드 전용 | README에 명시. 서명은 후속 |
 | Store identity 미확정 | `CN=Tinyrack`은 실제 제출 시 거부됨 | Partner Center 등록 후 환경 변수/시크릿으로 교체 |
-| MSIX 업데이트 시 승격 초기화 | 사용자가 다시 트레이에 고정해야 함 | 온보딩 재안내, 문서화 |
+| 셸이 고정 GUID를 거부 | 승격이 초기화됨(아이콘은 폴백으로 표시) | `NotifyIconSettings` 확인 후 GUID 없이 재등록, 온보딩 재안내 |
 | MSIX에서 Start 메뉴 실행 시 창이 없다 | 사용자가 앱이 실행됐는지 모를 수 있음 | 트레이/두 번째 실행/`--settings` 안내, 온보딩 |
 | MSIX와 installer 동시 설치 | 자동 시작 항목 중복, 하나만 실행됨(mutex) | 문서화. 필요 시 installer가 MSIX 설치 감지 후 안내 |
 | per-user ↔ per-machine 전환 시 경로 변경 | 승격 초기화 | 문서화 |
@@ -412,3 +414,28 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 3. **아이콘은 임시 마크다.** `tools/make_assets.py`가 ICO와 MSIX 타일을 모두 만들고,
    디자인 교체 시 이 스크립트만 고치면 된다.
 4. **로컬 Git Bash에는 `make`가 없다.** README/AGENTS에 스크립트 직접 실행 명령을 병기했다.
+
+---
+
+## 10. 고정 GUID (P7)
+
+MSIX 업데이트마다 exe 경로가 바뀌어 트레이 승격이 초기화되던 문제를 지표별 고정 GUID로 해결했다.
+
+- `src/tray/mod.rs`의 `TRAY_GUIDS`가 `Metric::ALL` 순서와 1:1로 대응한다. 값과 순서는
+  한 번 정해지면 바꾸지 않는다. 바꾸면 사용자의 승격 설정이 다른 아이콘으로 옮겨간다.
+- `win32::set_guid_tooltip`이 `NIF_TIP | NIF_GUID`로 `NIM_MODIFY`를 직접 보낸다.
+  `tray-icon` 0.26.1의 `set_tooltip`은 `NIF_GUID`를 빠뜨려 GUID 아이콘에서 항상 실패한다.
+- `Tray::build`는 아이콘을 만든 뒤 `NotifyIconSettings`에 GUID 항목이 생겼는지 확인한다.
+  셸이 거부하면 GUID 없이 다시 등록한다(아이콘은 보이고 승격만 초기화).
+
+실측(Windows 11 build 26300, 74개 항목):
+
+| 실험 | 결과 |
+| --- | --- |
+| unpackaged, unsigned, 고정 GUID | 4개 키에 `IconGuid` 기록, `IsPromoted` 유지 |
+| unpackaged, 경로 A → B 이동 | 같은 키가 B 경로로 이동, `IsPromoted=1` 유지 |
+| MSIX 0.4.0.0 → 0.4.1.0(다른 폴더) | 같은 키가 새 경로로 이동, `IsPromoted=1` 유지 |
+| GUID를 이미 다른 경로가 선점 | `NotifyIconSettings` 항목이 없어 GUID 없이 재등록(폴백), 아이콘 표시 |
+
+코드 서명은 필요하지 않았다. 서명이 있으면 `Publisher`가 기록될 뿐, 승격 유지 자체는
+GUID만으로 성립했다.
