@@ -392,7 +392,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 | 단계 | 결과 |
 | --- | --- |
 | P1 | 자산 12개 생성·커밋, `app.rc` ICON, 정적 CRT, `[lints.rust]`. 테스트 **131개** 통과. exe 629,760 bytes, `VCRUNTIME140` 없음, 아이콘 32×32 확인 |
-| P2 | `platform`/StartupTask/승격 정규화/WM_CLOSE. 패키지 등록 후 `LocalState`에 config·state·log가 생성되고 기존 `%APPDATA%` 설정이 복사되는 것을 확인 |
+| P2 | `platform`/StartupTask/승격 정규화/WM_CLOSE. 패키지 등록 후 `LocalState`에 config·state·log가 생성되고 기존 `%APPDATA%` 설정이 복사되는 것을 확인. 업그레이드 시 설정 창/첫 실행 안내를 닫고 종료하는 것도 확인 |
 | P3 | 무인 설치 → `--help` → 실행 중 업그레이드(WM_CLOSE로 종료) → 제거까지 확인. 제거 시 HKCU Run 값도 삭제됨 |
 | P4 | `makeappx pack/unpack` 왕복, 개발자 모드 등록, 트레이·설정 창·자동 시작 토글을 재시작 후까지 확인(`autostart=true/false`) |
 | P5 | 워크플로 YAML 파싱, 릴리스 스크립트를 로컬에서 모의 실행해 3종 자산 + `SHA256SUMS` 생성 확인. 실제 CI는 PR에서 확인 |
@@ -405,6 +405,9 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
    우회했지만, 설정 창의 `WM_INITDIALOG` 안에서는 UI 스레드가 결과를 기다리는 동안
    대화상자가 보이지 않고 멈췄다. 최종적으로 자동 시작 토글을 `WM_APP_AUTOSTART`
    메시지로 미루고, UI 스레드에서 input-synchronous 호출 밖에 실행하도록 했다.
+   종료 요청(`WM_CLOSE`)은 프로세스의 `#32770` 창을 모두 닫는다. 설정 창이나 첫 실행
+   안내가 모달 루프를 잡고 있으면 installer가 5초 뒤 포기하기 때문이다. 안내가 아직
+   뜨기 전에 종료 요청이 오는 경우도 있어 `run_onboarding`이 `exiting`을 확인한다.
 2. **`AppExecutionAlias`는 넣지 않았다.** Store 사용자에게 CLI를 노출할 필요가 아직 없다.
 3. **아이콘은 임시 마크다.** `tools/make_assets.py`가 ICO와 MSIX 타일을 모두 만들고,
    디자인 교체 시 이 스크립트만 고치면 된다.

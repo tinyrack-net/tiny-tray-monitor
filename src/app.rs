@@ -355,9 +355,13 @@ impl App {
     }
 
     fn run_onboarding(&mut self) {
-        let promotion = onboard::promotion_state();
-        if promotion != onboard::Promotion::All {
-            onboard::show_onboarding(promotion);
+        // 종료 요청이 먼저 왔으면 모달 안내를 띄우지 않는다. installer가 이 창을
+        // 닫지 못하면 업그레이드가 5초 뒤 실패한다.
+        if !self.exiting {
+            let promotion = onboard::promotion_state();
+            if promotion != onboard::Promotion::All {
+                onboard::show_onboarding(promotion);
+            }
         }
         self.store.state.onboarding_shown = true;
         self.store.state.last_version = env!("CARGO_PKG_VERSION").to_string();

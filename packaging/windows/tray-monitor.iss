@@ -100,6 +100,11 @@ begin
   Hwnd := FindWindowW('#32770', SETTINGS_CAPTION);
   if Hwnd <> 0 then
     PostMessageW(Hwnd, WM_CLOSE, 0, 0);
+
+  { 이전 버전은 첫 실행 안내/오류를 같은 제목의 메시지 상자로 띄운다. }
+  Hwnd := FindWindowW('#32770', '{#AppName}');
+  if Hwnd <> 0 then
+    PostMessageW(Hwnd, WM_CLOSE, 0, 0);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

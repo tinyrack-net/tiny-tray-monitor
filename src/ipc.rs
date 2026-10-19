@@ -49,8 +49,10 @@ extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, lparam: L
         return LRESULT(0);
     }
     if message == WM_CLOSE {
-        // installer가 파일을 덮어쓰기 전에 정상 종료를 요청한다.
+        // installer가 파일을 덮어쓰기 전에 정상 종료를 요청한다. 설정 창이나 첫 실행
+        // 안내가 모달 루프를 돌리고 있으면 그것부터 닫아야 메인 루프가 종료를 본다.
         runtime::request_exit();
+        win32::window::close_dialogs();
         return LRESULT(0);
     }
     win32::window::default_procedure(hwnd, message, wparam, lparam)

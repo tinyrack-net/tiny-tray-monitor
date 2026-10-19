@@ -110,6 +110,11 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     the promotion is lost after every version update. `onboard.rs` detects this and prompts
     again; compare paths after `\WindowsApps\` because packaged paths start with a known-folder
     GUID.
+18. **A quit request must close modal dialogs first.** The installer posts `WM_CLOSE` to the IPC
+    window, but the settings dialog or the onboarding `MB_YESNO` box keeps the main loop in a
+    nested loop. `win32::window::close_dialogs` posts `WM_CLOSE` to every `#32770` window in the
+    process, and `run_onboarding`/`settings::open` skip showing a new dialog when an exit is
+    already pending.
 
 ## Merging
 

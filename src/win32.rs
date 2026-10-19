@@ -294,11 +294,13 @@ pub mod dialog {
 pub mod window {
     use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowW, PostMessageW, RegisterClassW,
-        WINDOW_EX_STYLE, WNDCLASSW, WS_POPUP,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowW, GetClassNameW,
+        GetWindowThreadProcessId, PostMessageW, RegisterClassW, WINDOW_EX_STYLE, WM_CLOSE,
+        WNDCLASSW, WS_POPUP,
     };
-    use windows::core::PCWSTR;
+    use windows::core::{BOOL, PCWSTR};
 
     /// 보이지 않는 창을 만든다.
     ///
@@ -353,6 +355,39 @@ pub mod window {
     /// 창을 없앤다.
     pub fn destroy(hwnd: HWND) {
         let _ = unsafe { DestroyWindow(hwnd) };
+    }
+
+    /// 이 프로세스의 최상위 대화상자(`#32770`)를 모두 닫는다.
+    ///
+    /// 종료 요청을 받았는데 설정 창이나 첫 실행 안내가 모달 루프를 돌리고 있으면,
+    /// 메인 루프는 그 창이 닫힐 때까지 종료 검사를 하지 못한다.
+    pub fn close_dialogs() {
+        unsafe {
+            let process = GetCurrentProcessId() as isize;
+            let _ = EnumWindows(Some(close_dialog), LPARAM(process));
+        }
+    }
+
+    extern "system" fn close_dialog(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let process = lparam.0 as u32;
+        let mut pid = 0u32;
+        unsafe {
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        }
+        if pid != process {
+            return BOOL(1);
+        }
+
+        let mut class = [0u16; 32];
+        let len = unsafe { GetClassNameW(hwnd, &mut class) };
+        if len <= 0 || String::from_utf16_lossy(&class[..len as usize]) != "#32770" {
+            return BOOL(1);
+        }
+
+        // 설정 창은 WM_CLOSE에서 다크 모드 자원을 정리하고, 첫 실행 안내/메시지
+        // 상자도 WM_CLOSE로 닫힌다(실측).
+        let _ = unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) };
+        BOOL(1)
     }
 
     /// 프로시저가 처리하지 않은 메시지를 기본 처리로 넘긴다.
