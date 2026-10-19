@@ -15,6 +15,9 @@ const CLASS_NAME: &str = "tray-monitor-ipc";
 /// 두 번째 실행이 보내는 메시지. `WM_APP` 영역이라 다른 메시지와 겹치지 않는다.
 const WM_APP_OPEN_SETTINGS: u32 = 0x8000 + 1;
 
+/// installer가 업그레이드 전에 보내는 종료 요청. 표준 `WM_CLOSE`를 그대로 쓴다.
+const WM_CLOSE: u32 = 0x0010;
+
 /// 이 인스턴스가 설정 창 요청을 받는 창.
 pub struct Listener {
     hwnd: HWND,
@@ -45,6 +48,11 @@ extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, lparam: L
         runtime::request_settings();
         return LRESULT(0);
     }
+    if message == WM_CLOSE {
+        // installer가 파일을 덮어쓰기 전에 정상 종료를 요청한다.
+        runtime::request_exit();
+        return LRESULT(0);
+    }
     win32::window::default_procedure(hwnd, message, wparam, lparam)
 }
 
@@ -59,6 +67,15 @@ pub fn request_settings() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// installer는 이 창에 `WM_CLOSE`를 보내 앱을 종료시킨다.
+    #[test]
+    fn the_window_accepts_the_close_message() {
+        let listener = Listener::start().expect("IPC 창을 만들 수 있다");
+        let hwnd = win32::window::find(CLASS_NAME).expect("클래스 이름으로 찾을 수 있다");
+        assert!(win32::window::notify(hwnd, WM_CLOSE));
+        drop(listener);
+    }
 
     /// 두 번째 프로세스는 이 창을 찾아 메시지를 넣을 수 있어야 한다.
     #[test]

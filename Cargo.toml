@@ -12,6 +12,7 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 tray-icon = "0.26"
+windows-future = "0.3"
 windows-registry = "0.100"
 
 [build-dependencies]
@@ -21,12 +22,14 @@ embed-resource = "3"
 [dependencies.windows]
 version = "0.62"
 features = [
+    "ApplicationModel",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",
     "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_Storage_Packaging_Appx",
     "Win32_System_Console",
     "Win32_System_LibraryLoader",
     "Win32_System_SystemInformation",

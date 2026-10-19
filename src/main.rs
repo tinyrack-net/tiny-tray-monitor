@@ -19,6 +19,7 @@ mod icon;
 mod ipc;
 mod logging;
 mod metrics;
+mod platform;
 mod runtime;
 mod settings;
 mod startup;

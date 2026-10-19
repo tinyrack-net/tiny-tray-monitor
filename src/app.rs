@@ -93,6 +93,11 @@ impl App {
         self.exiting
     }
 
+    /// 종료 요청. installer가 업그레이드 전에 보내거나 메뉴의 Quit이 쓴다.
+    pub fn request_exit(&mut self) {
+        self.exiting = true;
+    }
+
     /// 샘플링 주기마다 호출된다.
     pub fn tick(&mut self) {
         let now = Instant::now();

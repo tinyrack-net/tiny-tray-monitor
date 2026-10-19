@@ -13,12 +13,9 @@ const MAX_BYTES: u64 = 256 * 1024;
 
 static LOGGER: OnceLock<Mutex<Option<File>>> = OnceLock::new();
 
-/// `%LOCALAPPDATA%\tray-monitor`
+/// `%LOCALAPPDATA%\tray-monitor` (패키지에서는 `LocalState`)
 pub fn data_dir() -> PathBuf {
-    let base = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    base.join("tray-monitor")
+    crate::platform::data_dir()
 }
 
 pub fn log_path() -> PathBuf {

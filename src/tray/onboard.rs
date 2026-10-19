@@ -49,6 +49,28 @@ fn current_exe() -> Option<String> {
         .map(|path| path.display().to_string())
 }
 
+/// `\WindowsApps\` 뒤의 경로. MSIX 앱의 실행 경로는 설치 버전마다 바뀐다.
+fn after_windows_apps(path: &str) -> Option<&str> {
+    // ASCII만 소문자로 바꾸므로 비ASCII 사용자 이름이 있어도 인덱스가 유지된다.
+    let lower = path.to_ascii_lowercase();
+    let index = lower.find(r"\WindowsApps\".to_ascii_lowercase().as_str())?;
+    Some(&path[index + 1..])
+}
+
+/// 레지스트리에 적힌 실행 경로와 현재 exe가 같은 프로그램인가.
+///
+/// 패키지 앱은 `{6D809377-…}\WindowsApps\…`처럼 known-folder GUID를 붙여 적는다.
+/// 전체 문자열을 비교하면 항상 불일치하므로 `WindowsApps` 이후만 비교한다.
+pub fn same_executable(registered: &str, current: &str) -> bool {
+    if registered.eq_ignore_ascii_case(current) {
+        return true;
+    }
+    match (after_windows_apps(registered), after_windows_apps(current)) {
+        (Some(left), Some(right)) => left.eq_ignore_ascii_case(right),
+        _ => false,
+    }
+}
+
 /// 이 실행 파일로 등록된 아이콘들의 승격 상태.
 pub fn promotion_state() -> Promotion {
     let Some(exe) = current_exe() else {
@@ -70,7 +92,7 @@ pub fn promotion_state() -> Promotion {
         let Ok(path) = entry.get_string("ExecutablePath") else {
             continue;
         };
-        if !path.eq_ignore_ascii_case(&exe) {
+        if !same_executable(&path, &exe) {
             continue;
         }
         total += 1;
@@ -191,5 +213,31 @@ mod tests {
             assert!(!summary.contains("registered"), "{summary}");
         }
         assert!(Promotion::All.summary().contains("visible"));
+    }
+
+    /// 패키지 앱은 `{GUID}\WindowsApps\…` 형식으로 경로를 적는다.
+    #[test]
+    fn packaged_paths_are_compared_after_windows_apps() {
+        let registered = r"{6D809377-6AF0-444B-8957-A3773F02200E}\WindowsApps\Tinyrack.TrayMonitor_0.3.1.0_x64__abc\tray-monitor.exe";
+        let current =
+            r"C:\Program Files\WindowsApps\Tinyrack.TrayMonitor_0.3.1.0_x64__abc\tray-monitor.exe";
+        assert!(same_executable(registered, current));
+
+        let other =
+            r"C:\Program Files\WindowsApps\Tinyrack.TrayMonitor_0.2.0.0_x64__abc\tray-monitor.exe";
+        assert!(
+            !same_executable(registered, other),
+            "다른 패키지 버전의 경로는 다르다"
+        );
+
+        // 대소문자는 Windows 경로처럼 무시한다.
+        assert!(same_executable(registered, &current.to_uppercase()));
+    }
+
+    #[test]
+    fn unpackaged_paths_still_match() {
+        let path = r"C:\Users\me\AppData\Local\Programs\tray-monitor\tray-monitor.exe";
+        assert!(same_executable(path, &path.to_uppercase()));
+        assert!(!same_executable(path, r"C:\Other\tray-monitor.exe"));
     }
 }
