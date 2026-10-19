@@ -136,6 +136,8 @@ impl MenuHandles {
 struct Slot {
     metric: Metric,
     tray: TrayIcon,
+    /// 이 아이콘을 등록할 때 쓴 고정 GUID. 쓰지 않았거나 등록에 실패했으면 `None`.
+    guid: Option<u128>,
     value: String,
     tooltip: String,
     dirty: bool,
@@ -153,19 +155,40 @@ pub struct Tray {
 }
 
 impl Tray {
-    /// 아이콘 3개를 [Metric::ALL] 순서로 만든다. 순서를 바꾸면 승격 설정이 어긋난다.
+    /// 아이콘 4개를 [Metric::ALL] 순서로 만든다. 순서를 바꾸면 승격 설정이 어긋난다.
     pub fn new(
         px: i32,
         config: &Config,
         palette: Palette,
         autostart: bool,
     ) -> Result<Self, String> {
+        // 아직 고정 GUID를 켜지 않는다. 다음 변경에서 `Some(TRAY_GUIDS)`로 바꾼다.
+        let preferred: Option<[u128; 4]> = None;
+        match Self::build(px, config, palette, autostart, preferred) {
+            Ok(tray) => Ok(tray),
+            Err(error) if preferred.is_some() => {
+                logging::warn(format!(
+                    "고정 GUID로 트레이 아이콘을 등록하지 못해 GUID 없이 다시 시도한다: {error}"
+                ));
+                Self::build(px, config, palette, autostart, None)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn build(
+        px: i32,
+        config: &Config,
+        palette: Palette,
+        autostart: bool,
+        guids: Option<[u128; 4]>,
+    ) -> Result<Self, String> {
         let spec = icon::stack_spec(px);
         let handles = MenuHandles::new(config, autostart);
         let mut cache = GlyphCache::new(GlyphCache::DEFAULT_CAPACITY);
         let mut slots = Vec::with_capacity(Metric::ALL.len());
 
-        for metric in Metric::ALL {
+        for (index, metric) in Metric::ALL.into_iter().enumerate() {
             let menu = handles.build()?;
             let (label_color, value_color) = palette.colors(config.color_mode, metric);
             let bitmap = icon::stacked(
@@ -179,16 +202,31 @@ impl Tray {
             );
             let tray_icon = Icon::from_rgba(bitmap.rgba, bitmap.width as u32, bitmap.height as u32)
                 .map_err(|e| format!("아이콘을 만들 수 없다: {e}"))?;
-            let tray = TrayIconBuilder::new()
+            let mut builder = TrayIconBuilder::new()
                 .with_icon(tray_icon)
                 .with_tooltip(metric.tooltip_name())
-                .with_menu(Box::new(menu))
+                .with_menu(Box::new(menu));
+            let guid = guids.map(|set| set[index]);
+            if let Some(guid) = guid {
+                builder = builder.with_guid(guid);
+            }
+            let tray = builder
                 .build()
                 .map_err(|e| format!("트레이 아이콘을 등록할 수 없다: {e}"))?;
+
+            // `tray-icon`은 셸이 GUID 등록을 거부해도 성공으로 돌려준다. 툴팁 갱신을
+            // 한 번 보내 실제로 등록됐는지 확인하고, 실패하면 호출자가 GUID 없이
+            // 다시 만들도록 오류를 돌려준다.
+            if let Some(guid) = guid {
+                if !win32::set_guid_tooltip(tray.window_handle(), guid, metric.tooltip_name()) {
+                    return Err(format!("{metric:?} 아이콘의 고정 GUID를 등록하지 못했다"));
+                }
+            }
 
             slots.push(Slot {
                 metric,
                 tray,
+                guid,
                 value: PLACEHOLDER.to_string(),
                 tooltip: metric.tooltip_name().to_string(),
                 dirty: false,
@@ -285,8 +323,17 @@ impl Tray {
         }
 
         if tooltip_changed {
-            if let Err(error) = slot.tray.set_tooltip(Some(&tooltip)) {
-                logging::warn(format!("{metric:?} 툴팁을 바꾸지 못했다: {error}"));
+            match slot.guid {
+                Some(guid) => {
+                    if !win32::set_guid_tooltip(slot.tray.window_handle(), guid, &tooltip) {
+                        logging::warn(format!("{metric:?} 툴팁을 바꾸지 못했다"));
+                    }
+                }
+                None => {
+                    if let Err(error) = slot.tray.set_tooltip(Some(&tooltip)) {
+                        logging::warn(format!("{metric:?} 툴팁을 바꾸지 못했다: {error}"));
+                    }
+                }
             }
             slot.tooltip = tooltip;
         }
