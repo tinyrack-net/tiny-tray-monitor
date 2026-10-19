@@ -10,6 +10,26 @@
 #include <windows.h>
 #include "version_defines.rc"
 
+/* 설정 창. 컨트롤 id는 src/settings/dialog.rs의 상수와 같아야 한다(테스트로 대조한다). */
+#define IDD_SETTINGS            101
+#define IDC_CPU                 1001
+#define IDC_MEMORY              1002
+#define IDC_NETWORK_DOWN        1003
+#define IDC_NETWORK_UP          1004
+#define IDC_PREVIEW             1005
+#define IDC_INTERVAL            1006
+#define IDC_INTERVAL_EDIT       1007
+#define IDC_INTERVAL_UNIT       1008
+#define IDC_COLOR_METRIC        1009
+#define IDC_COLOR_THEME         1010
+#define IDC_VIRTUAL             1011
+#define IDC_AUTOSTART           1012
+#define IDC_STATUS              1013
+#define IDC_VERSION             1014
+#define IDC_OPEN_CONFIG         1015
+#define IDC_OPEN_LOG            1016
+#define IDC_RESET               1017
+
 /* RT_MANIFEST = 24, CREATEPROCESS_MANIFEST_RESOURCE_ID = 1 */
 1 24 "resources/app.manifest"
 
@@ -40,4 +60,33 @@ BEGIN
     BEGIN
         VALUE "Translation", 0x409, 1200
     END
+END
+
+IDD_SETTINGS DIALOGEX 0, 0, 248, 188
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "tray-monitor settings"
+FONT 9, "Segoe UI", 400, 0, 0x0
+BEGIN
+    LTEXT           "Readouts", -1, 10, 8, 60, 9
+    CONTROL         "CPU", IDC_CPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 13, 20, 54, 10
+    CONTROL         "Memory", IDC_MEMORY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 72, 20, 54, 10
+    CONTROL         "Network down (DN)", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 13, 33, 86, 10
+    CONTROL         "Network up (UP)", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 104, 33, 86, 10
+    /* 미리보기는 창이 뜨면 코드가 비트맵을 넣는다(SS_BITMAP). */
+    CONTROL         "", IDC_PREVIEW, "Static", SS_BITMAP | SS_CENTERIMAGE | WS_BORDER | WS_GROUP, 13, 47, 222, 34
+    LTEXT           "Update every", -1, 10, 88, 62, 9
+    COMBOBOX        IDC_INTERVAL, 76, 86, 96, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
+    EDITTEXT        IDC_INTERVAL_EDIT, 176, 86, 40, 13, ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL
+    LTEXT           "ms", IDC_INTERVAL_UNIT, 219, 88, 18, 9
+    LTEXT           "Colours", -1, 10, 106, 62, 9
+    CONTROL         "Per readout", IDC_COLOR_METRIC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 76, 105, 64, 10
+    CONTROL         "Taskbar theme", IDC_COLOR_THEME, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 144, 105, 74, 10
+    CONTROL         "Count virtual adapters", IDC_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 13, 119, 140, 10
+    CONTROL         "Run at sign-in", IDC_AUTOSTART, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 13, 132, 140, 10
+    LTEXT           "", IDC_STATUS, 10, 147, 170, 9
+    RTEXT           "", IDC_VERSION, 186, 147, 52, 9
+    PUSHBUTTON      "Open config file", IDC_OPEN_CONFIG, 10, 161, 72, 14, WS_TABSTOP | WS_GROUP
+    PUSHBUTTON      "Open log", IDC_OPEN_LOG, 86, 161, 52, 14, WS_TABSTOP
+    PUSHBUTTON      "Reset to defaults", IDC_RESET, 142, 161, 62, 14, WS_TABSTOP
+    DEFPUSHBUTTON   "Close", IDCANCEL, 208, 161, 30, 14
 END

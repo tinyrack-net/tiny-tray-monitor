@@ -34,6 +34,8 @@ Run the validation loop after changes:
 | `src/tray/` | Tray slots, the context menu and the first-run onboarding |
 | `src/config.rs` | `config.toml` / `state.toml` |
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
+| `src/settings/` | The settings window: a pure model, the Win32 dialog and the icon preview |
+| `src/ipc.rs` | Hidden window that hands a second launch over to the running instance |
 | `src/win32.rs` | The remaining `unsafe` helpers |
 | `src/devtools.rs` | `--probe`, `--interfaces`, `--dump` |
 | `build.rs` | Compiles `resources/app.rc` so the exe carries `VERSIONINFO` and the manifest |
@@ -76,6 +78,14 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     that the manifest took effect, read the *path* of the loaded `comctl32.dll`: the WinSxS
     assembly is `...common-controls_..._6.0.<build>` even though its file version string still
     says `5.82`. `docs/SPIKE.md` §10.
+11. **A modal window opened while `App` is borrowed freezes the tray.** `runtime::with` holds the
+    app for the whole call, so a `MessageBox` raised inside it drops every timer tick until it
+    closes, and re-entrant dialog messages silently no-op. The settings window is opened from
+    the message loop with no borrow held, and a failed change is reported through the window's
+    status line instead of a `MessageBox`. `docs/SPIKE.md` §11-4.
+12. **A read-only registry handle cannot delete a value.** `CURRENT_USER.open()` hands back a
+    key opened for reading, so `remove_value` fails with `Access is denied`. Use `create()` for
+    the removal path too.
 
 ## Merging
 

@@ -1,6 +1,7 @@
 //! Win32 공용 헬퍼. `unsafe`는 이 모듈과 [crate::icon::gdi]에만 둔다.
 
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
+use windows::Win32::Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MoveFileExW};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
@@ -49,6 +50,23 @@ pub fn acquire_named(name: &str) -> bool {
     }
 }
 
+/// `from`을 `to`로 바꾼다. 대상이 있으면 대체한다.
+///
+/// 설정 파일을 임시 파일에 먼저 쓰고 이 함수로 교체한다. 저장 도중에 죽어도 반쯤 쓰인
+/// 설정이 남아 다음 시작에 기본값으로 돌아가는 일이 없다.
+pub fn replace_file(from: &std::path::Path, to: &std::path::Path) -> Result<(), String> {
+    let from = wide(&from.display().to_string());
+    let to = wide(&to.display().to_string());
+    unsafe {
+        MoveFileExW(
+            PCWSTR(from.as_ptr()),
+            PCWSTR(to.as_ptr()),
+            MOVEFILE_REPLACE_EXISTING,
+        )
+    }
+    .map_err(|e| e.to_string())
+}
+
 /// 기본 브라우저나 설정 앱으로 URI를 연다.
 pub fn open_url(url: &str) -> bool {
     let operation = wide("open");
@@ -84,6 +102,251 @@ pub fn inform(title: &str, text: &str) {
     let style: MESSAGEBOX_STYLE = MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST;
     unsafe {
         MessageBoxW(None, PCWSTR(text.as_ptr()), PCWSTR(title.as_ptr()), style);
+    }
+}
+
+/// 대화상자와 그 안의 컨트롤.
+///
+/// 설정 창이 쓰는 Win32 호출을 여기에 모아 둔다(`unsafe`는 이 모듈과 [crate::icon::gdi]에만
+/// 둔다는 경계). 바깥에는 안전한 Rust만 넘어간다.
+pub mod dialog {
+    use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT, WPARAM};
+    use windows::Win32::Graphics::Gdi::{
+        DeleteObject, GetMonitorInfoW, HBITMAP, HGDIOBJ, HMONITOR, MONITOR_DEFAULTTONEAREST,
+        MONITORINFO, MonitorFromPoint,
+    };
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::Controls::{
+        BST_CHECKED, ICC_STANDARD_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, DialogBoxParamW,
+        EndDialog, GetCursorPos, GetDlgItemTextW, GetWindowRect, IMAGE_BITMAP, STM_SETIMAGE,
+        SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SendDlgItemMessageW, SetDlgItemTextW,
+        SetForegroundWindow, SetWindowPos,
+    };
+    use windows::core::PCWSTR;
+
+    /// 표준 컨트롤 클래스를 등록한다.
+    ///
+    /// 비주얼 스타일은 매니페스트가 켜지만(comctl32 v6), 클래스 등록은 따로 알려 줘야 한다.
+    pub fn init_common_controls() {
+        let classes = INITCOMMONCONTROLSEX {
+            dwSize: std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32,
+            dwICC: ICC_STANDARD_CLASSES,
+        };
+        let _ = unsafe { InitCommonControlsEx(&classes) };
+    }
+
+    /// 대화상자를 모달로 띄운다. 닫힐 때까지 돌아오지 않는다.
+    pub fn show(id: u16, procedure: extern "system" fn(HWND, u32, WPARAM, LPARAM) -> isize) {
+        let instance = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
+        // 리소스 id는 문자열이 아니라 정수 포인터로 넘긴다(MAKEINTRESOURCE).
+        let name = PCWSTR(id as usize as *const u16);
+        unsafe {
+            DialogBoxParamW(
+                Some(instance.into()),
+                name,
+                None,
+                Some(procedure),
+                LPARAM(0),
+            )
+        };
+    }
+
+    /// 대화상자를 닫는다.
+    pub fn end(hwnd: HWND) {
+        let _ = unsafe { EndDialog(hwnd, 0) };
+    }
+
+    /// 체크박스·라디오의 체크 상태를 바꾼다.
+    pub fn set_check(hwnd: HWND, id: i32, checked: bool) {
+        let state = if checked { BST_CHECKED.0 } else { 0 };
+        unsafe {
+            SendDlgItemMessageW(hwnd, id, BM_SETCHECK, WPARAM(state as usize), LPARAM(0));
+        }
+    }
+
+    /// 체크되어 있는가.
+    pub fn is_check(hwnd: HWND, id: i32) -> bool {
+        let state = unsafe { SendDlgItemMessageW(hwnd, id, BM_GETCHECK, WPARAM(0), LPARAM(0)) };
+        state.0 == BST_CHECKED.0 as isize
+    }
+
+    /// 컨트롤의 글자를 바꾼다.
+    pub fn set_text(hwnd: HWND, id: i32, text: &str) {
+        let text = super::wide(text);
+        let _ = unsafe { SetDlgItemTextW(hwnd, id, PCWSTR(text.as_ptr())) };
+    }
+
+    /// 컨트롤의 글자를 읽는다. 너무 길면 잘린다(입력 칸은 짧다).
+    pub fn text(hwnd: HWND, id: i32) -> String {
+        let mut buffer = [0u16; 64];
+        let length = unsafe { GetDlgItemTextW(hwnd, id, &mut buffer) } as usize;
+        String::from_utf16_lossy(&buffer[..length.min(buffer.len())])
+    }
+
+    /// 콤보에 항목을 넣고 그 위치를 돌려준다.
+    pub fn combo_add(hwnd: HWND, id: i32, text: &str) -> i32 {
+        let text = super::wide(text);
+        let index = unsafe {
+            SendDlgItemMessageW(
+                hwnd,
+                id,
+                CB_ADDSTRING,
+                WPARAM(0),
+                LPARAM(text.as_ptr() as isize),
+            )
+        };
+        index.0 as i32
+    }
+
+    /// 콤보에서 고른 위치. 고른 것이 없으면 -1.
+    pub fn combo_selection(hwnd: HWND, id: i32) -> i32 {
+        let index = unsafe { SendDlgItemMessageW(hwnd, id, CB_GETCURSEL, WPARAM(0), LPARAM(0)) };
+        index.0 as i32
+    }
+
+    /// 콤보의 선택을 바꾼다. `CBN_SELCHANGE`는 오지 않는다.
+    pub fn combo_select(hwnd: HWND, id: i32, index: i32) {
+        unsafe {
+            SendDlgItemMessageW(hwnd, id, CB_SETCURSEL, WPARAM(index as usize), LPARAM(0));
+        }
+    }
+
+    /// 정적 컨트롤의 비트맵을 바꾸고 **이전 비트맵을 지운다.**
+    ///
+    /// `STM_SETIMAGE`는 이전 핸들을 돌려주므로 여기서 지우지 않으면 갱신할 때마다 GDI
+    /// 핸들이 샌다.
+    pub fn set_bitmap(hwnd: HWND, id: i32, bitmap: HBITMAP) {
+        let previous = unsafe {
+            SendDlgItemMessageW(
+                hwnd,
+                id,
+                STM_SETIMAGE,
+                WPARAM(IMAGE_BITMAP.0 as usize),
+                LPARAM(bitmap.0 as isize),
+            )
+        };
+        let previous = HBITMAP(previous.0 as *mut core::ffi::c_void);
+        if !previous.is_invalid() {
+            let _ = unsafe { DeleteObject(HGDIOBJ(previous.0)) };
+        }
+    }
+
+    /// 커서가 있는 모니터의 작업 영역 가운데로 옮긴다.
+    ///
+    /// PMv2라 크기는 시스템이 배율에 맞춰 정한다. 위치만 잡아 준다.
+    pub fn center_on_cursor_monitor(hwnd: HWND) {
+        let mut cursor = POINT::default();
+        if unsafe { GetCursorPos(&mut cursor) }.is_err() {
+            return;
+        }
+
+        let monitor: HMONITOR = unsafe { MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST) };
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
+            return;
+        }
+
+        let mut rect = RECT::default();
+        if unsafe { GetWindowRect(hwnd, &mut rect) }.is_err() {
+            return;
+        }
+
+        let work = info.rcWork;
+        let x = work.left + ((work.right - work.left) - (rect.right - rect.left)) / 2;
+        let y = work.top + ((work.bottom - work.top) - (rect.bottom - rect.top)) / 2;
+        let _ = unsafe {
+            SetWindowPos(
+                hwnd,
+                None,
+                x,
+                y,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        };
+    }
+
+    /// 대화상자를 앞으로 가져온다. 트레이 클릭으로 열면 이미 활성 상태다.
+    pub fn bring_to_front(hwnd: HWND) {
+        let _ = unsafe { SetForegroundWindow(hwnd) };
+    }
+}
+
+/// 창 하나를 만들고 찾는다. 두 번째 실행을 넘겨받는 IPC 창이 쓴다.
+pub mod window {
+    use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowW, PostMessageW, RegisterClassW,
+        WINDOW_EX_STYLE, WNDCLASSW, WS_POPUP,
+    };
+    use windows::core::PCWSTR;
+
+    /// 보이지 않는 창을 만든다.
+    ///
+    /// `HWND_MESSAGE`(메시지 전용 창)는 최상위 창이 아니라 `FindWindowW`로 찾히지 않으므로,
+    /// 보여 주지 않는 일반 창을 만든다. `WS_POPUP` + `ShowWindow`를 부르지 않기 때문에
+    /// 화면에 나타나지 않는다.
+    pub fn create(
+        class: &str,
+        procedure: extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT,
+    ) -> Result<HWND, String> {
+        let class_name = super::wide(class);
+        unsafe {
+            let instance: HINSTANCE = GetModuleHandleW(None).map_err(|e| e.to_string())?.into();
+            let definition = WNDCLASSW {
+                lpfnWndProc: Some(procedure),
+                hInstance: instance,
+                lpszClassName: PCWSTR(class_name.as_ptr()),
+                ..Default::default()
+            };
+            // 같은 클래스를 두 번 등록하면 실패하지만 그대로 진행해도 된다.
+            RegisterClassW(&definition);
+
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                PCWSTR(class_name.as_ptr()),
+                PCWSTR::null(),
+                WS_POPUP,
+                0,
+                0,
+                0,
+                0,
+                None,
+                None,
+                Some(instance),
+                None,
+            )
+            .map_err(|e| format!("{class} 창을 만들 수 없다: {e}"))
+        }
+    }
+
+    /// 클래스 이름으로 창을 찾는다. 없으면 `None`.
+    pub fn find(class: &str) -> Option<HWND> {
+        let class = super::wide(class);
+        unsafe { FindWindowW(PCWSTR(class.as_ptr()), PCWSTR::null()) }.ok()
+    }
+
+    /// 창에 메시지를 넣는다. 상대가 처리할 때까지 기다리지 않는다.
+    pub fn notify(hwnd: HWND, message: u32) -> bool {
+        unsafe { PostMessageW(Some(hwnd), message, WPARAM(0), LPARAM(0)).is_ok() }
+    }
+
+    /// 창을 없앤다.
+    pub fn destroy(hwnd: HWND) {
+        let _ = unsafe { DestroyWindow(hwnd) };
+    }
+
+    /// 프로시저가 처리하지 않은 메시지를 기본 처리로 넘긴다.
+    pub fn default_procedure(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
     }
 }
 

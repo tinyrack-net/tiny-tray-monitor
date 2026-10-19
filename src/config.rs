@@ -212,7 +212,12 @@ fn load_toml<T: Default + serde::de::DeserializeOwned>(path: &PathBuf) -> T {
 fn save_toml<T: Serialize>(directory: &PathBuf, name: &str, value: &T) -> Result<(), String> {
     std::fs::create_dir_all(directory).map_err(|e| e.to_string())?;
     let text = toml::to_string_pretty(value).map_err(|e| e.to_string())?;
-    std::fs::write(directory.join(name), text).map_err(|e| e.to_string())
+    let target = directory.join(name);
+
+    // 반쯤 쓰인 파일이 남으면 다음 시작에 기본값으로 돌아간다. 임시 파일에 쓰고 교체한다.
+    let temporary = directory.join(format!("{name}.tmp"));
+    std::fs::write(&temporary, text).map_err(|e| e.to_string())?;
+    crate::win32::replace_file(&temporary, &target)
 }
 
 #[cfg(test)]
@@ -365,5 +370,23 @@ network = false
             assert!(!show.get(metric));
         }
         assert_eq!(show.count(), 0);
+    }
+
+    /// 저장은 임시 파일을 거쳐 교체한다. 임시 파일이 남거나 이전 내용이 살아 있으면 실패다.
+    #[test]
+    fn saving_replaces_the_file_and_leaves_no_temporary() {
+        let dir = temp_dir("atomic");
+        let mut store = Store::load_from(dir.clone());
+        store.config.poll_interval_ms = 750;
+        store.save_config().expect("save");
+        store.config.poll_interval_ms = 500;
+        store.save_config().expect("save again");
+
+        assert_eq!(Store::load_from(dir.clone()).config.poll_interval_ms, 500);
+        assert!(
+            !dir.join("config.toml.tmp").exists(),
+            "임시 파일이 남으면 안 된다"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

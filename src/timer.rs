@@ -11,7 +11,7 @@
 //! 그래서 콜백을 **꺼내서 실행하고 다시 넣는다.** 실행 중 재진입한 타이머는 콜백이
 //! 비어 있으므로 조용히 건너뛴다.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -23,6 +23,22 @@ use windows::core::PCWSTR;
 
 thread_local! {
     static ON_TICK: RefCell<Option<Box<dyn FnMut()>>> = const { RefCell::new(None) };
+    /// 살아 있는 타이머 창. 주기를 바꾸려면 메시지 루프 밖에서도 핸들이 필요하다.
+    static WINDOW: Cell<Option<(HWND, usize)>> = const { Cell::new(None) };
+}
+
+/// 타이머 주기를 바꾼다.
+///
+/// 설정 창은 모달 루프를 돌리므로 메시지 루프를 거치지 않고 여기서 바로 바꾼다. 같은 id로
+/// 다시 걸면 Windows가 그 타이머를 새 주기로 바꾼다.
+pub fn set_interval(interval_ms: u32) {
+    WINDOW.with(|slot| {
+        if let Some((hwnd, timer)) = slot.get() {
+            unsafe {
+                SetTimer(Some(hwnd), timer, interval_ms, None);
+            }
+        }
+    });
 }
 
 const CLASS_NAME: &str = "tray-monitor-timer";
@@ -99,6 +115,7 @@ impl TimerWindow {
             if timer == 0 {
                 return Err("SetTimer 가 실패했다".to_string());
             }
+            WINDOW.with(|slot| slot.set(Some((hwnd, timer))));
             Ok(Self { hwnd, timer })
         }
     }
@@ -112,6 +129,7 @@ impl TimerWindow {
 impl Drop for TimerWindow {
     fn drop(&mut self) {
         ON_TICK.with(|slot| *slot.borrow_mut() = None);
+        WINDOW.with(|slot| slot.set(None));
         unsafe {
             let _ = KillTimer(Some(self.hwnd), self.timer);
             let _ = DestroyWindow(self.hwnd);
@@ -177,5 +195,21 @@ mod tests {
     fn dispatch_without_callback_is_a_noop() {
         clear();
         dispatch_tick();
+    }
+
+    /// 창이 없을 때도, 있을 때도 주기 변경이 패닉 없이 지나가야 한다.
+    #[test]
+    fn interval_can_be_changed_while_the_window_lives() {
+        clear();
+        set_interval(500);
+
+        let window = TimerWindow::new(1_000, || {}).expect("타이머 창");
+        assert_eq!(window.id(), 1, "hwnd를 주면 요청한 id가 그대로 쓰인다");
+        set_interval(250);
+        set_interval(10_000);
+
+        drop(window);
+        set_interval(500);
+        clear();
     }
 }

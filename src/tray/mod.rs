@@ -30,6 +30,7 @@ pub const MENU_SHOW: [&str; 4] = [
 ];
 pub const MENU_AUTOSTART: &str = "autostart";
 pub const MENU_VIRTUAL: &str = "count-virtual-adapters";
+pub const MENU_SETTINGS: &str = "settings";
 pub const MENU_OPEN_CONFIG: &str = "open-config";
 pub const MENU_EXIT: &str = "exit";
 
@@ -42,6 +43,7 @@ pub struct MenuHandles {
     pub autostart: CheckMenuItem,
     pub virtual_adapters: CheckMenuItem,
     about: MenuItem,
+    settings: MenuItem,
     open_config: MenuItem,
     exit: PredefinedMenuItem,
     separators: Vec<PredefinedMenuItem>,
@@ -83,6 +85,10 @@ impl MenuHandles {
                 .text("Open config file")
                 .id(MenuId::new(MENU_OPEN_CONFIG))
                 .build(),
+            settings: MenuItemBuilder::new()
+                .text("Settings…")
+                .id(MenuId::new(MENU_SETTINGS))
+                .build(),
             exit: PredefinedMenuItem::quit(Some("Exit")),
             separators: vec![
                 PredefinedMenuItem::separator(),
@@ -90,6 +96,19 @@ impl MenuHandles {
                 PredefinedMenuItem::separator(),
             ],
         }
+    }
+
+    /// 체크 표시를 실제 값에 맞춘다.
+    ///
+    /// 값이 바뀌는 경로는 하나(`App::apply_effects`)지만 표시는 창과 메뉴 두 곳이므로,
+    /// 반영이 끝난 뒤 한 번에 맞춘다.
+    pub fn sync(&self, config: &Config, autostart: bool) {
+        for (index, metric) in Metric::ALL.iter().enumerate() {
+            self.show[index].set_checked(config.show.get(*metric));
+        }
+        self.autostart.set_checked(autostart);
+        self.virtual_adapters
+            .set_checked(!config.exclude_virtual_adapters);
     }
 
     /// 같은 아이템을 공유하는 새 메뉴. 아이콘마다 하나씩 필요하다.
@@ -105,6 +124,7 @@ impl MenuHandles {
             &self.autostart,
             &self.virtual_adapters,
             &self.separators[2],
+            &self.settings,
             &self.open_config,
             &self.exit,
         ];
@@ -116,7 +136,6 @@ impl MenuHandles {
 struct Slot {
     metric: Metric,
     tray: TrayIcon,
-    visible: bool,
     value: String,
     tooltip: String,
     dirty: bool,
@@ -148,7 +167,7 @@ impl Tray {
 
         for metric in Metric::ALL {
             let menu = handles.build()?;
-            let (label_color, value_color) = colors(palette, config.color_mode, metric);
+            let (label_color, value_color) = palette.colors(config.color_mode, metric);
             let bitmap = icon::stacked(
                 &mut cache,
                 metric.label(),
@@ -170,7 +189,6 @@ impl Tray {
             slots.push(Slot {
                 metric,
                 tray,
-                visible: true,
                 value: PLACEHOLDER.to_string(),
                 tooltip: metric.tooltip_name().to_string(),
                 dirty: false,
@@ -179,13 +197,11 @@ impl Tray {
 
         // 설정에서 꺼진 지표는 등록은 유지한 채 숨긴다.
         for slot in &mut slots {
-            let visible = config.show.get(slot.metric);
-            if !visible {
+            if !config.show.get(slot.metric) {
                 if let Err(error) = slot.tray.set_visible(false) {
                     logging::warn(format!("{:?} 아이콘을 숨기지 못했다: {error}", slot.metric));
                 }
             }
-            slot.visible = visible;
         }
 
         Ok(Self {
@@ -208,14 +224,6 @@ impl Tray {
         &self.handles
     }
 
-    pub fn is_visible(&self, metric: Metric) -> bool {
-        self.slots
-            .iter()
-            .find(|slot| slot.metric == metric)
-            .map(|slot| slot.visible)
-            .unwrap_or(false)
-    }
-
     /// 표시 여부를 바꾼다. 등록은 유지하므로 승격 설정이 보존된다.
     pub fn set_visible(&mut self, metric: Metric, visible: bool) {
         let Some(slot) = self.slot(metric) else {
@@ -223,9 +231,7 @@ impl Tray {
         };
         if let Err(error) = slot.tray.set_visible(visible) {
             logging::warn(format!("{metric:?} 아이콘 표시를 바꾸지 못했다: {error}"));
-            return;
         }
-        slot.visible = visible;
     }
 
     /// 테마나 색 모드가 바뀌면 다음 갱신에서 다시 그린다.
@@ -254,7 +260,7 @@ impl Tray {
         }
 
         if value_changed || slot.dirty {
-            let (label_color, value_color) = colors(palette, color_mode, metric);
+            let (label_color, value_color) = palette.colors(color_mode, metric);
             let bitmap = icon::stacked(
                 &mut self.cache,
                 metric.label(),
@@ -295,14 +301,6 @@ impl Tray {
     }
 }
 
-/// 지표별 (라벨색, 값색).
-fn colors(palette: Palette, mode: ColorMode, metric: Metric) -> (icon::Color, icon::Color) {
-    match mode {
-        ColorMode::Theme => (palette.label, palette.mono),
-        ColorMode::Metric => (palette.label, palette.value(metric)),
-    }
-}
-
 /// 설정 파일을 기본 편집기로 연다.
 pub fn open_config_file() {
     let path = crate::config::config_dir().join("config.toml");
@@ -320,33 +318,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn colors_follow_the_mode() {
-        let palette = Palette::dark();
-        let (label, value) = colors(palette, ColorMode::Theme, Metric::Cpu);
-        assert_eq!(label, palette.label);
-        assert_eq!(value, palette.mono);
-
-        let (_, value) = colors(palette, ColorMode::Metric, Metric::Cpu);
-        assert_eq!(value, palette.cpu);
-    }
-
-    #[test]
-    fn metric_colors_differ_by_metric() {
-        let palette = Palette::dark();
-        let cpu = colors(palette, ColorMode::Metric, Metric::Cpu).1;
-        let memory = colors(palette, ColorMode::Metric, Metric::Memory).1;
-        let down = colors(palette, ColorMode::Metric, Metric::NetworkDown).1;
-        let up = colors(palette, ColorMode::Metric, Metric::NetworkUp).1;
-        assert_ne!(cpu, memory);
-        assert_ne!(memory, down);
-        assert_ne!(down, up);
-    }
-
-    #[test]
     fn menu_ids_are_unique() {
         let mut ids: Vec<&str> = MENU_SHOW.to_vec();
         ids.push(MENU_AUTOSTART);
         ids.push(MENU_VIRTUAL);
+        ids.push(MENU_SETTINGS);
         ids.push(MENU_OPEN_CONFIG);
         ids.push(MENU_EXIT);
         let mut sorted = ids.clone();

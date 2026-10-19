@@ -550,3 +550,29 @@ pub fn diff(current: &Config, autostart: bool, next: &SettingsDraft) -> Vec<Effe
 3. **comctl32 v6의 파일 버전 문자열은 `5.82`다.** 경로로 판별해야 한다(SPIKE.md §10-2).
 4. **대화상자 배율 실측은 G3로 옮겼다.** G0에는 대화상자가 없다. 지금 확인한 것은 매니페스트의
    DPI 선언이 실제로 적용된다는 것까지다(SPIKE.md §10-5).
+
+### 12.12 G1 ~ G7 진행 결과
+
+설정 창을 띄워 컨트롤을 조작하며 확인했다. 실측은 [SPIKE.md](SPIKE.md) §11에 있다.
+
+| 단계 | 결과 |
+| --- | --- |
+| G1 설정 모델 | `src/settings/model.rs`. draft · `Effect` · `validate` · `diff` · 마지막 지표 규칙이 전부 순수 함수다 |
+| G2 적용 경로 단일화 | `App::apply_effects` 하나로 모았다. 트레이 메뉴도 `Effect`를 만들어 같은 길을 탄다. `timer::set_interval`, 메뉴 체크 동기화(`MenuHandles::sync`), 설정 저장을 임시 파일 + 교체로 바꿨다 |
+| G3 대화상자 | `resources/app.rc`의 `IDD_SETTINGS` + `src/settings/dialog.rs`. 모든 컨트롤이 즉시 적용되고, 창이 열려 있는 동안에도 트레이가 계속 갱신된다 |
+| G4 아이콘 미리보기 | `src/settings/preview.rs`. 트레이와 같은 렌더러로 그려 배경 위에 합성한다(정적 컨트롤은 알파를 합성하지 않는다) |
+| G5 바로가기·복원 | Open config file / Open log / Reset to defaults / 버전 표시 |
+| G7 진입 경로 | 트레이 메뉴 `Settings…`, `--settings`, exe 재실행 시 실행 중 인스턴스에 창 열기(`src/ipc.rs`) |
+
+계획과 달라진 점:
+
+1. **주기 입력에 스피너(up-down)를 넣지 않았다.** 콤보 + 입력 칸만 둔다. 스피너는
+   `Win32_UI_Controls`와 buddy 배선을 더 요구하는데, 콤보로 고르고 숫자로 다듬는 흐름은
+   입력 칸만으로 충분하다.
+2. **`.rc` 컨트롤 id 대조 테스트를 넣었다.** `include_str!("../../resources/app.rc")`로
+   상수와 리소스가 어긋나지 않는지 검사한다(§12.6-5).
+3. **검증에서 결함 2개를 찾아 함께 고쳤다.** 자동 실행 해제가 `Access is denied`로 실패하던
+   문제와, 그 실패를 알리는 `MessageBox`가 `App` 대여를 붙잡아 트레이를 멈추던 문제다
+   (SPIKE.md §11-4). 둘 다 v0.2.0에 있던 것이라 트레이 메뉴 경로도 같이 고쳐졌다.
+4. **`Tray::is_visible`과 `Slot::visible`을 지웠다.** 표시 여부는 `config.show` 하나로
+   충분해져 중복 상태가 사라졌다.
