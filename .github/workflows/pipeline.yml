@@ -71,18 +71,14 @@ jobs:
           .\target\release\tray-monitor.exe --interfaces
           .\target\release\tray-monitor.exe --dump
       - name: Check the rendered icons
+        # 이름을 나열하지 않는다. 지표를 늘리면 dump 파일 이름도 바뀌므로
+        # 개수와 내용만 확인한다.
         run: |
-          $expected = @(
-            "out/dark_px16_CPU@16x.bmp",
-            "out/dark_px16_MEM@16x.bmp",
-            "out/dark_px16_NET@16x.bmp",
-            "out/light_px16_CPU@16x.bmp",
-            "out/light_px16_MEM@16x.bmp",
-            "out/light_px16_NET@16x.bmp"
-          )
-          foreach ($path in $expected) {
-            if (-not (Test-Path $path)) { throw "missing $path" }
-            if ((Get-Item $path).Length -le 0) { throw "empty $path" }
+          $files = @(Get-ChildItem out -Filter *.bmp)
+          Write-Output "dumped $($files.Count) files"
+          if ($files.Count -lt 6) { throw "expected at least six dumped files, found $($files.Count)" }
+          foreach ($file in $files) {
+            if ($file.Length -le 0) { throw "empty $($file.Name)" }
           }
       - uses: actions/upload-artifact@v4
         with:

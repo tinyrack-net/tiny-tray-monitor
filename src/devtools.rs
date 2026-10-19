@@ -264,3 +264,43 @@ pub fn interfaces() {
         println!();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 태그가 겹치면 덤프 파일이 서로를 덮어써 조용히 사라진다.
+    #[test]
+    fn every_metric_has_a_unique_dump_tag() {
+        let tags: Vec<&str> = Metric::ALL.iter().map(|metric| tag(*metric)).collect();
+        let mut sorted = tags.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), tags.len(), "{tags:?}");
+    }
+
+    /// `tools/icon_sheet.py`의 TAGS와 같아야 시트가 만들어진다.
+    #[test]
+    fn dump_tags_match_the_sheet_tool() {
+        let expected = ["CPU", "MEM", "NETD", "NETU"];
+        let actual: Vec<&str> = Metric::ALL.iter().map(|metric| tag(*metric)).collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn every_metric_has_a_sample_value() {
+        for metric in Metric::ALL {
+            let value = sample_value(metric);
+            assert!(!value.is_empty(), "{metric:?}");
+            assert!(value.chars().count() <= 4, "{metric:?}: {value}");
+        }
+    }
+
+    #[test]
+    fn label_candidates_are_comparable() {
+        assert!(LABEL_CANDIDATES.len() >= 4);
+        for (id, label) in LABEL_CANDIDATES {
+            assert!(!id.is_empty() && !label.is_empty());
+        }
+    }
+}
