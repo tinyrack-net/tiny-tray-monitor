@@ -16,9 +16,11 @@ mod app;
 mod config;
 mod devtools;
 mod icon;
+mod ipc;
 mod logging;
 mod metrics;
 mod runtime;
+mod settings;
 mod startup;
 mod theme;
 mod timer;
@@ -42,6 +44,7 @@ tray-monitor - CPU / memory / network readouts in the Windows tray
 
 usage:
   tray-monitor                run the tray app
+  tray-monitor --settings     run and open the settings window
   tray-monitor --probe        print metrics every second (no tray)
   tray-monitor --interfaces   list network interfaces and what is counted
   tray-monitor --dump         dump icon renderings and layout measurements
@@ -51,6 +54,7 @@ usage:
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let has = |flag: &str| args.iter().any(|a| a == flag);
+    let wants_settings = has("--settings");
 
     // 진단 명령은 릴리스 빌드에도 콘솔이 없으므로 부모 콘솔에 붙는다.
     if has("--dump") || has("--probe") || has("--interfaces") || has("--help") {
@@ -84,6 +88,11 @@ fn main() {
     });
 
     if !win32::acquire_single_instance() {
+        // 이미 떠 있는 인스턴스가 있으면 그쪽에 설정 창을 부탁하고 조용히 끝난다.
+        if ipc::request_settings() {
+            logging::info("실행 중인 인스턴스에 설정 창을 요청했다");
+            return;
+        }
         logging::info("이미 실행 중이라 종료한다");
         win32::inform("tray-monitor", "tray-monitor is already running.");
         return;
@@ -121,6 +130,14 @@ fn main() {
     };
     logging::info(format!("폴링 주기 {interval:?}, 타이머 id {}", timer.id()));
 
+    // 두 번째 실행이 설정 창을 열 수 있게 창 하나를 띄워 둔다.
+    let _listener = ipc::Listener::start();
+
+    // `--settings`는 여기서 바로 열어도 된다(App을 빌리고 있지 않다).
+    if wants_settings {
+        settings::open();
+    }
+
     unsafe {
         let mut message = MSG::default();
         loop {
@@ -139,6 +156,12 @@ fn main() {
 
             // 클릭 메시지가 도착하면 즉시 처리되도록 매 메시지마다 비운다.
             runtime::drain_events();
+
+            // 설정 창은 **대여 밖에서만** 연다. 대여 중에 모달 루프에 들어가면 그동안
+            // 타이머 틱이 전부 버려져 트레이가 멈춘다.
+            if runtime::take_settings_request() {
+                settings::open();
+            }
 
             if runtime::should_exit() {
                 break;

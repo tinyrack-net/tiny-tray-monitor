@@ -20,7 +20,8 @@ pub fn install(app: App) {
     APP.with(|cell| *cell.borrow_mut() = Some(app));
 }
 
-fn with<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
+/// `App`을 빌려 쓴다. 쓰이는 중이면(재진입) `None`이다.
+pub fn with<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
     APP.with(|cell| match cell.try_borrow_mut() {
         Ok(mut slot) => slot.as_mut().map(f),
         Err(_) => None,
@@ -35,6 +36,19 @@ pub fn tick() {
 /// 트레이/메뉴 이벤트 처리.
 pub fn drain_events() {
     with(|app| app.drain_events());
+}
+
+/// 설정 창 열기를 요청한다.
+///
+/// 메뉴 핸들러와 IPC 창은 여기까지만 한다. 실제로 창을 여는 것은 메시지 루프이고,
+/// 그때는 `App`을 빌리고 있지 않다(모달 루프에서도 타이머가 계속 돈다).
+pub fn request_settings() {
+    with(|app| app.request_settings());
+}
+
+/// 요청이 있으면 가져가고 지운다.
+pub fn take_settings_request() -> bool {
+    with(|app| app.take_settings_request()).unwrap_or(false)
 }
 
 pub fn poll_interval() -> Duration {

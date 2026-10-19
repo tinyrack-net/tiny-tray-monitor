@@ -3,6 +3,7 @@
 //! 트레이 아이콘은 작업 표시줄 배경 위에 그려진다. 배경이 밝은데 흰 글자를 쓰면
 //! 보이지 않으므로, Windows 모드(`SystemUsesLightTheme`)를 읽어 색을 뒤집는다.
 
+use crate::config::ColorMode;
 use crate::icon::{Color, Metric};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +54,23 @@ impl Palette {
             Metric::Memory => self.memory,
             Metric::NetworkDown => self.network,
             Metric::NetworkUp => self.network_up,
+        }
+    }
+
+    /// 지표별 (라벨색, 값색).
+    pub const fn colors(&self, mode: ColorMode, metric: Metric) -> (Color, Color) {
+        match mode {
+            ColorMode::Theme => (self.label, self.mono),
+            ColorMode::Metric => (self.label, self.value(metric)),
+        }
+    }
+
+    /// 작업 표시줄 배경색. 미리보기가 아이콘을 올려 그리는 바탕이다.
+    pub const fn taskbar(&self) -> Color {
+        if self.light {
+            Color(243, 243, 243)
+        } else {
+            Color(32, 32, 32)
         }
     }
 }
@@ -109,11 +127,7 @@ mod tests {
         let label_alpha = crate::icon::stack_spec(16).label_alpha as f32 / 255.0;
 
         for palette in [Palette::dark(), Palette::light()] {
-            let background = if palette.light {
-                Color(243, 243, 243)
-            } else {
-                Color(32, 32, 32)
-            };
+            let background = palette.taskbar();
             let background_luminance = luminance(background);
 
             let cases = [
@@ -140,5 +154,32 @@ mod tests {
     fn current_palette_is_readable() {
         let palette = current();
         assert_eq!(palette.light, is_light());
+    }
+
+    #[test]
+    fn colors_follow_the_mode() {
+        let palette = Palette::dark();
+        let (label, value) = palette.colors(ColorMode::Theme, Metric::Cpu);
+        assert_eq!(label, palette.label);
+        assert_eq!(value, palette.mono);
+
+        let (_, value) = palette.colors(ColorMode::Metric, Metric::Cpu);
+        assert_eq!(value, palette.cpu);
+    }
+
+    #[test]
+    fn metric_colors_differ_by_metric() {
+        let palette = Palette::dark();
+        let color = |metric| palette.colors(ColorMode::Metric, metric).1;
+        assert_ne!(color(Metric::Cpu), color(Metric::Memory));
+        assert_ne!(color(Metric::Memory), color(Metric::NetworkDown));
+        assert_ne!(color(Metric::NetworkDown), color(Metric::NetworkUp));
+    }
+
+    /// 미리보기 바탕은 아이콘이 실제로 놓이는 배경과 같아야 한다.
+    #[test]
+    fn taskbar_background_matches_the_contrast_check() {
+        assert_eq!(Palette::light().taskbar(), Color(243, 243, 243));
+        assert_eq!(Palette::dark().taskbar(), Color(32, 32, 32));
     }
 }

@@ -39,10 +39,11 @@ the executable path, so moving the file makes Windows treat it as a new icon.
 
 ## Menu
 
-Right-click any of the three icons.
+Right-click any of the icons.
 
 | Item | What it does |
 | --- | --- |
+| Settings… | Opens the settings window |
 | CPU / Memory / Network down (DN) / Network up (UP) | Show or hide that readout. The last visible one cannot be turned off |
 | Run at sign-in | Adds or removes the `HKCU\...\Run` entry for the current executable |
 | Count virtual adapters | Include Hyper-V, VPN and similar adapters in the network total |
@@ -50,6 +51,24 @@ Right-click any of the three icons.
 | Exit | Stops tray-monitor |
 
 Hovering an icon shows the exact numbers, including upload rate and memory in GB.
+
+## Settings window
+
+Everything the menu does, plus the update interval, in one window. Re-running
+`tray-monitor.exe` (or running `tray-monitor --settings`) opens it in the instance that is
+already running.
+
+| Setting | Notes |
+| --- | --- |
+| Readouts | CPU, memory, network down and up. The last one cannot be turned off, and the preview shows what the tray icons look like right now |
+| Update every | 250 ms to 10 s. Pick a preset or type an exact number of milliseconds |
+| Colours | One colour per readout, or a single colour from the taskbar theme |
+| Network | Count virtual adapters (Hyper-V, VPN, vSwitch) in the network total |
+| Startup | Run at sign-in |
+| Buttons | Open `config.toml`, open the log file, reset everything in `config.toml` to the defaults |
+
+There is no OK button: every change applies immediately and is written to `config.toml` at
+once, so the tray icons are the preview. Close the window with the button or `Escape`.
 
 ## Configuration
 
@@ -78,10 +97,14 @@ Logs are written to `%LOCALAPPDATA%\tray-monitor\log.txt`.
 | Command | What it does |
 | --- | --- |
 | `tray-monitor` | Run the tray app |
+| `tray-monitor --settings` | Run and open the settings window (or open it in the running instance) |
 | `tray-monitor --probe` | Print the metrics every second, without any tray icon |
 | `tray-monitor --interfaces` | List network interfaces and mark which ones are counted |
 | `tray-monitor --dump` | Render the icons and print the layout measurements |
 | `tray-monitor --help` | Usage |
+
+The settings window is also reachable from the tray menu; `--settings` is for scripts and
+keyboard launchers.
 
 `--interfaces` is the quickest way to understand the network number:
 
