@@ -169,6 +169,76 @@ def outputs() -> dict[Path, bytes]:
     return files
 
 
+PNG_SIGNATURE = bytes([137, 80, 78, 71, 13, 10, 26, 10])
+
+def _png_rgba(data: bytes) -> tuple[int, int, bytes]:
+    """PNG 한 장을 (width, height, RGBA)로 푼다. 우리가 쓰는 형식만 지원한다."""
+    if data[:8] != PNG_SIGNATURE:
+        raise ValueError("not a PNG")
+    position = 8
+    compressed = bytearray()
+    width = height = 0
+    while position + 8 <= len(data):
+        length = struct.unpack(">I", data[position : position + 4])[0]
+        kind = data[position + 4 : position + 8]
+        body = data[position + 8 : position + 8 + length]
+        position += 12 + length
+        if kind == b"IHDR":
+            width, height, depth, color, _, _, _ = struct.unpack(">IIBBBBB", body)
+            if depth != 8 or color != 6:
+                raise ValueError("unsupported PNG format")
+        elif kind == b"IDAT":
+            compressed += body
+        elif kind == b"IEND":
+            break
+
+    raw = zlib.decompress(bytes(compressed))
+    stride = width * 4 + 1
+    rgba = bytearray()
+    for row in range(height):
+        if raw[row * stride] != 0:
+            raise ValueError("unsupported PNG filter")
+        rgba += raw[row * stride + 1 : (row + 1) * stride]
+    return width, height, bytes(rgba)
+
+
+def _ico_images(data: bytes) -> list[tuple[int, int, bytes]]:
+    """ICO 안의 PNG 항목을 (width, height, RGBA)로 푼다."""
+    _, kind, count = struct.unpack("<HHH", data[:6])
+    if kind != 1:
+        raise ValueError("not an ICO")
+    images = []
+    for index in range(count):
+        entry = data[6 + index * 16 : 6 + (index + 1) * 16]
+        width, height, _, _, _, _, size, offset = struct.unpack("<BBBBHHII", entry)
+        width = width or 256
+        height = height or 256
+        png_width, png_height, rgba = _png_rgba(data[offset : offset + size])
+        if (png_width, png_height) != (width, height):
+            raise ValueError("ICO entry size mismatch")
+        images.append((width, height, rgba))
+    return images
+
+
+def _same_image(path: Path, expected: bytes) -> bool:
+    """압축된 바이트가 아니라 픽셀로 비교한다.
+
+    zlib 버전이 다르면 같은 그림도 PNG 바이트가 달라진다. CI의 Python과 개발 PC의
+    Python이 달라도 자산 검사가 실패하지 않도록 디코딩해서 비교한다.
+    """
+    actual = path.read_bytes()
+    if actual == expected:
+        return True
+    try:
+        if path.suffix == ".png":
+            return _png_rgba(actual) == _png_rgba(expected)
+        if path.suffix == ".ico":
+            return _ico_images(actual) == _ico_images(expected)
+    except (ValueError, struct.error, zlib.error):
+        return False
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="생성 결과가 커밋된 파일과 같은지 확인")
@@ -178,7 +248,7 @@ def main() -> int:
     if args.check:
         stale = []
         for path, data in files.items():
-            if not path.exists() or path.read_bytes() != data:
+            if not path.exists() or not _same_image(path, data):
                 stale.append(path.relative_to(ROOT))
         if stale:
             for path in stale:
