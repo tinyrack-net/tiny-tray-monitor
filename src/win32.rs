@@ -1,17 +1,19 @@
 //! Win32 공용 헬퍼. `unsafe`는 이 모듈과 [crate::icon::gdi]에만 둔다.
 
-use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
+use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError, HWND};
 use windows::Win32::Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MoveFileExW};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
-use windows::Win32::UI::Shell::ShellExecuteW;
+use windows::Win32::UI::Shell::{
+    NIF_GUID, NIF_TIP, NIM_MODIFY, NOTIFYICONDATAW, Shell_NotifyIconW, ShellExecuteW,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetSystemMetrics, IDYES, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO,
     MESSAGEBOX_STYLE, MessageBoxW, SM_CXSMICON, SW_SHOWNORMAL,
 };
-use windows::core::PCWSTR;
+use windows::core::{GUID, PCWSTR};
 
 /// NUL 종료 UTF-16 문자열.
 pub fn wide(text: &str) -> Vec<u16> {
@@ -31,6 +33,26 @@ pub fn set_dpi_awareness() -> bool {
 /// 트레이 아이콘 한 칸의 크기(px). 배율에 따라 16/24/32 등이 된다.
 pub fn tray_icon_size() -> i32 {
     unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16)
+}
+
+/// GUID로 등록된 트레이 아이콘의 툴팁을 바꾼다.
+///
+/// `tray-icon` 0.26.1의 `set_tooltip`은 `NIF_GUID` 없이 `NIM_MODIFY`를 보내 GUID
+/// 아이콘에서는 항상 실패한다. 같은 호출을 직접 보내 우회한다. 반환값은 아이콘이
+/// 실제로 등록됐는지 확인하는 탐침으로도 쓸 수 있다.
+pub fn set_guid_tooltip(hwnd: *mut core::ffi::c_void, guid: u128, tooltip: &str) -> bool {
+    let text = wide(tooltip);
+    let mut data = NOTIFYICONDATAW {
+        cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+        hWnd: HWND(hwnd),
+        uFlags: NIF_TIP | NIF_GUID,
+        guidItem: GUID::from_u128(guid),
+        ..unsafe { std::mem::zeroed() }
+    };
+    for (slot, unit) in data.szTip.iter_mut().zip(&text) {
+        *slot = *unit;
+    }
+    unsafe { Shell_NotifyIconW(NIM_MODIFY, &data) }.as_bool()
 }
 
 /// 중복 실행을 막는다. 이미 실행 중이면 `false`.
