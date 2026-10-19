@@ -102,8 +102,8 @@ display scaling) leaves room for a 5px label and a 9px value, which is why the v
 never longer than four characters. Measurements and the reasoning behind the layout are in
 [docs/SPIKE.md](docs/SPIKE.md).
 
-Idle cost measured on a 2560x1440 100% display: about **11 MB** of memory and **0.4%** of one
-CPU core at a one second interval.
+Idle cost measured on a 2560x1440 100% display: about **19 MB** of working set (3 MB private,
+216 handles, all steady) and **0.4%** of one CPU core at a one second interval.
 
 ## Limitations
 
