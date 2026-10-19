@@ -73,9 +73,15 @@ fn main() {
         return;
     }
 
-    win32::set_dpi_awareness();
+    let dpi_set_at_runtime = win32::set_dpi_awareness();
     logging::init();
     install_panic_hook();
+    // 매니페스트의 DPI 선언이 실제로 링크되었는지 로그로 확인한다(실패하면 런타임 폴백이다).
+    logging::info(if dpi_set_at_runtime {
+        "DPI: 런타임 호출로 PerMonitorV2를 설정했다(매니페스트 없음)"
+    } else {
+        "DPI: 매니페스트의 PerMonitorV2 선언을 사용한다"
+    });
 
     if !win32::acquire_single_instance() {
         logging::info("이미 실행 중이라 종료한다");

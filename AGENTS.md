@@ -36,6 +36,8 @@ Run the validation loop after changes:
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
 | `src/win32.rs` | The remaining `unsafe` helpers |
 | `src/devtools.rs` | `--probe`, `--interfaces`, `--dump` |
+| `build.rs` | Compiles `resources/app.rc` so the exe carries `VERSIONINFO` and the manifest |
+| `resources/` | `app.rc` (version info, manifest reference) and `app.manifest` (comctl32 v6, PerMonitorV2, asInvoker) |
 | `docs/` | [PLAN.md](docs/PLAN.md), [SPIKE.md](docs/SPIKE.md) |
 | `tools/` | Python helpers for icon sheets, screenshots, tray keys |
 
@@ -67,6 +69,13 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
    the binary resets the user's choice. Release archives extract in place.
 9. **Cache glyph renderings.** Recreating the font and device context every second doubles CPU
    use. Values are a small finite set, so a per-string cache keeps the hit rate high.
+10. **`rc.exe` has no default include path, and comctl32 v6 misreports its version.** Run
+    outside a developer prompt, the resource compiler fails on `#include <windows.h>`
+    (`RC1015`) unless the SDK include directories are passed; `embed-resource` fills
+    `%INCLUDE%` for us, so the resource step needs no extra setup in `build.rs`. When checking
+    that the manifest took effect, read the *path* of the loaded `comctl32.dll`: the WinSxS
+    assembly is `...common-controls_..._6.0.<build>` even though its file version string still
+    says `5.82`. `docs/SPIKE.md` §10.
 
 ## Merging
 

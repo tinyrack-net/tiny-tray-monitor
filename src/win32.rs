@@ -19,11 +19,12 @@ pub fn wide(text: &str) -> Vec<u16> {
 
 /// 작업 표시줄 DPI를 따라 아이콘을 그리도록 프로세스를 설정한다.
 ///
-/// 이미 설정되어 있으면 실패하므로 결과를 무시한다.
-pub fn set_dpi_awareness() {
-    unsafe {
-        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    }
+/// `resources/app.manifest`가 `PerMonitorV2`를 선언하면 이 호출은 "이미 설정됨"으로
+/// 실패한다. 그 실패가 매니페스트가 살아 있다는 증거이므로 결과를 돌려준다.
+///
+/// 반환값: `true` = 이 호출이 설정했다(매니페스트가 없다), `false` = 이미 설정되어 있었다.
+pub fn set_dpi_awareness() -> bool {
+    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).is_ok() }
 }
 
 /// 트레이 아이콘 한 칸의 크기(px). 배율에 따라 16/24/32 등이 된다.
