@@ -21,13 +21,16 @@
     Directory for the .msix. Defaults to <repo>\dist.
 
 .PARAMETER IdentityName
-    Package identity name. Defaults to Tinyrack.TrayMonitor.
+    Package identity name. Defaults to tinyrack.TinyTrayManager.
 
 .PARAMETER Publisher
-    Publisher subject. Defaults to CN=Tinyrack.
+    Publisher subject. Defaults to the tinyrack Partner Center publisher.
 
 .PARAMETER PublisherDisplayName
-    Display name of the publisher. Defaults to Tinyrack.
+    Display name of the publisher. Defaults to tinyrack.
+
+.PARAMETER DisplayName
+    Product display name. Defaults to TinyTrayManager.
 
 .EXAMPLE
     pwsh -File packaging/windows/build-msix.ps1 -Exe target/release/tray-monitor.exe
@@ -39,11 +42,13 @@ param(
 
     [string]$OutputDir,
 
-    [string]$IdentityName = $(if ($env:MSIX_IDENTITY_NAME) { $env:MSIX_IDENTITY_NAME } else { 'Tinyrack.TrayMonitor' }),
+    [string]$IdentityName = $(if ($env:MSIX_IDENTITY_NAME) { $env:MSIX_IDENTITY_NAME } else { 'tinyrack.TinyTrayManager' }),
 
-    [string]$Publisher = $(if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=Tinyrack' }),
+    [string]$Publisher = $(if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=42FA8D93-3683-4A00-A40C-5ED8A02E8B3A' }),
 
-    [string]$PublisherDisplayName = $(if ($env:MSIX_PUBLISHER_DISPLAY_NAME) { $env:MSIX_PUBLISHER_DISPLAY_NAME } else { 'Tinyrack' }),
+    [string]$PublisherDisplayName = $(if ($env:MSIX_PUBLISHER_DISPLAY_NAME) { $env:MSIX_PUBLISHER_DISPLAY_NAME } else { 'tinyrack' }),
+
+    [string]$DisplayName = $(if ($env:MSIX_DISPLAY_NAME) { $env:MSIX_DISPLAY_NAME } else { 'TinyTrayManager' }),
 
     [ValidateSet('x64', 'arm64')]
     [string]$Arch = 'x64'
@@ -105,7 +110,7 @@ $manifest = Get-Content $template -Raw -Encoding UTF8
 $manifest = $manifest.Replace('@IDENTITY_NAME@', $IdentityName)
 $manifest = $manifest.Replace('@PUBLISHER@', $Publisher)
 $manifest = $manifest.Replace('@PUBLISHER_DISPLAY_NAME@', $PublisherDisplayName)
-$manifest = $manifest.Replace('@DISPLAY_NAME@', 'tray-monitor')
+$manifest = $manifest.Replace('@DISPLAY_NAME@', $DisplayName)
 $manifest = $manifest.Replace('@VERSION@', $quad)
 $manifest = $manifest.Replace('@ARCH@', $Arch)
 $manifestPath = Join-Path $stage 'AppxManifest.xml'

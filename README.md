@@ -41,7 +41,7 @@ Releases also contain `tray-monitor-<version>-windows-x64.msix`. It is **unsigne
 not install the file directly. The Store signs the submitted package; for local testing, unpack it
 and run `Add-AppxPackage -Register AppxManifest.xml` in developer mode. A packaged build keeps its
 config, state and log in
-`%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState`, uses the Windows startup-task API
+`%LOCALAPPDATA%\Packages	inyrack.TinyTrayManager_<hash>\LocalState`, uses the Windows startup-task API
 instead of the `Run` key, and keeps the tray promotion across package updates because each
 readout registers with a fixed GUID that Windows keys the setting on. Launching it
 from the Start menu only starts the tray; run it again or use the tray menu to open the settings.
@@ -96,7 +96,7 @@ With a dark taskbar the window opens dark, and the tray menu follows the same se
 ## Configuration
 
 `%APPDATA%\tray-monitor\config.toml` is created on first run. In the MSIX package the file lives
-in `%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState\config.toml`; an existing
+in `%LOCALAPPDATA%\Packages\tinyrack.TinyTrayManager_<hash>\LocalState\config.toml`; an existing
 config from `%APPDATA%\tray-monitor` is copied there on the first packaged run.
 
 ```toml

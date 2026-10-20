@@ -50,11 +50,11 @@ manifest 최소 형태(검증됨):
   xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap5 rescap">
-  <Identity Name="Tinyrack.TrayMonitor" Publisher="CN=Tinyrack"
-            Version="0.3.1.0" ProcessorArchitecture="x64" />
+  <Identity Name="tinyrack.TinyTrayManager" Publisher="CN=42FA8D93-3683-4A00-A40C-5ED8A02E8B3A"
+            Version="0.5.0.0" ProcessorArchitecture="x64" />
   <Properties>
-    <DisplayName>tray-monitor</DisplayName>
-    <PublisherDisplayName>Tinyrack</PublisherDisplayName>
+    <DisplayName>TinyTrayManager</DisplayName>
+    <PublisherDisplayName>tinyrack</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Resources><Resource Language="en-us" /></Resources>
@@ -159,7 +159,7 @@ manifest 최소 형태(검증됨):
 | MSIX 자동 시작 | **StartupTask API** | 패키지에서 Run 키가 무동작 |
 | 아이콘 | **간단한 임시 마크 생성 후 커밋** | 디자인은 나중에 교체. `tools/make_assets.py`로 재생성 |
 | VC 런타임 | **정적 CRT** | MSIX/installer 모두 VC++ 재배포 요구 제거 |
-| MSIX identity | 기본 `Tinyrack.TrayMonitor` / `CN=Tinyrack`, 환경 변수로 덮어쓰기 | 실제 Store identity는 Partner Center 등록 후 확정 |
+| MSIX identity | 예약된 `tinyrack.TinyTrayManager` / `CN=42FA8D93-…`, 환경 변수로 덮어쓰기 | Store ID `9MT22CHX25FD`. 이름·Publisher는 한 번 정하면 바꾸지 않는다 |
 | 버전 소스 | **빌드된 exe의 `ProductVersion`** | `build.rs`가 `Cargo.toml`에서 만들므로 아티팩트와 항상 일치. 태그와도 CI에서 대조 |
 
 ---
@@ -276,7 +276,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 - 1.1의 검증된 manifest를 템플릿화: `@@VERSION@@`, `@@IDENTITY_NAME@@`, `@@PUBLISHER@@`,
   `@@PUBLISHER_DISPLAY_NAME@@`, `@@DISPLAY_NAME@@`, `@@ARCH@@`.
-- 기본값 `Tinyrack.TrayMonitor`, `CN=Tinyrack`.
+- 기본값 `tinyrack.TinyTrayManager`, `CN=42FA8D93-3683-4A00-A40C-5ED8A02E8B3A`.
   환경 변수 `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER`, `MSIX_PUBLISHER_DISPLAY_NAME`로 덮어쓰기.
 - 선택 사항: `uap5:AppExecutionAlias`(`desktop4:Subsystem="windows"`)로
   `tray-monitor --dump` 같은 진단 명령을 패키지 설치에서도 쓸 수 있게 한다(구현 시 검증).
@@ -319,7 +319,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 - `README.md`:
   - 설치 방법 3가지(installer 권장, 포터블, MSIX는 Store 제출용/unsigned 주의).
   - MSIX 사용자: 설정/로그는
-    `%LOCALAPPDATA%\Packages\Tinyrack.TrayMonitor_<hash>\LocalState`,
+    `%LOCALAPPDATA%\Packages\tinyrack.TinyTrayManager_<hash>\LocalState`,
     자동 시작은 Windows 설정의 Startup apps, 업데이트 후에도 고정 GUID로 승격이 유지됨.
   - MSIX에서 Start 메뉴로 실행하면 창 없이 트레이만 시작되고,
     다시 실행하거나 트레이 메뉴로 설정을 연다는 점.
@@ -356,7 +356,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 | 위험 | 영향 | 대응 |
 | --- | --- | --- |
 | unsigned MSIX는 일반 사용자 설치 불가 | MSIX 자산은 Store 제출/개발자 모드 전용 | README에 명시. 서명은 후속 |
-| Store identity 미확정 | `CN=Tinyrack`은 실제 제출 시 거부됨 | Partner Center 등록 후 환경 변수/시크릿으로 교체 |
+| Store identity | 예약 완료: `tinyrack.TinyTrayManager`, `CN=42FA8D93-…` | 이름·Publisher는 제출 후 바꾸지 않는다. 변경하려면 새 제품을 등록해야 한다 |
 | 셸이 고정 GUID를 거부 | 승격이 초기화됨(아이콘은 폴백으로 표시) | `NotifyIconSettings` 확인 후 GUID 없이 재등록, 온보딩 재안내 |
 | MSIX에서 Start 메뉴 실행 시 창이 없다 | 사용자가 앱이 실행됐는지 모를 수 있음 | 트레이/두 번째 실행/`--settings` 안내, 온보딩 |
 | MSIX와 installer 동시 설치 | 자동 시작 항목 중복, 하나만 실행됨(mutex) | 문서화. 필요 시 installer가 MSIX 설치 감지 후 안내 |
@@ -382,7 +382,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 ## 8. 후속 (이번 스코프 아님)
 
-- Partner Center에서 `Tinyrack.TrayMonitor` identity 예약, Publisher CN 확정.
+- Partner Center identity 예약 완료: `tinyrack.TinyTrayManager` / `CN=42FA8D93-…` (Store ID `9MT22CHX25FD`).
 - 코드 서명 인증서(Azure Artifact Signing 권장) 도입 → installer/MSIX 서명.
 - MSIX `.msixbundle`(x64 + arm64), Store 제출 파이프라인.
 - winget/scoop 매니페스트 자동 갱신.

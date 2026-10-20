@@ -273,7 +273,7 @@ impl App {
     fn apply_from_menu(&mut self, effects: &[Effect]) {
         let problems = self.apply_effects(effects);
         if !problems.is_empty() {
-            crate::win32::inform("tray-monitor", &problems.join("\n\n"));
+            crate::win32::inform(crate::PRODUCT_NAME, &problems.join("\n\n"));
         }
     }
 

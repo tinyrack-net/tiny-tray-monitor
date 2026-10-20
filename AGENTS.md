@@ -3,6 +3,9 @@
 ## Project Overview
 
 **tray-monitor** shows CPU, memory and network readouts in the Windows system tray.
+The Microsoft Store listing is named **TinyTrayManager** (`tinyrack.TinyTrayManager`, Store ID
+`9MT22CHX25FD`). The exe name, install path and config folders stay `tray-monitor` so existing
+installs keep their tray promotion.
 
 - **Main technologies:** Rust (edition 2024), `windows`, `windows-future`, `tray-icon`,
   `windows-registry`, `serde` + `toml`. All dependencies come from crates.io; there are no git

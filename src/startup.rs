@@ -103,7 +103,7 @@ fn set_task(enabled: bool) -> Result<(), String> {
     }
 
     Err(match state.0 {
-        1 => "Windows Settings has disabled startup for tray-monitor. \
+        1 => "Windows Settings has disabled startup for TinyTrayManager. \
               Turn it on in Settings > Apps > Startup."
             .to_string(),
         3 => "Startup is disabled by policy.".to_string(),

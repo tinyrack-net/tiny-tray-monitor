@@ -39,7 +39,7 @@ pub fn init() {
 
     info(format!(
         "--- {} v{} 시작 ({}) ---",
-        env!("CARGO_PKG_NAME"),
+        crate::PRODUCT_NAME,
         env!("CARGO_PKG_VERSION"),
         std::env::current_exe()
             .map(|p| p.display().to_string())

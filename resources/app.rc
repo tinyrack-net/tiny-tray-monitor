@@ -56,7 +56,7 @@ BEGIN
             VALUE "InternalName", "tray-monitor"
             VALUE "LegalCopyright", "Copyright (c) 2026 winetree94"
             VALUE "OriginalFilename", "tray-monitor.exe"
-            VALUE "ProductName", "tray-monitor"
+            VALUE "ProductName", "TinyTrayManager"
             VALUE "ProductVersion", APP_VERSION_STRING
         END
     END
@@ -68,7 +68,7 @@ END
 
 IDD_SETTINGS DIALOGEX 0, 0, 248, 188
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "tray-monitor settings"
+CAPTION "TinyTrayManager settings"
 FONT 9, "Segoe UI", 400, 0, 0x0
 BEGIN
     LTEXT           "Readouts", -1, 10, 8, 60, 9

@@ -162,12 +162,13 @@ pub fn should_onboard(state: &State, promotion: Promotion) -> bool {
 }
 
 fn onboarding_text(promotion: Promotion) -> String {
+    let name = crate::PRODUCT_NAME;
     format!(
-        "tray-monitor is running.\n\n\
+        "{name} is running.\n\n\
          Windows hides new tray icons in the overflow area by default, so the\n\
          CPU / Memory / Network readouts may not be visible in the taskbar yet.\n\n\
          Current state: {}.\n\n\
-         Open the taskbar settings and turn on tray-monitor under\n\
+         Open the taskbar settings and turn on {name} under\n\
          \"Other system tray icons\"?",
         promotion.summary()
     )
@@ -175,7 +176,7 @@ fn onboarding_text(promotion: Promotion) -> String {
 
 /// 안내 대화상자를 띄운다. 사용자가 수락하면 작업 표시줄 설정을 연다.
 pub fn show_onboarding(promotion: Promotion) -> bool {
-    if !win32::confirm("tray-monitor", &onboarding_text(promotion)) {
+    if !win32::confirm(crate::PRODUCT_NAME, &onboarding_text(promotion)) {
         return false;
     }
     open_taskbar_settings()
