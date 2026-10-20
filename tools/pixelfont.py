@@ -7,7 +7,8 @@
     python tools/pixelfont.py            # src/icon/glyphs.rs 생성
     python tools/pixelfont.py --check    # 커밋된 파일과 같은지 확인
 
-표는 라벨 줄(3x5)과 값 줄(3x7) 두 벌이다. 필요한 문자만 둔다.
+표는 라벨 줄(3x5), 값 줄(3x9), 라벨 숨김 값(4x10), 단위까지 숨긴 확대 값(4x13)
+네 벌이다. 필요한 문자만 둔다.
 """
 
 from __future__ import annotations
@@ -15,6 +16,12 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+
+# Windows CI의 콘솔 인코딩(cp1252)에서도 한글 메시지가 죽지 않게 한다.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):
+    pass
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = ROOT / "src" / "icon" / "glyphs.rs"
