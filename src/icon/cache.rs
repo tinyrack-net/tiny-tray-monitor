@@ -102,8 +102,8 @@ mod tests {
     #[test]
     fn second_lookup_is_a_hit() {
         let mut cache = GlyphCache::new(16);
-        assert!(cache.get(request("80%")).is_some());
-        assert!(cache.get(request("80%")).is_some());
+        assert!(cache.get(request("80")).is_some());
+        assert!(cache.get(request("80")).is_some());
         let stats = cache.stats();
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.hits, 1);
@@ -114,8 +114,8 @@ mod tests {
     #[test]
     fn different_texts_are_different_entries() {
         let mut cache = GlyphCache::new(16);
-        let _ = cache.get(request("80%"));
-        let _ = cache.get(request("77%"));
+        let _ = cache.get(request("80"));
+        let _ = cache.get(request("77"));
         assert_eq!(cache.stats().entries, 2);
     }
 
@@ -123,10 +123,10 @@ mod tests {
     #[test]
     fn faces_do_not_share_entries() {
         let mut cache = GlyphCache::new(16);
-        let _ = cache.get(request("M"));
+        let _ = cache.get(request("1"));
         let _ = cache.get(GlyphRequest {
             face: Face::Label,
-            ..request("M")
+            ..request("1")
         });
         assert_eq!(cache.stats().entries, 2);
     }

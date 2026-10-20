@@ -129,6 +129,20 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     `win32::set_guid_tooltip` sends `NIM_MODIFY` with `NIF_TIP | NIF_GUID` directly, and `Tray`
     uses it whenever a slot has a GUID. The same call also serves as the first registration
     probe; re-check both when the crate is upgraded.
+20. **`DarkMode_Explorer` has no radio button text colour.** Its `Button` class defines
+    `TMT_TEXTCOLOR` for checkboxes only, so themed radio buttons draw black text on the dark
+    dialog background. `win32::dark::paint_radio` gives radio buttons `DarkMode_DarkTheme`
+    and falls back to turning the visual style off. `docs/SPIKE.md` §11-5.
+21. **Menu clicks must not wait for the main loop.** A modal loop (the settings window, a
+    message box) stops the main loop, so events read from `MenuEvent::receiver()` piled up until
+    the dialog closed. `main.rs` installs `MenuEvent::set_event_handler`, which calls
+    `runtime::menu_event` from the tray window's `WM_COMMAND`; it queues the id only when `App`
+    is borrowed, and the next message or timer tick drains it. `docs/SPIKE.md` §11-4.
+22. **There is only one settings window.** A request while it is open must bring it to the
+    front, never set the "open" flag: the main loop would reopen the window right after it
+    closes. `App::request_settings` and `settings::open` both go through
+    `settings::dialog::focus`. A second launch calls `AllowSetForegroundWindow` before posting
+    to the IPC window, because the running instance is in the background.
 
 ## Merging
 
@@ -168,7 +182,12 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   (glyph table shape, string widths, output stays 1-bit at every scale). The only GDI left is the
   preview DIB, where handle leaks are checked.
 - The tray itself has no automated test. Use `make run`, then check the readouts, the context
-  menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. The log records a heartbeat every 60 updates
+  menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. Log messages are English only;
+  `logging::tests::source_strings_are_english` rejects Hangul in any non-test string literal,
+  because `{error}`/`{note}` values end up in the log too. The log records a heartbeat every 60 updates
   with the current values and the glyph cache hit rate.
+- Log messages are English only. `logging::tests::source_strings_are_english` rejects Hangul
+  in any non-test string literal, because `{error}`/`{note}` values end up in the log too.
+  Comments and test assertions stay in Korean.
 - The installer and MSIX need a desktop session for their end-to-end checks; CI covers the
   silent install/uninstall and the `makeappx` round trip.

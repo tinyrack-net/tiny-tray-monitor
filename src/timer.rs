@@ -108,12 +108,12 @@ impl TimerWindow {
                 Some(instance),
                 None,
             )
-            .map_err(|e| format!("타이머 창을 만들 수 없다: {e}"))?;
+            .map_err(|e| format!("cannot create the timer window: {e}"))?;
 
             // hwnd를 주면 요청한 id가 그대로 쓰인다.
             let timer = SetTimer(Some(hwnd), 1, interval_ms, None);
             if timer == 0 {
-                return Err("SetTimer 가 실패했다".to_string());
+                return Err("SetTimer failed".to_string());
             }
             WINDOW.with(|slot| slot.set(Some((hwnd, timer))));
             Ok(Self { hwnd, timer })

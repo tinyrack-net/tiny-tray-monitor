@@ -99,7 +99,7 @@ manifest 최소 형태(검증됨):
      `%LOCALAPPDATA%\Packages\<PFN>\LocalCache\Roaming`으로 리다이렉트된다.
    - 이미 존재하는 `%APPDATA%\tray-monitor` 안의 파일은 실제 경로에 쓴다(실측).
    - 즉 **설치 이력에 따라 설정/로그 위치가 달라진다.**
-     `Open config file`이 빈 파일을 열 수 있다.
+     설정 창이 바꾼 값이 다른 파일에 저장될 수 있다.
    - 대응: 패키지 모드에서는 `LocalState`를 명시적으로 쓴다.
 
 3. **승격 감지 오탐**
@@ -212,7 +212,6 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 ```
 
 - `config.rs::config_dir()`, `logging.rs::data_dir()`가 이 모듈을 쓰도록 바꾼다.
-  (`tray::open_config_file`, `settings::dialog::open_log_file`도 자동으로 따라온다.)
 - 패키지 첫 실행 마이그레이션: `LocalState`에 설정이 없고
   `%APPDATA%\tray-monitor\config.toml`이 읽히면 복사한다(읽기는 가상화되지 않음 — 실측).
 - 순수 경로 결정 함수(`resolve_dirs(packaged, pfn, appdata, localappdata)`)를 분리해 단위 테스트.
@@ -346,7 +345,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 1. installer 설치 → 트레이 4개, 승격 유지, 설정 창 열림.
 2. 앱 실행 중 installer 업그레이드 → 자동 종료 후 설치, 재실행.
 3. MSIX `-Register` → 트레이, 설정 창, `Run at sign-in` 토긘이 StartupTask를 켜는지.
-4. MSIX에서 설정 변경 → `LocalState`에 기록되는지, `Open config file`이 그 파일을 여는지.
+4. MSIX에서 설정 변경 → `LocalState\config.toml`에 기록되는지.
 5. MSIX 버전 업데이트 → 같은 GUID 키가 새 경로로 옮겨지고 승격 유지, 온보딩 없음.
 
 ---

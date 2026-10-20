@@ -65,31 +65,30 @@ Right-click any of the icons.
 | Item | What it does |
 | --- | --- |
 | Settings… | Opens the settings window |
-| CPU / Memory / Network down (DN) / Network up (UP) | Show or hide that readout. The last visible one cannot be turned off |
-| Run at sign-in | Adds or removes the `HKCU\...\Run` entry (or the package startup task) |
-| Count virtual adapters | Include Hyper-V, VPN and similar adapters in the network total |
-| Show labels | Draw the CPU/MEM/DN/UP label above each value. Turn it off to make the value larger |
-| Show units | Append `%`/`K`/`M`/`G` to each value. Turn it off to keep values to three characters and draw them larger |
-| Open config file | Opens `config.toml` in your default editor |
+| CPU / Memory / Network down / Network up | Show or hide that readout. The last visible one cannot be turned off |
 | Exit | Stops tray-monitor |
 
 Hovering an icon shows the exact numbers, including upload rate and memory in GB.
 
 ## Settings window
 
-Everything the menu does, plus the update interval, in one window. Re-running
-`tray-monitor.exe` (or running `tray-monitor --settings`) opens it in the instance that is
-already running.
+Everything the menu does, plus the update interval, colours, network counting and startup, in
+one window. There is only ever one settings window:
+
+| Situation | `Settings…` in the tray menu | Running `tray-monitor.exe` again |
+| --- | --- | --- |
+| Settings window open | Brings it to the front | Brings it to the front |
+| Settings window closed | Opens it | Opens it in the running instance |
+| App not running | — | Starts the tray app without the settings window |
 
 | Setting | Notes |
 | --- | --- |
 | Readouts | CPU, memory, network down and up. The last one cannot be turned off, and the preview shows what the tray icons look like right now |
 | Update every | 250 ms to 10 s. Pick a preset or type an exact number of milliseconds |
 | Colours | One colour per readout, or a single colour from the taskbar theme |
-| Labels | Show the CPU/MEM/DN/UP label above each value. Turning it off swaps in a taller value face, so the number is larger |
 | Network | Count virtual adapters (Hyper-V, VPN, vSwitch) in the network total |
-| Startup | Run at sign-in |
-| Buttons | Open `config.toml`, open the log file, reset everything in `config.toml` to the defaults |
+| Startup | Run at sign-in: adds or removes the `HKCU\...\Run` entry (or the package startup task) |
+| Buttons | Reset everything in `config.toml` to the defaults |
 
 There is no OK button: every change applies immediately and is written to `config.toml` at
 once, so the tray icons are the preview. Close the window with the button or `Escape`.
@@ -106,8 +105,6 @@ config from `%APPDATA%\tray-monitor` is copied there on the first packaged run.
 poll_interval_ms = 1000          # 250 ~ 10000
 exclude_virtual_adapters = true  # skip adapters that mirror physical traffic
 color_mode = "metric"            # "metric" = one colour per readout, "theme" = single colour
-show_labels = true               # false = drop the label row and enlarge the value
-show_units = true                # false = drop %/K/M/G and enlarge the value further
 
 [show]
 cpu = true
@@ -120,14 +117,14 @@ A `network = ...` setting written by v0.1.0 is migrated to `network_down` and
 `network_up` on the next start.
 
 Deleted or broken files fall back to the defaults; a broken file is kept as `config.toml.bak`.
-Logs are written to `%LOCALAPPDATA%\tray-monitor\log.txt`.
+Logs are written in English to `%LOCALAPPDATA%\tray-monitor\log.txt`.
 
 ## Command line
 
 | Command | What it does |
 | --- | --- |
 | `tray-monitor` | Run the tray app |
-| `tray-monitor --settings` | Run and open the settings window (or open it in the running instance) |
+| `tray-monitor --settings` | Run and open the settings window at once (or show it in the running instance) |
 | `tray-monitor --probe` | Print the metrics every second, without any tray icon |
 | `tray-monitor --interfaces` | List network interfaces and mark which ones are counted |
 | `tray-monitor --dump` | Render the icons and print the layout measurements |
@@ -155,13 +152,12 @@ keyboard launchers.
 | Network down / up | `GetIfTable2` byte counters, loopback and tunnel interfaces excluded |
 
 Values are formatted to fit a square icon and drawn with a built-in 1-bit pixel font
-(a 5px label over a 9px value) into an RGBA bitmap, then handed to `Shell_NotifyIcon` as an
+(a 5px caption over a 10px value) into an RGBA bitmap, then handed to `Shell_NotifyIcon` as an
 `HICON`. There is no anti-aliasing and no GDI text: the glyph table is generated from
 `tools/pixelfont.py`, so the same input always produces the same pixels. The 16px master is
 scaled to the tray size with nearest-neighbour, which keeps the result 1-bit at every display
-scale. The label row and the unit suffix can each be turned off. Hiding the label swaps the 9px
-value for a 10px one; hiding the units as well keeps values to three characters and swaps the
-value for a 13px one. The values are never longer than four characters. Measurements and the
+scale. The unit lives in the caption (`CPU`, `MEM`, `↓MB`, `↑KB`), so the value row only ever holds a
+number of at most three characters and can use wide 4px digits with a 1px gap. Measurements and the
 reasoning behind the layout are in
 [docs/SPIKE.md](docs/SPIKE.md) and
 [docs/PIXEL-FONT.md](docs/PIXEL-FONT.md).

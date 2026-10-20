@@ -18,7 +18,7 @@ pub fn data_dir() -> PathBuf {
     crate::platform::data_dir()
 }
 
-pub fn log_path() -> PathBuf {
+fn log_path() -> PathBuf {
     data_dir().join("log.txt")
 }
 
@@ -38,7 +38,7 @@ pub fn init() {
     let _ = LOGGER.set(Mutex::new(file));
 
     info(format!(
-        "--- {} v{} 시작 ({}) ---",
+        "--- {} v{} started ({}) ---",
         crate::PRODUCT_NAME,
         env!("CARGO_PKG_VERSION"),
         std::env::current_exe()
@@ -111,9 +111,106 @@ mod tests {
 
     #[test]
     fn logging_does_not_panic_before_init() {
-        info("초기화 전 기록은 조용히 버려진다");
-        warn("경고");
-        error("오류");
+        info("records before init are dropped silently");
+        warn("warning");
+        error("error");
+    }
+
+    /// 로그는 영문으로만 남긴다. 사용자가 보내 준 로그를 누구나 읽을 수 있어야 하고,
+    /// 편집기가 UTF-8로 열지 않아도 깨지지 않는다.
+    ///
+    /// 로그 문구가 `{error}`·`{note}`로 다른 문자열을 끌어오므로 로그 호출만이 아니라
+    /// 소스의 문자열 리터럴 전부(주석과 테스트 제외)를 검사한다.
+    #[test]
+    fn source_strings_are_english() {
+        const SOURCES: [(&str, &str); 22] = [
+            ("app.rs", include_str!("app.rs")),
+            ("config.rs", include_str!("config.rs")),
+            ("devtools.rs", include_str!("devtools.rs")),
+            ("ipc.rs", include_str!("ipc.rs")),
+            ("logging.rs", include_str!("logging.rs")),
+            ("main.rs", include_str!("main.rs")),
+            ("platform.rs", include_str!("platform.rs")),
+            ("runtime.rs", include_str!("runtime.rs")),
+            ("startup.rs", include_str!("startup.rs")),
+            ("theme.rs", include_str!("theme.rs")),
+            ("timer.rs", include_str!("timer.rs")),
+            ("win32.rs", include_str!("win32.rs")),
+            ("icon/cache.rs", include_str!("icon/cache.rs")),
+            ("icon/layout.rs", include_str!("icon/layout.rs")),
+            ("icon/mod.rs", include_str!("icon/mod.rs")),
+            ("icon/render.rs", include_str!("icon/render.rs")),
+            ("metrics/format.rs", include_str!("metrics/format.rs")),
+            ("metrics/network.rs", include_str!("metrics/network.rs")),
+            ("settings/dialog.rs", include_str!("settings/dialog.rs")),
+            ("settings/model.rs", include_str!("settings/model.rs")),
+            ("tray/mod.rs", include_str!("tray/mod.rs")),
+            ("tray/onboard.rs", include_str!("tray/onboard.rs")),
+        ];
+        for (name, source) in SOURCES {
+            for literal in string_literals(source) {
+                assert!(
+                    !literal.chars().any(is_hangul),
+                    "{name}: 로그로 갈 수 있는 문자열은 영문이어야 한다: {literal}"
+                );
+            }
+        }
+    }
+
+    fn is_hangul(c: char) -> bool {
+        matches!(c, '\u{AC00}'..='\u{D7A3}' | '\u{3131}'..='\u{318E}')
+    }
+
+    /// 주석과 `#[cfg(test)]` 아래를 뺀 문자열 리터럴. 문자 리터럴(`'"'`)은 건너뛴다.
+    fn string_literals(source: &str) -> Vec<String> {
+        let code = source.split("#[cfg(test)]").next().unwrap_or(source);
+        let chars: Vec<char> = code.chars().collect();
+        let mut literals = Vec::new();
+        let mut i = 0;
+        while i < chars.len() {
+            match chars[i] {
+                '/' if chars.get(i + 1) == Some(&'/') => {
+                    while i < chars.len() && chars[i] != '\n' {
+                        i += 1;
+                    }
+                }
+                '\'' if chars.get(i + 2) == Some(&'\'') => i += 3,
+                '\'' if chars.get(i + 1) == Some(&'\\') && chars.get(i + 3) == Some(&'\'') => {
+                    i += 4
+                }
+                // 원시 문자열 `r"..."`은 `\`가 이스케이프가 아니다.
+                'r' if chars.get(i + 1) == Some(&'"')
+                    && !i
+                        .checked_sub(1)
+                        .is_some_and(|before| chars[before].is_alphanumeric()) =>
+                {
+                    let start = i + 2;
+                    i = start;
+                    while i < chars.len() && chars[i] != '"' {
+                        i += 1;
+                    }
+                    literals.push(chars[start..i.min(chars.len())].iter().collect());
+                    i += 1;
+                }
+                '"' => {
+                    let start = i + 1;
+                    i += 1;
+                    while i < chars.len() && chars[i] != '"' {
+                        i += if chars[i] == '\\' { 2 } else { 1 };
+                    }
+                    literals.push(chars[start..i.min(chars.len())].iter().collect());
+                    i += 1;
+                }
+                _ => i += 1,
+            }
+        }
+        literals
+    }
+
+    #[test]
+    fn string_literal_scanner_skips_comments_and_chars() {
+        let source = "// \"주석\"\nlet a = '\"'; let b = \"ok\"; let c = \"\\\"x\"; let d = r\"a\\\"; for x in y {}";
+        assert_eq!(string_literals(source), vec!["ok", "\\\"x", "a\\"]);
     }
 
     #[test]

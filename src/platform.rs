@@ -87,7 +87,7 @@ pub fn migrate_legacy_data() {
         }
         if std::fs::copy(&source, &destination).is_ok() {
             crate::logging::info(format!(
-                "기존 설정을 {} 에서 {} 로 복사했다",
+                "copied the existing config from {} to {}",
                 source.display(),
                 destination.display()
             ));

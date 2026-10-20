@@ -68,7 +68,8 @@ fn set_named(name: &str, enabled: bool) -> Result<(), String> {
     let key = CURRENT_USER.create(RUN_KEY).map_err(|e| e.to_string())?;
 
     if enabled {
-        let command = command_line().ok_or_else(|| "실행 경로를 알 수 없다".to_string())?;
+        let command =
+            command_line().ok_or_else(|| "cannot determine the executable path".to_string())?;
         return key.set_string(name, &command).map_err(|e| e.to_string());
     }
 
@@ -86,7 +87,7 @@ fn enabled_state(state: i32) -> bool {
 
 fn get_task() -> Result<StartupTask, String> {
     let operation = StartupTask::GetAsync(&HSTRING::from(TASK_ID))
-        .map_err(|e| format!("자동 시작 작업을 열 수 없다: {e}"))?;
+        .map_err(|e| format!("cannot open the startup task: {e}"))?;
     wait(&operation)
 }
 
@@ -123,16 +124,16 @@ fn wait<T: RuntimeType + 'static>(operation: &IAsyncOperation<T>) -> Result<T, S
         let status = info.Status().map_err(|e| e.to_string())?;
         match status {
             AsyncStatus::Completed => return operation.GetResults().map_err(|e| e.to_string()),
-            AsyncStatus::Canceled => return Err("자동 시작 요청이 취소되었다".to_string()),
+            AsyncStatus::Canceled => return Err("the startup request was cancelled".to_string()),
             AsyncStatus::Error => {
                 let code = info.ErrorCode().map(|code| code.0).unwrap_or(0);
-                return Err(format!("자동 시작 요청이 실패했다 (0x{code:08X})"));
+                return Err(format!("the startup request failed (0x{code:08X})"));
             }
             _ => {}
         }
 
         if Instant::now() >= deadline {
-            return Err("자동 시작 요청이 시간 안에 끝나지 않았다".to_string());
+            return Err("the startup request timed out".to_string());
         }
         std::thread::sleep(Duration::from_millis(10));
     }

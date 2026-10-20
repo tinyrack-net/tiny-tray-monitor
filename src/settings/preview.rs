@@ -11,18 +11,14 @@ use crate::theme::Palette;
 /// 확대 배율. 16px 아이콘을 그대로 보여주면 라벨을 읽을 수 없다.
 pub const SCALE: i32 = 3;
 
-/// 지표별 표본 값. 아이콘에서 값이 차지하는 폭을 보여주는 것이 목적이다.
-/// 단위를 숨기면 값이 3글자 이하가 되어 더 큰 글리프가 쓰인다.
-fn sample(metric: Metric, units: bool) -> &'static str {
-    match (metric, units) {
-        (Metric::Cpu, true) => "34%",
-        (Metric::Memory, true) => "41%",
-        (Metric::NetworkDown, true) => "1.7K",
-        (Metric::NetworkUp, true) => "341K",
-        (Metric::Cpu, false) => "34",
-        (Metric::Memory, false) => "41",
-        (Metric::NetworkDown, false) => "1.7",
-        (Metric::NetworkUp, false) => "341",
+/// 지표별 표본 값(숫자, 단위). 아이콘에서 값이 차지하는 폭을 보여주는 것이 목적이다.
+/// 단위는 캡션 줄에 들어간다.
+fn sample(metric: Metric) -> (&'static str, &'static str) {
+    match metric {
+        Metric::Cpu => ("34", "%"),
+        Metric::Memory => ("41", "%"),
+        Metric::NetworkDown => ("1.7", "KB"),
+        Metric::NetworkUp => ("341", "KB"),
     }
 }
 
@@ -73,15 +69,14 @@ impl Preview {
         let mut out = Bitmap::transparent(width, height);
         fill(&mut out, palette.taskbar());
 
-        let spec = icon::stack_spec(draft.show_labels, draft.show_units);
         for (index, metric) in metrics.iter().enumerate() {
             let (label_color, value_color) = palette.colors(draft.color_mode, *metric);
+            let (number, unit) = sample(*metric);
             let glyph = icon::stacked(
                 &mut self.cache,
-                metric.label(),
-                sample(*metric, draft.show_units),
+                &metric.caption(unit),
+                number,
                 px,
-                spec,
                 label_color,
                 value_color,
             );

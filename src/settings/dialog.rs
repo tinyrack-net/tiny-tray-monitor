@@ -20,7 +20,6 @@ use crate::runtime;
 use crate::settings::model::{self, SettingsDraft};
 use crate::settings::preview::{self, Preview};
 use crate::theme;
-use crate::tray;
 use crate::win32;
 
 /// 리소스의 대화상자 id.
@@ -40,11 +39,7 @@ pub const IDC_VIRTUAL: i32 = 1011;
 pub const IDC_AUTOSTART: i32 = 1012;
 pub const IDC_STATUS: i32 = 1013;
 pub const IDC_VERSION: i32 = 1014;
-pub const IDC_OPEN_CONFIG: i32 = 1015;
-pub const IDC_OPEN_LOG: i32 = 1016;
 pub const IDC_RESET: i32 = 1017;
-pub const IDC_LABELS: i32 = 1018;
-pub const IDC_UNITS: i32 = 1019;
 
 /// 닫기 버튼과 Esc가 보내는 id.
 pub const IDC_CLOSE: i32 = 2;
@@ -65,10 +60,39 @@ thread_local! {
     /// `SetPreferredAppMode`와 `SetWindowTheme`은 다시 테마 메시지를 보낸다. 그 메시지를
     /// 그대로 처리하면 끝없이 되돌아 스택이 넘친다(실측: build 26300에서 스택 오버플로).
     static APPLYING: Cell<bool> = const { Cell::new(false) };
+    /// 열려 있는 설정 창. 트레이 메뉴가 바꾼 값을 창에 알릴 때 쓴다.
+    static WINDOW: Cell<Option<HWND>> = const { Cell::new(None) };
 }
 
 /// 자동 시작 토글을 미룰 때 쓰는 창 메시지. `WM_APP` 영역.
 const WM_APP_AUTOSTART: u32 = 0x8000 + 2;
+
+/// 바깥(트레이 메뉴)에서 값이 바뀌었으니 컨트롤을 다시 맞추라는 창 메시지.
+const WM_APP_REFRESH: u32 = 0x8000 + 3;
+
+/// 설정 창이 열려 있으면 앞으로 가져온다. 열려 있었으면 `true`.
+///
+/// 열려 있는 동안 들어온 "설정 열기"는 새 창을 예약하지 않고 이 함수로 끝낸다. 예약하면
+/// 지금 창을 닫는 순간 메시지 루프가 그 요청을 보고 창을 한 번 더 띄운다(실측).
+pub fn focus() -> bool {
+    match WINDOW.with(Cell::get) {
+        Some(hwnd) => {
+            logging::info("settings window already open, bringing it to the front");
+            win32::dialog::bring_to_front(hwnd);
+            true
+        }
+        None => false,
+    }
+}
+
+/// 설정 창이 열려 있으면 컨트롤을 지금 값에 다시 맞추게 한다.
+///
+/// 부르는 쪽은 `App`을 빌린 채이므로 여기서 바로 맞추지 않고 메시지로 미룬다.
+pub fn refresh() {
+    if let Some(hwnd) = WINDOW.with(Cell::get) {
+        win32::dialog::post(hwnd, WM_APP_REFRESH);
+    }
+}
 
 /// `Custom…`은 프리셋 뒤에 붙는다.
 fn custom_index() -> i32 {
@@ -79,10 +103,13 @@ fn custom_index() -> i32 {
 ///
 /// **`App`을 빌린 채 부르면 안 된다.** 모달 루프 동안 타이머 틱이 전부 버려진다.
 pub fn open() {
+    if focus() {
+        return;
+    }
     win32::dialog::init_common_controls();
-    logging::info("설정 창을 열었다");
+    logging::info("settings window opened");
     win32::dialog::show(IDD_SETTINGS, procedure);
-    logging::info("설정 창을 닫았다");
+    logging::info("settings window closed");
 }
 
 extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, _lparam: LPARAM) -> isize {
@@ -107,6 +134,12 @@ extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, _lparam: 
             });
             1
         }
+        WM_APP_REFRESH => {
+            if let Some(draft) = current() {
+                sync_controls(hwnd, &draft);
+            }
+            1
+        }
         // 작업 표시줄 테마가 바뀌면 창과 미리보기를 다시 맞춘다.
         WM_THEMECHANGED | WM_SETTINGCHANGE => {
             apply_theme(hwnd);
@@ -127,6 +160,7 @@ fn dark() -> bool {
 
 /// 창을 닫는다. 다크 모드용 GDI 자원도 함께 돌려준다.
 fn finish(hwnd: HWND) {
+    WINDOW.with(|slot| slot.set(None));
     win32::dark::forget();
     win32::dialog::end(hwnd);
 }
@@ -153,6 +187,7 @@ fn apply_theme(hwnd: HWND) {
 }
 
 fn on_init(hwnd: HWND) {
+    WINDOW.with(|slot| slot.set(Some(hwnd)));
     win32::dialog::center_on_cursor_monitor(hwnd);
     win32::dialog::bring_to_front(hwnd);
     apply_theme(hwnd);
@@ -183,8 +218,6 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
 
     match id {
         IDC_CLOSE => finish(hwnd),
-        IDC_OPEN_CONFIG => tray::open_config_file(),
-        IDC_OPEN_LOG => open_log_file(hwnd),
         IDC_RESET => reset(hwnd),
         IDC_INTERVAL if notification == CBN_SELCHANGE => interval_selected(hwnd),
         IDC_INTERVAL_EDIT if notification == EN_KILLFOCUS => interval_typed(hwnd),
@@ -198,14 +231,6 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
         }),
         IDC_VIRTUAL => commit(hwnd, |draft| {
             draft.count_virtual = !draft.count_virtual;
-            Ok(())
-        }),
-        IDC_LABELS => commit(hwnd, |draft| {
-            draft.show_labels = !draft.show_labels;
-            Ok(())
-        }),
-        IDC_UNITS => commit(hwnd, |draft| {
-            draft.show_units = !draft.show_units;
             Ok(())
         }),
         IDC_AUTOSTART => {
@@ -260,8 +285,6 @@ fn sync_controls(hwnd: HWND, draft: &SettingsDraft) {
     );
     win32::dialog::set_check(hwnd, IDC_COLOR_THEME, draft.color_mode == ColorMode::Theme);
     win32::dialog::set_check(hwnd, IDC_VIRTUAL, draft.count_virtual);
-    win32::dialog::set_check(hwnd, IDC_LABELS, draft.show_labels);
-    win32::dialog::set_check(hwnd, IDC_UNITS, draft.show_units);
     win32::dialog::set_check(hwnd, IDC_AUTOSTART, draft.autostart);
     sync_interval(hwnd, draft.poll_interval_ms);
     sync_preview(hwnd, draft);
@@ -292,7 +315,7 @@ fn sync_preview(hwnd: HWND, draft: &SettingsDraft) {
 
     match icon::gdi::bitmap_from_rgba(bitmap.width, bitmap.height, &bitmap.rgba) {
         Some(handle) => win32::dialog::set_bitmap(hwnd, IDC_PREVIEW, handle),
-        None => logging::warn("미리보기 비트맵을 만들지 못했다"),
+        None => logging::warn("could not create the preview bitmap"),
     }
 }
 
@@ -375,18 +398,6 @@ fn reset(hwnd: HWND) {
     set_status(hwnd, &message);
 }
 
-/// 로그 파일을 기본 편집기로 연다.
-fn open_log_file(hwnd: HWND) {
-    let path = logging::log_path();
-    if path.exists() && win32::open_url(&path.display().to_string()) {
-        set_status(hwnd, "");
-        return;
-    }
-
-    logging::warn(format!("{} 를 열지 못했다", path.display()));
-    set_status(hwnd, "Could not open the log file");
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -398,6 +409,13 @@ mod tests {
             IDC_CLOSE, IDCANCEL.0,
             "닫기 버튼은 Esc와 같은 id를 써야 한다"
         );
+    }
+
+    /// 창이 없으면 포커스할 것도 없다. 호출자는 이때만 새 창을 연다.
+    #[test]
+    fn focus_reports_a_closed_window() {
+        WINDOW.with(|slot| slot.set(None));
+        assert!(!focus());
     }
 
     #[test]
@@ -434,11 +452,7 @@ mod tests {
             ("IDC_AUTOSTART", IDC_AUTOSTART),
             ("IDC_STATUS", IDC_STATUS),
             ("IDC_VERSION", IDC_VERSION),
-            ("IDC_OPEN_CONFIG", IDC_OPEN_CONFIG),
-            ("IDC_OPEN_LOG", IDC_OPEN_LOG),
             ("IDC_RESET", IDC_RESET),
-            ("IDC_LABELS", IDC_LABELS),
-            ("IDC_UNITS", IDC_UNITS),
         ];
 
         for (name, value) in expected {

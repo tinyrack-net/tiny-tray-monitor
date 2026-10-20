@@ -1,9 +1,29 @@
 //! 값 -> 표시 문자열 변환.
 //!
 //! 트레이 아이콘은 정사각형이고 폭이 16~24px이므로 표시 문자열을 최대 4자로 제한한다.
-//! 모두 순수 함수라 단위 테스트로 검증한다.
+//! 아이콘은 숫자와 단위를 나눠 그린다([Reading]). 단위는 캡션 줄로 올라가고 값 줄에는
+//! 3자 이하의 숫자만 남는다. 모두 순수 함수라 단위 테스트로 검증한다.
 
 const UNITS: [&str; 4] = ["", "K", "M", "G"];
+
+/// 아이콘 캡션에 쓰는 전송률 단위. [UNITS]와 같은 순서다.
+const RATE_UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+
+/// 아이콘에 그리는 값. 숫자는 값 줄에, 단위는 캡션 줄에 들어간다.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reading {
+    /// 숫자만(`80`, `1.2`, `512`). 최대 3자.
+    pub number: String,
+    /// 단위(`%`, `B`, `KB`, `MB`, `GB`).
+    pub unit: &'static str,
+}
+
+impl Reading {
+    /// 로그용 한 줄 표기. (예: "1.2MB")
+    pub fn compact(&self) -> String {
+        format!("{}{}", self.number, self.unit)
+    }
+}
 
 /// `limit`을 넘으면 다음 단위로 올린다.
 fn scale(mut value: f64, limit: f64) -> (f64, usize) {
@@ -17,45 +37,47 @@ fn scale(mut value: f64, limit: f64) -> (f64, usize) {
 
 /// 사용률(%)을 표시 문자열로. 최대 4자("100%").
 pub fn percent(value: f64) -> String {
-    percent_unit(value, true)
+    percent_reading(value).compact()
 }
 
-/// 사용률을 표시 문자열로. `units`가 false면 `%`를 뺀다(최대 3자).
-pub fn percent_unit(value: f64, units: bool) -> String {
+fn percent_number(value: f64) -> i64 {
     if !value.is_finite() || value <= 0.0 {
-        return if units {
-            "0%".to_string()
-        } else {
-            "0".to_string()
-        };
+        return 0;
     }
     let v = value.min(100.0);
-    let number = if v >= 99.5 { 100 } else { v.round() as i64 };
-    if units {
-        format!("{number}%")
-    } else {
-        number.to_string()
+    if v >= 99.5 { 100 } else { v.round() as i64 }
+}
+
+/// 사용률을 아이콘 값으로. 숫자는 최대 3자("100").
+pub fn percent_reading(value: f64) -> Reading {
+    Reading {
+        number: percent_number(value).to_string(),
+        unit: "%",
     }
 }
 
-/// 초당 바이트를 최대 4자로 압축한다. ("512", "1.0K", "24M", "1.2G")
-pub fn rate(bytes_per_sec: f64) -> String {
-    rate_unit(bytes_per_sec, true)
-}
-
-/// 초당 바이트를 압축한다. `units`가 false면 K/M/G 접미사를 뺀다(최대 3자).
-pub fn rate_unit(bytes_per_sec: f64, units: bool) -> String {
+/// 초당 바이트를 (숫자, 단위 단계)로 압축한다. 숫자는 최대 3자.
+fn rate_number(bytes_per_sec: f64) -> (String, usize) {
     let v = if bytes_per_sec.is_finite() {
         bytes_per_sec.max(0.0)
     } else {
         0.0
     };
     let (scaled, unit) = scale(v, 999.5);
-    let suffix = if units { UNITS[unit] } else { "" };
-    if unit > 0 && scaled < 9.95 {
-        format!("{scaled:.1}{suffix}")
+    let number = if unit > 0 && scaled < 9.95 {
+        format!("{scaled:.1}")
     } else {
-        format!("{}{suffix}", scaled.round() as i64)
+        (scaled.round() as i64).to_string()
+    };
+    (number, unit)
+}
+
+/// 초당 바이트를 아이콘 값으로. ("24" + "MB", "512" + "B")
+pub fn rate_reading(bytes_per_sec: f64) -> Reading {
+    let (number, unit) = rate_number(bytes_per_sec);
+    Reading {
+        number,
+        unit: RATE_UNITS[unit],
     }
 }
 
@@ -87,6 +109,7 @@ pub fn bytes(value: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::icon::Metric;
 
     #[test]
     fn percent_rounds_and_clamps() {
@@ -104,62 +127,61 @@ mod tests {
     #[test]
     fn rate_examples() {
         const K: f64 = 1024.0;
-        assert_eq!(rate(0.0), "0");
-        assert_eq!(rate(512.0), "512");
-        assert_eq!(rate(1023.0), "1.0K");
-        assert_eq!(rate(K), "1.0K");
-        assert_eq!(rate(24.0 * K), "24K");
-        assert_eq!(rate(512.0 * K), "512K");
-        assert_eq!(rate(K * K * 1.2), "1.2M");
-        assert_eq!(rate(24.0 * K * K), "24M");
-        assert_eq!(rate(1.2 * K * K * K), "1.2G");
+        let rate = |v: f64| rate_reading(v).compact();
+        assert_eq!(rate(0.0), "0B");
+        assert_eq!(rate(512.0), "512B");
+        assert_eq!(rate(1023.0), "1.0KB");
+        assert_eq!(rate(K), "1.0KB");
+        assert_eq!(rate(24.0 * K), "24KB");
+        assert_eq!(rate(512.0 * K), "512KB");
+        assert_eq!(rate(K * K * 1.2), "1.2MB");
+        assert_eq!(rate(24.0 * K * K), "24MB");
+        assert_eq!(rate(1.2 * K * K * K), "1.2GB");
         // 비정상 입력은 0으로 낮춘다 (표시가 튀는 것보다 낫다)
-        assert_eq!(rate(f64::INFINITY), "0");
-        assert_eq!(rate(f64::NAN), "0");
-        assert_eq!(rate(-5.0), "0");
+        assert_eq!(rate(f64::INFINITY), "0B");
+        assert_eq!(rate(f64::NAN), "0B");
+        assert_eq!(rate(-5.0), "0B");
     }
 
-    /// 값이 어떤 범위여도 아이콘에 들어가도록 4자를 넘지 않아야 한다.
+    /// 아이콘 값 줄에는 3자 이하의 숫자만 들어간다.
     #[test]
-    fn rate_never_exceeds_four_chars() {
+    fn readings_keep_numbers_to_three_characters() {
         let mut v = 0.0f64;
         while v < 10.0 * 1024.0 * 1024.0 * 1024.0 {
-            let s = rate(v);
-            assert!(s.chars().count() <= 4, "rate({v}) = {s}");
-            v = v * 1.07 + 1.0;
-        }
-    }
-
-    #[test]
-    fn percent_never_exceeds_four_chars() {
-        for i in 0..=1000 {
-            let s = percent(i as f64 / 10.0);
-            assert!(s.chars().count() <= 4, "percent({i}) = {s}");
-        }
-    }
-
-    #[test]
-    fn unit_less_forms_drop_the_suffix() {
-        assert_eq!(percent_unit(80.4, false), "80");
-        assert_eq!(percent_unit(100.0, false), "100");
-        assert_eq!(percent_unit(-1.0, false), "0");
-        assert_eq!(rate_unit(1024.0, false), "1.0");
-        assert_eq!(rate_unit(24.0 * 1024.0, false), "24");
-        assert_eq!(rate_unit(512.0, false), "512");
-        assert_eq!(rate_unit(0.0, false), "0");
-    }
-
-    /// 단위를 빼면 3자를 넘지 않아야 확대 글리프에 들어간다.
-    #[test]
-    fn unit_less_forms_never_exceed_three_chars() {
-        let mut v = 0.0f64;
-        while v < 10.0 * 1024.0 * 1024.0 * 1024.0 {
-            assert!(rate_unit(v, false).chars().count() <= 3, "rate_unit({v})");
+            let reading = rate_reading(v);
+            assert!(reading.number.chars().count() <= 3, "rate_reading({v})");
+            assert!(
+                Metric::NetworkDown.units().contains(&reading.unit),
+                "캡션 글리프 검사는 Metric::units()를 기준으로 한다: {}",
+                reading.unit
+            );
+            assert!(
+                reading
+                    .number
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '.')
+            );
             v = v * 1.07 + 1.0;
         }
         for i in 0..=1000 {
-            assert!(percent_unit(i as f64 / 10.0, false).chars().count() <= 3);
+            let reading = percent_reading(i as f64 / 10.0);
+            assert!(reading.number.chars().count() <= 3);
+            assert!(Metric::Cpu.units().contains(&reading.unit));
         }
+    }
+
+    #[test]
+    fn readings_split_number_and_unit() {
+        const K: f64 = 1024.0;
+        let pair = |r: Reading| (r.number, r.unit);
+        assert_eq!(pair(percent_reading(80.4)), ("80".into(), "%"));
+        assert_eq!(pair(percent_reading(100.0)), ("100".into(), "%"));
+        assert_eq!(pair(rate_reading(0.0)), ("0".into(), "B"));
+        assert_eq!(pair(rate_reading(512.0)), ("512".into(), "B"));
+        assert_eq!(pair(rate_reading(K)), ("1.0".into(), "KB"));
+        assert_eq!(pair(rate_reading(24.0 * K * K)), ("24".into(), "MB"));
+        assert_eq!(pair(rate_reading(1.2 * K * K * K)), ("1.2".into(), "GB"));
+        assert_eq!(rate_reading(24.0 * K * K).compact(), "24MB");
     }
 
     #[test]

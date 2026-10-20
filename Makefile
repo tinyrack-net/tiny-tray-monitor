@@ -33,8 +33,6 @@ dump:
 	cargo run --release -- --dump
 	python tools/icon_sheet.py out/sheet-dark.bmp 16 dark_px16 dark_px20 dark_px24 dark_px32
 	python tools/icon_sheet.py out/sheet-light.bmp 16 light_px16 light_px20 light_px24 light_px32
-	python tools/icon_sheet.py out/sheet-nolabel-dark.bmp 16 dark_nolabel_px16 dark_nolabel_px20 dark_nolabel_px24 dark_nolabel_px32
-	python tools/icon_sheet.py out/sheet-nolabel-light.bmp 16 light_nolabel_px16 light_nolabel_px20 light_nolabel_px24 light_nolabel_px32
 
 # 글리프 표를 다시 만든다. 결과는 커밋한다.
 glyphs:
