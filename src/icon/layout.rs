@@ -44,6 +44,8 @@ pub enum Metric {
     Memory,
     NetworkDown,
     NetworkUp,
+    Gpu,
+    GpuVram,
 }
 
 impl Metric {
@@ -52,17 +54,19 @@ impl Metric {
     ///
     /// v0.1.0의 세 번째 아이콘(Network)은 [Metric::NetworkDown]이 이어받는다.
     /// 그래야 이미 승격해 둔 사용자가 다운로드 아이콘을 계속 본다.
-    pub const ALL: [Metric; 4] = [
+    pub const ALL: [Metric; 6] = [
         Metric::Cpu,
         Metric::Memory,
         Metric::NetworkDown,
         Metric::NetworkUp,
+        Metric::Gpu,
+        Metric::GpuVram,
     ];
 
     /// 이 지표가 쓰는 단위. 첫 항목은 아이콘이 처음 뜰 때(첫 표본 전) 쓴다.
     pub fn units(self) -> &'static [&'static str] {
         match self {
-            Metric::Cpu | Metric::Memory => &["%"],
+            Metric::Cpu | Metric::Memory | Metric::Gpu | Metric::GpuVram => &["%"],
             Metric::NetworkDown | Metric::NetworkUp => &["B", "KB", "MB", "GB"],
         }
     }
@@ -82,6 +86,8 @@ impl Metric {
             Metric::Memory => "MEM".to_string(),
             Metric::NetworkDown => format!("↓{unit}"),
             Metric::NetworkUp => format!("↑{unit}"),
+            Metric::Gpu => "GPU".to_string(),
+            Metric::GpuVram => "VRM".to_string(),
         }
     }
 
@@ -92,6 +98,8 @@ impl Metric {
             Metric::Memory => "memory",
             Metric::NetworkDown => "network-down",
             Metric::NetworkUp => "network-up",
+            Metric::Gpu => "gpu",
+            Metric::GpuVram => "gpu-vram",
         }
     }
 }
@@ -116,6 +124,8 @@ mod tests {
         assert_eq!(Metric::Memory.caption("%"), "MEM");
         assert_eq!(Metric::NetworkDown.caption("MB"), "↓MB");
         assert_eq!(Metric::NetworkUp.caption("B"), "↑B");
+        assert_eq!(Metric::Gpu.caption("%"), "GPU");
+        assert_eq!(Metric::GpuVram.caption("%"), "VRM");
     }
 
     #[test]
@@ -133,7 +143,14 @@ mod tests {
     fn metric_order_is_stable() {
         assert_eq!(
             Metric::ALL.map(|m| m.id()),
-            ["cpu", "memory", "network-down", "network-up"],
+            [
+                "cpu",
+                "memory",
+                "network-down",
+                "network-up",
+                "gpu",
+                "gpu-vram"
+            ],
             "순서가 바뀌면 트레이 승격 설정이 어긋난다"
         );
     }

@@ -114,12 +114,14 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     `RequestEnableAsync` inside `WM_COMMAND` fails with `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`.
     The settings dialog posts `WM_APP_AUTOSTART` to itself and commits in that message instead.
 17. **A package update changes the executable path.** `NotifyIconSettings` keys are per path, so
-    the promotion used to reset after every version update. Each readout now registers with a
+    the promotion used to reset after every version update. Each readout registers with a
     fixed per-metric GUID (`tray::TRAY_GUIDS`), and Windows keys the promotion on that GUID, so
     the setting survives a package update. The GUIDs and the `Metric::ALL` order must never
-    change. `tray-icon` reports success even when the shell rejects a GUID, so `Tray::build`
-    waits for the `NotifyIconSettings` entry and retries without GUIDs when it never appears;
-    compare paths after `\WindowsApps\` because packaged paths start with a known-folder GUID.
+    change. Acceptance is decided by `NIM_ADD` plus the `NIF_GUID` tooltip round-trip only:
+    **a missing `NotifyIconSettings` entry is not a refusal** (the shell never rewrites a key for
+    an identity it already knows), and treating it as one made every second launch fall back to
+    path registration. Compare paths after `\WindowsApps\` because packaged paths start with a
+    known-folder GUID. See `docs/SPIKE.md` §15.
 18. **A quit request must close modal dialogs first.** The installer posts `WM_CLOSE` to the IPC
     window, but the settings dialog or the onboarding `MB_YESNO` box keeps the main loop in a
     nested loop. `win32::window::close_dialogs` posts `WM_CLOSE` to every `#32770` window in the
@@ -153,6 +155,15 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     it calls `i18n::set_language`, `Tray::relabel` (menu `set_text`, never a new tray icon) and
     the dialog refills its combos. `logging::tests::source_strings_are_english` skips
     `i18n.rs`; `i18n::tests` keeps the English table free of CJK instead. `docs/SPIKE.md` §13.
+24. **A path-registered tray icon is identified by `(exe path, uID)`.** The tooltip is stored in
+    the key (`InitialTooltip`) but is not part of the identity, and the shell writes a
+    `NotifyIconSettings` key only for identities it has not seen yet. `tray-icon` numbers icons
+    from a per-process counter, so a failed GUID pass shifts every later uID (the fallback gets
+    `N+1..2N`) and the user's pins land on other readouts or vanish. Never treat a missing key
+    as a rejection (rule 17), and do not kill a running instance with `taskkill /F`: the dead
+    identity stays in the Explorer session and no key is written for it again until Explorer
+    restarts (a normal `Exit` or the installer's `WM_CLOSE` does not do this).
+    `docs/SPIKE.md` §15.
 
 ## Merging
 

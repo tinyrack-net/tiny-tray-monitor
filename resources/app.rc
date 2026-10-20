@@ -30,6 +30,8 @@
 #define IDC_AUTOSTART           1012
 #define IDC_STATUS              1013
 #define IDC_VERSION             1014
+#define IDC_GPU                 1015
+#define IDC_GPU_VRAM            1016
 #define IDC_RESET               1017
 #define IDC_GROUP_READOUTS      1018
 #define IDC_HINT_READOUTS       1019
@@ -65,7 +67,7 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "tinyrack"
-            VALUE "FileDescription", "CPU, memory and network readouts in the Windows system tray"
+            VALUE "FileDescription", "CPU, memory, network and GPU readouts in the Windows system tray"
             VALUE "FileVersion", APP_VERSION_STRING
             VALUE "InternalName", "tray-monitor"
             VALUE "LegalCopyright", "Copyright (c) 2026 winetree94"
@@ -89,10 +91,12 @@ BEGIN
     /* 표시 항목 */
     GROUPBOX        "", IDC_GROUP_READOUTS, 7, 6, 286, 90
     LTEXT           "", IDC_HINT_READOUTS, 15, 17, 270, 9
-    CONTROL         "", IDC_CPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 17, 30, 62, 10
-    CONTROL         "", IDC_MEMORY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 86, 30, 62, 10
-    CONTROL         "", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 42, 95, 10
-    CONTROL         "", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 118, 42, 95, 10
+    CONTROL         "", IDC_CPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 17, 30, 84, 10
+    CONTROL         "", IDC_MEMORY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 107, 30, 84, 10
+    CONTROL         "", IDC_GPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 197, 30, 84, 10
+    CONTROL         "", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 42, 84, 10
+    CONTROL         "", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 107, 42, 84, 10
+    CONTROL         "", IDC_GPU_VRAM, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 197, 42, 84, 10
     /* 미리보기는 창이 뜨면 코드가 비트맵을 넣는다(SS_BITMAP). */
     CONTROL         "", IDC_PREVIEW, "Static", SS_BITMAP | SS_CENTERIMAGE | WS_BORDER | WS_GROUP, 17, 55, 266, 36
     /* 갱신 주기 */

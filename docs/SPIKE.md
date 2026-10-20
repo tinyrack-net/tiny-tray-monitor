@@ -446,3 +446,151 @@ UIA `ValuePattern.SetValue`로 언어 콤보를 바꾸면 값은 바뀌지만 `C
 `WM_CTLCOLORSTATIC`의 글자색(`TEXT` = `0xF0F0F0`)으로 캡션을 그려 보인다. 프레임도 클래식
 (3D 에칭)으로 바뀌는데, 어두운 배경에서 밝은 선이라 오히려 잘 보인다. 라이트 모드는 이
 경로를 타지 않아 그대로다.
+
+---
+
+## 14. GPU 사용률과 전용 VRAM (v0.8.0)
+
+관리자 권한 없이 GPU 엔진 사용률과 전용 VRAM 상주량을 읽는다. 계획과 구현은
+[PLAN.md](PLAN.md) §16.
+
+### 수집 경로 두 개
+
+| 값 | 호출 | 비고 |
+| --- | --- | --- |
+| 어댑터 목록·전용 한도 | `CreateDXGIFactory1` → `EnumAdapters1` | `DXGI_ADAPTER_FLAG_SOFTWARE`와 `IDXGIAdapter3`를 못 얻는 어댑터를 뺀다 |
+| 엔진별 누적 실행 시간 | `gdi32!D3DKMTQueryStatistics` (`QUERYSTATISTICS_NODE` = 5) | `NODE_INFORMATION.GlobalInformation.RunningTime` |
+| 세그먼트별 상주 바이트 | 같은 함수 (`QUERYSTATISTICS_SEGMENT` = 3) | `SEGMENT_INFORMATION.BytesResident`와 `Aperture` |
+
+`D3DKMTQueryStatistics`는 공개 헤더에 있지만 `windows` 크레이트에 정의가 없어
+`gdi32.dll`에서 함수 포인터를 직접 얻고 구조체를 손으로 적었다.
+
+### 구조체 배치 (`d3dkmthk.h`, SDK 10.0.26100.0)
+
+| 오프셋 | 필드 | 근거 |
+| --- | --- | --- |
+| 0 | `Type` (u32) | |
+| 4 | `AdapterLuid` (`LUID`) | LUID는 4바이트 정렬 |
+| 16 | `hProcess` | 포인터는 8바이트 정렬 → 12~16이 패딩 |
+| 24 | `QueryResult` | 776바이트 |
+| 800 | `QueryId` union | `SegmentId`/`NodeId`가 union의 첫 4바이트 |
+| 전체 | 808바이트 | 헤더의 `C_ASSERT(sizeof(D3DKMT_QUERYSTATISTICS) == 0x328)` (x64 전용) |
+
+`QueryResult` 안쪽 오프셋도 같은 헤더에서 읽었다.
+
+| 구조체 | 필드(오프셋) |
+| --- | --- |
+| `ADAPTER_INFORMATION` | `NbSegments`(0), `NodeCount`(4) |
+| `NODE_INFORMATION.GlobalInformation` | `RunningTime`(0) |
+| `SEGMENT_INFORMATION` | `CommitLimit`(0), `BytesCommitted`(8), `BytesResident`(16), `Aperture`(40) |
+
+`kmt_statistics_layout_matches_the_wdk` 테스트가 `size_of`와 `offset_of`로 이 배치를
+고정한다. 배치를 손으로 적은 이상, 조용히 어긋나는 것보다 테스트로 깨지는 편이 낫다.
+
+### 단위: 주석은 micro-second, 실측은 100ns
+
+헤더는 `RunningTime` 주석에 "Running time in micro-second"라고 적었다. µs로 나누면
+사용률이 10분의 1이 된다. NVENC를 4K60으로 포화시켜 `nvidia-smi`와 교차 검증했다.
+
+| 구간 | `nvidia-smi utilization.encoder` | 아이콘 값 |
+| --- | --- | --- |
+| 부하 | 99%, 99%, 99%, 99%, 99% | 91.4%, 99.8%, 99.3%, 99.9%, 99.8% |
+| 해제 후 | 7%, 5%, 1% | 5.6%, 6.6%, 6.0% |
+
+100ns로 나눠야 인코더 포화가 100%로 나온다. 테스트 `percent_uses_100ns_ticks`가
+이 단위를 고정한다.
+
+### VRAM: aperture가 아닌 세그먼트의 합
+
+`Aperture`가 0인 세그먼트(로컬 전용 메모리)의 `BytesResident`를 모두 더하고, DXGI가
+알려주는 전용 한도로 나눈다. PDH `GPU Adapter Memory(*)\Dedicated Usage`와 같은 구간에서
+비교했다(한도 7,956MB).
+
+| 아이콘 | 아이콘 환산 | PDH Dedicated Usage |
+| --- | --- | --- |
+| 87.5% | 6,962 MB | 6,958 MB, 6,966 MB |
+| 79.8% | 6,350 MB | 6,349 MB |
+
+정의가 다른 값도 있다. `nvidia-smi memory.used`는 6,337 MiB였고, 전용 한도도 8,188 MiB로
+DXGI(7,956MB)보다 크다(예약분 포함). 작업 표시줄에 보여줄 값은 Windows가 보고하는 쪽,
+즉 DXGI 한도와 `BytesResident` 합으로 정했다.
+
+### PDH `GPU Engine`은 쓰지 않는다
+
+처음에는 PDH 카운터를 기준으로 삼으려 했다. 이 기기에서는 값이 갱신되지 않았다. NVENC를
+포화시킨 10초 동안 `GPU Engine(*engtype_videoencode)`가 11%에 머물렀고, 같은 구간에
+`nvidia-smi`는 99%, `D3DKMTQueryStatistics`도 99%를 보고했다. `Get-Counter`가
+"The data in one of the performance counter samples is not valid"로 실패하기도 했다.
+수집 경로는 `D3DKMTQueryStatistics` 하나로 간다.
+
+### 사용률은 엔진별 최대값
+
+노드는 엔진 하나(3D·복사·비디오 인코더…)에 대응한다. 아이콘 하나로 GPU 전체를 요약하려면
+엔진별 값 중 최대를 쓰는 게 가장 설명하기 쉽다. NVENC 포화 시 3D는 18~27%, 인코더는 99%를
+가리켰고 아이콘은 99%를 보여줬다.
+
+엔진별 그래프를 나눠 보여주는 도구와 비교할 때는 "가장 바쁜 엔진" 기준임을 기억해야 한다.
+엔진 사용률을 모두 더한 값(예: 3D 15% + 복사 7% = 22%)과는 다르다.
+
+### 아직 재지 않은 것
+
+- 어댑터 선택 기준: 지금은 소프트웨어 렌더러를 뺀 뒤 전용 메모리가 가장 큰 어댑터다.
+  하이브리드 노트북에서 화면을 그리는 GPU가 아닐 수 있다.
+- Intel/AMD의 세그먼트 구성: `Aperture == 0` 필터가 전용 메모리만 고르는지 확인하지 않았다.
+- 절전 복귀 후 첫 표본: `reset()`이 기준점을 다시 잡지만 실측하지는 않았다.
+- 전용 메모리가 0인 어댑터: CI 러너(`windows-2025`)에는 실제 GPU가 없어 "Microsoft Basic Render Driver"(WARP)가 잡히고 전용 한도가 0MB다. 이때 VRAM 사용률은 0%로 두고, 스모크 테스트가 그 경우를 허용한다(로컬에서는 RTX 4060 7,956MB로만 확인).
+
+---
+
+## 15. 트레이 아이콘 정체성과 `NotifyIconSettings` (v0.8.0)
+
+승격(작업 표시줄에 고정)이 어느 키에 저장되는지, 그리고 셸이 키를 언제 쓰는지를 앱 밖에서
+직접 재현했다. `Shell_NotifyIconW`를 호출하는 임시 PowerShell 프로브로 `NIM_ADD`/
+`NIM_MODIFY`의 반환값과 레지스트리 쓰기를 함께 관측했다.
+
+### 실측
+
+| 실험 | `NIM_ADD` | `NIM_MODIFY`(NIF_GUID) | `NotifyIconSettings` |
+| --- | --- | --- | --- |
+| 처음 보는 GUID | true | true | 키 생성(관측 즉시) |
+| 같은 GUID 재등록(삭제 후) | true | true | 같은 키가 다시 생성 |
+| 기존 `TRAY_GUIDS`(CPU)로 등록 | true | true | **키가 15초 넘게 안 생김** |
+| 경로 기반, uID=1, 툴팁 A | true | - | 키 생성(`UID=0x1`) |
+| 경로 기반, uID=2, 같은 툴팁 A | true | - | **다른 키** 생성(`UID=0x2`) |
+| 경로 기반, uID=1, 다른 툴팁 B | true | - | 새 키 없음, 기존 키의 `InitialTooltip`은 A 그대로 |
+
+### 정체성 규칙
+
+1. **경로 기반 정체성은 `(ExecutablePath, uID)`다.** 툴팁은 키가 아니라 키에 기록되는 값이고
+   (`InitialTooltip`), 최초 등록 시점 값에서 갱신되지 않는다. 그래서 툴팁을 바꿔도 고정은
+   같은 아이콘에 남고, uID가 밀리면 다른 아이콘으로 옮겨간다.
+2. **셸은 이미 아는 정체성에는 키를 (다시) 쓰지 않는다.** 키가 없다는 것은 거부가 아니라
+   "이 Explorer 세션이 그 정체성을 이미 본 적이 있다"는 뜻이다.
+3. GUID로 등록하면 정체성이 GUID가 되어 uID·경로와 무관해진다.
+
+### 고친 결함
+
+`Tray::build`는 `NotifyIconSettings`에 키가 생기는지를 GUID 수락 판정으로 썼다. 규칙 2 때문에
+**두 번째 실행부터 항상 폴백**했고, 폴백은 GUID 시도가 쓴 uID(`1..N`) 뒤에서 다시 만들어져
+`N+1..2N`을 받았다. 지표를 4개에서 6개로 늘리면 경로 기반 정체성이 통째로 밀려 기존 고정이
+다른 아이콘으로 가거나 사라진다(AGENTS.md 규칙 1·23이 경고하는 상황).
+
+수정: 판정은 `NIM_ADD` 성공과 `win32::set_guid_tooltip`(`NIF_TIP | NIF_GUID`)의 성공만 본다.
+키 개수는 **진단 로그**로만 남긴다(`onboard::guids_registered`).
+
+### 수정 후 검증 (Explorer 재시작 → 앱 실행)
+
+| 단계 | 결과 |
+| --- | --- |
+| 시작 로그 | 폴백 경고 없음, "persisted 6 of 6" 경고 없음 |
+| 레지스트리 | 6개 키 전부 `IconGuid` 기록, `ExecutablePath`는 우리 exe |
+| `promote.py`로 4개 고정 | 로그 `promotion Some { promoted: 4, total: 6 }`, 작업 표시줄에 4개 표시 |
+| exe를 다른 폴더로 복사해 실행 | 같은 6개 키가 새 경로로 이동, `IsPromoted=1` 유지(MSIX 업데이트 시나리오) |
+
+### 함정
+
+- **실행 중인 앱을 `/F`로 죽이지 않는다.** 죽은 창의 정체성이 Explorer 세션에 남아, 같은
+  GUID·경로로 다시 등록해도 키가 기록되지 않는다(관측). 그 상태에서는 Explorer를 재시작해야
+  한다. 정상 종료는 `Exit` 메뉴나 IPC 창의 `WM_CLOSE`(installer가 쓰는 경로)다.
+- 셸이 승격을 기록할 자리가 없는 상태(키 없음)에서는 사용자가 고정을 눌러도 기억되지 않는다.
+  진단 경고가 뜨면 Explorer를 재시작한 뒤 앱을 다시 실행한다.

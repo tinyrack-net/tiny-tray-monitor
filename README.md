@@ -2,23 +2,24 @@
 
 # tray-monitor
 
-**CPU, memory and network readouts in the Windows system tray.**
+**CPU, memory, network and GPU readouts in the Windows system tray.**
 
 [![CI](https://github.com/tinyrack-net/tray-monitor/actions/workflows/pipeline.yml/badge.svg)](https://github.com/tinyrack-net/tray-monitor/actions/workflows/pipeline.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
 
-tray-monitor puts four live readouts in the taskbar notification area, each showing
+tray-monitor puts six live readouts in the taskbar notification area, each showing
 what it measures and its current value:
 
 ```
- UP    DN    MEM   CPU
-341K  1.7K   41%   34%
+ VRM   GPU   ↑KB   ↓MB   MEM   CPU
+ 90    14    341   1.7   41    34
 ```
 
 No administrator rights, no kernel driver, no background service. It reads CPU time
-counters, `GlobalMemoryStatusEx` and the interface table directly.
+counters, `GlobalMemoryStatusEx`, the interface table and the GPU engine statistics
+(`D3DKMTQueryStatistics`) directly.
 
 ## Install
 
@@ -65,7 +66,7 @@ Right-click any of the icons.
 | Item | What it does |
 | --- | --- |
 | Settings… | Opens the settings window |
-| CPU / Memory / Network down / Network up | Show or hide that readout. The last visible one cannot be turned off |
+| CPU / Memory / Network down / Network up / GPU / GPU VRAM | Show or hide that readout. The last visible one cannot be turned off |
 | Exit | Stops tray-monitor |
 
 Hovering an icon shows the exact numbers, including upload rate and memory in GB.
@@ -83,7 +84,7 @@ one window. There is only ever one settings window:
 
 | Setting | Notes |
 | --- | --- |
-| Readouts | CPU, memory, network down and up. The last one cannot be turned off, and the preview shows what the tray icons look like right now |
+| Readouts | CPU, memory, network down and up, GPU and GPU VRAM. The last one cannot be turned off, and the preview shows what the tray icons look like right now |
 | Update every | 250 ms to 10 s. Pick a preset or type an exact number of milliseconds |
 | Colours | One colour per readout, or a single colour from the taskbar theme |
 | Network | Count virtual adapters (Hyper-V, VPN, vSwitch) in the network total |
@@ -113,6 +114,8 @@ cpu = true
 memory = true
 network_down = true
 network_up = true
+gpu = true
+gpu_vram = true
 ```
 
 A `network = ...` setting written by v0.1.0 is migrated to `network_down` and
@@ -155,6 +158,8 @@ keyboard launchers.
 | CPU | `GetSystemTimes` deltas (kernel time includes idle time) |
 | Memory | `GlobalMemoryStatusEx` |
 | Network down / up | `GetIfTable2` byte counters, loopback and tunnel interfaces excluded |
+| GPU | `D3DKMTQueryStatistics` per-engine running time deltas. The readout is the busiest engine of the adapter with the largest dedicated memory |
+| GPU VRAM | The same call, summed over the adapter's non-aperture segments, against the DXGI dedicated limit |
 
 Values are formatted to fit a square icon and drawn with a built-in 1-bit pixel font
 (a 5px caption over a 10px value) into an RGBA bitmap, then handed to `Shell_NotifyIcon` as an
@@ -185,6 +190,9 @@ words at this size. Measurements for every candidate are in
 - Requires Windows 11 or Windows 10 (build 17063 or later for `GetIfTable2`).
 - CPU temperature, fan speed and voltages are not included: they need administrator rights
   and a kernel driver.
+- The GPU readout follows one adapter: the one with the largest dedicated memory. On a laptop
+  whose display adapter is not that one, the number belongs to the other GPU. The value is the
+  busiest engine of that adapter, so it can differ from the per-engine graphs in Task Manager.
 - The MSIX package is unsigned (developer mode or Store signing needed). A package update
   changes the executable path, but the fixed per-readout GUIDs keep the tray promotion. If the
   shell rejects a GUID, the app falls back to per-path registration and the onboarding prompt

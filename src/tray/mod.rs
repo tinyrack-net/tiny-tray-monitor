@@ -28,11 +28,13 @@ use crate::win32;
 pub mod onboard;
 
 /// 메뉴 항목 id. 이벤트 처리에서 문자열로 비교한다.
-pub const MENU_SHOW: [&str; 4] = [
+pub const MENU_SHOW: [&str; 6] = [
     "show-cpu",
     "show-memory",
     "show-network-down",
     "show-network-up",
+    "show-gpu",
+    "show-gpu-vram",
 ];
 pub const MENU_SETTINGS: &str = "settings";
 pub const MENU_EXIT: &str = "exit";
@@ -50,12 +52,17 @@ fn placeholder(metric: Metric) -> Reading {
 /// 트레이 아이콘의 고정 GUID. `Metric::ALL` 순서와 같아야 하고, 버전이 바뀌어도
 /// 절대 바꾸면 안 된다. Windows가 이 값으로 "작업 표시줄에 항상 표시" 설정을
 /// 저장하므로, 실행 경로가 바뀌는 MSIX 업데이트에서도 승격 설정이 유지된다.
-const TRAY_GUIDS: [u128; 4] = [
+const TRAY_GUIDS: [u128; 6] = [
     0x08d913012075905f3b765d99cc00e07b, // CPU
     0x30146b445a48f8bc812370db292437b9, // MEM
     0x512275b8e98770860fd9c119653456c1, // DN
     0xecb03b17ed4a5b28b5f90f8642431ee3, // UP
+    0x451ac7457b5f28feb60d30f69e64b770, // GPU. v0.7.0에서 새로 발급했다.
+    0x5a61af487507da6c2d7b7302fd3e2479, // VRM. v0.7.0에서 새로 발급했다.
 ];
+
+/// 지표를 추가하면서 GUID를 빠뜨리면 여기서 컴파일이 멈춘다.
+const _: () = assert!(TRAY_GUIDS.len() == Metric::ALL.len());
 
 /// 메뉴 아이템을 만들어 보관한다. 아이콘 수만큼 메뉴가 필요하므로 아이템을 공유한다.
 pub struct MenuHandles {
@@ -125,17 +132,14 @@ impl MenuHandles {
 
     /// 같은 아이템을 공유하는 새 메뉴. 아이콘마다 하나씩 필요하다.
     fn build(&self) -> Result<Menu, String> {
-        let items: Vec<&dyn IsMenuItem> = vec![
-            &self.about,
-            &self.separators[0],
-            &self.show[0],
-            &self.show[1],
-            &self.show[2],
-            &self.show[3],
-            &self.separators[1],
-            &self.settings,
-            &self.exit,
-        ];
+        // 항목 수를 손으로 세지 않는다. 지표를 추가하면 메뉴에도 저절로 붙는다.
+        let mut items: Vec<&dyn IsMenuItem> = vec![&self.about, &self.separators[0]];
+        for item in &self.show {
+            items.push(item);
+        }
+        items.push(&self.separators[1]);
+        items.push(&self.settings);
+        items.push(&self.exit);
         Menu::with_items(&items).map_err(|e| e.to_string())
     }
 }
@@ -162,10 +166,18 @@ pub struct Tray {
 }
 
 impl Tray {
-    /// 아이콘 4개를 [Metric::ALL] 순서로 만든다. 순서를 바꾸면 승격 설정이 어긋난다.
+    /// 아이콘을 [Metric::ALL] 순서로 전부 만든다. 순서를 바꾸면 승격 설정이 어긋난다.
+    ///
+    /// **고정 GUID로 등록하는 것이 기본이다.** 아이콘마다 툴팁을 `NIF_GUID`로 한 번
+    /// 되쓰는 것으로 셸이 그 GUID의 아이콘을 들고 있는지 확인하고, 실패한 아이콘이
+    /// 있으면 GUID 없이 다시 만든다.
+    ///
+    /// `NotifyIconSettings`에 키가 없다는 것은 폴백 사유가 아니다. 셸은 이미 아는
+    /// 정체성에는 키를 다시 쓰지 않으므로, 그걸 거부로 읽으면 실행할 때마다 폴백하고
+    /// 정체성이 (경로, uID)로 굳어 승격 설정이 지표 추가/경로 변경마다 어긋난다
+    /// (실측: docs/SPIKE.md §15).
     pub fn new(px: i32, config: &Config, palette: Palette) -> Result<Self, String> {
-        // 고정 GUID로 먼저 시도하고, 셸이 거부하면 GUID 없이 다시 만든다.
-        match Self::build(px, config, palette, Some(TRAY_GUIDS)) {
+        match Self::build(px, config, palette, Some(&TRAY_GUIDS)) {
             Ok(tray) => Ok(tray),
             Err(error) => {
                 logging::warn(format!(
@@ -180,7 +192,7 @@ impl Tray {
         px: i32,
         config: &Config,
         palette: Palette,
-        guids: Option<[u128; 4]>,
+        guids: Option<&[u128]>,
     ) -> Result<Self, String> {
         let handles = MenuHandles::new(config);
         let mut cache = GlyphCache::new(GlyphCache::DEFAULT_CAPACITY);
@@ -233,12 +245,18 @@ impl Tray {
             });
         }
 
-        // `tray-icon`은 셸이 GUID를 거부해도 성공으로 돌려주고, NIM_MODIFY도 성공할
-        // 수 있다. Explorer가 실제로 만든 `NotifyIconSettings` 항목을 확인해
-        // GUID가 받아들여졌는지 판단한다.
+        // 진단용이다. 여기서 키가 적게 나와도 폴백하지 않는다: 셸은 이미 아는
+        // 정체성에는 키를 다시 쓰지 않는다. 이 상태에서는 셸이 승격 설정을 기록할
+        // 자리가 없으므로, Explorer를 다시 시작할 때까지는 고정이 기억되지 않는다.
         if let Some(guids) = guids {
-            if !Self::wait_for_guid_entries(&guids) {
-                return Err("the shell did not accept the fixed GUIDs".to_string());
+            if let Some(found) = onboard::guids_registered(guids) {
+                if found < guids.len() {
+                    logging::warn(format!(
+                        "the shell persisted {found} of {} fixed GUIDs; \
+                         the tray promotion may not be remembered until Explorer restarts",
+                        guids.len()
+                    ));
+                }
             }
         }
 
@@ -263,17 +281,6 @@ impl Tray {
             color_mode: config.color_mode,
             renders: 0,
         })
-    }
-
-    /// Explorer가 `NotifyIconSettings` 항목을 만들 때까지 잠깐 기다린다.
-    fn wait_for_guid_entries(guids: &[u128; 4]) -> bool {
-        for _ in 0..20 {
-            if onboard::guids_present(guids) {
-                return true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        false
     }
 
     fn slot(&mut self, metric: Metric) -> Option<&mut Slot> {

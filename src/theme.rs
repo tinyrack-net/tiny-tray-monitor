@@ -18,6 +18,8 @@ pub struct Palette {
     pub network: Color,
     /// 송신(업로드). 수신과 구분되도록 다른 색을 쓴다.
     pub network_up: Color,
+    pub gpu: Color,
+    pub gpu_vram: Color,
     pub light: bool,
 }
 
@@ -31,6 +33,8 @@ impl Palette {
             memory: Color(110, 170, 255),
             network: Color(255, 180, 90),
             network_up: Color(190, 150, 255),
+            gpu: Color(255, 130, 180),
+            gpu_vram: Color(130, 230, 230),
             light: false,
         }
     }
@@ -44,6 +48,8 @@ impl Palette {
             memory: Color(20, 80, 190),
             network: Color(170, 75, 0),
             network_up: Color(95, 40, 165),
+            gpu: Color(180, 20, 100),
+            gpu_vram: Color(0, 130, 130),
             light: true,
         }
     }
@@ -54,6 +60,8 @@ impl Palette {
             Metric::Memory => self.memory,
             Metric::NetworkDown => self.network,
             Metric::NetworkUp => self.network_up,
+            Metric::Gpu => self.gpu,
+            Metric::GpuVram => self.gpu_vram,
         }
     }
 
@@ -107,6 +115,8 @@ mod tests {
                 palette.value(Metric::Memory),
                 palette.value(Metric::NetworkDown),
                 palette.value(Metric::NetworkUp),
+                palette.value(Metric::Gpu),
+                palette.value(Metric::GpuVram),
             ];
             for (i, a) in colors.iter().enumerate() {
                 for b in &colors[i + 1..] {
@@ -137,6 +147,8 @@ mod tests {
                 ("memory", palette.value(Metric::Memory), 1.0),
                 ("network down", palette.value(Metric::NetworkDown), 1.0),
                 ("network up", palette.value(Metric::NetworkUp), 1.0),
+                ("gpu", palette.value(Metric::Gpu), 1.0),
+                ("gpu vram", palette.value(Metric::GpuVram), 1.0),
             ];
             for (name, color, alpha) in cases {
                 let on_screen = luminance(color) * alpha + background_luminance * (1.0 - alpha);

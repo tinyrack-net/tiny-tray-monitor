@@ -4,9 +4,9 @@ Copy for Partner Center → Store listing. Keep it in sync with the app.
 
 **Product name:** TinyTrayManager
 
-**Short description:** CPU, memory and network readouts in your Windows system tray.
+**Short description:** CPU, memory, network and GPU readouts in your Windows system tray.
 
-**Keywords:** tray, cpu, memory, network, system monitor, taskbar, performance
+**Keywords:** tray, cpu, memory, network, gpu, vram, system monitor, taskbar, performance
 
 **Copyright:** Copyright (c) 2026 winetree94
 
@@ -22,18 +22,20 @@ Copy for Partner Center → Store listing. Keep it in sync with the app.
 
 ## Description
 
-TinyTrayManager keeps an eye on your PC from the Windows system tray. Four compact readouts show what is happening right now:
+TinyTrayManager keeps an eye on your PC from the Windows system tray. Six compact readouts show what is happening right now:
 
 - CPU usage
 - Memory usage
 - Network download
 - Network upload
+- GPU usage
+- GPU VRAM usage
 
 Each readout is a single tray icon with a coloured value, so you can read the numbers at a glance without opening Task Manager.
 
 ### Features
 
-- Four independent readouts. Turn off the ones you do not need.
+- Six independent readouts. Turn off the ones you do not need.
 - Per-readout colours, or follow the taskbar theme.
 - Update interval from one second up.
 - Optional "Run at sign-in" so the readouts are there after a reboot.

@@ -20,6 +20,8 @@ pub static LABEL: &[(char, Glyph)] = &[
     ('B', Glyph { width: 3, rows: &[0b110, 0b101, 0b110, 0b101, 0b110] }),
     ('K', Glyph { width: 3, rows: &[0b101, 0b101, 0b110, 0b101, 0b101] }),
     ('G', Glyph { width: 3, rows: &[0b111, 0b100, 0b101, 0b101, 0b111] }),
+    ('V', Glyph { width: 3, rows: &[0b101, 0b101, 0b101, 0b101, 0b010] }),
+    ('R', Glyph { width: 3, rows: &[0b110, 0b101, 0b110, 0b101, 0b101] }),
     ('↓', Glyph { width: 3, rows: &[0b010, 0b010, 0b010, 0b111, 0b010] }),
     ('↑', Glyph { width: 3, rows: &[0b010, 0b111, 0b010, 0b010, 0b010] }),
     ('?', Glyph { width: 3, rows: &[0b111, 0b001, 0b011, 0b000, 0b010] }),

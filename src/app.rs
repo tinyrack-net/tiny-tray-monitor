@@ -33,6 +33,8 @@ pub struct App {
     last_memory: Option<String>,
     last_network_down: Option<String>,
     last_network_up: Option<String>,
+    last_gpu: Option<String>,
+    last_gpu_vram: Option<String>,
 }
 
 impl App {
@@ -85,6 +87,8 @@ impl App {
             last_memory: None,
             last_network_down: None,
             last_network_up: None,
+            last_gpu: None,
+            last_gpu_vram: None,
         })
     }
 
@@ -173,6 +177,29 @@ impl App {
             self.tray.update(Metric::NetworkDown, down, tooltip.clone());
             self.tray.update(Metric::NetworkUp, up, tooltip);
         }
+
+        if let Some(gpu) = sample.gpu_percent {
+            let value = format::percent_reading(gpu);
+            self.last_gpu = Some(value.compact());
+            let adapter = self
+                .sampler
+                .gpu_adapter()
+                .map(|adapter| adapter.name.as_str())
+                .unwrap_or_else(|| i18n::metric_label(Metric::Gpu));
+            let tooltip = i18n::gpu_tooltip(adapter, &format::percent(gpu));
+            self.tray.update(Metric::Gpu, value, tooltip);
+        }
+
+        if let Some(vram) = sample.gpu_vram {
+            let value = format::percent_reading(vram.percent);
+            self.last_gpu_vram = Some(value.compact());
+            let tooltip = i18n::vram_tooltip(
+                &format::percent(vram.percent),
+                &format::bytes(vram.used),
+                &format::bytes(vram.total),
+            );
+            self.tray.update(Metric::GpuVram, value, tooltip);
+        }
     }
 
     /// 주기적으로 상태를 남긴다. 값이 멈추면(타이머가 죽으면) 로그도 멈추므로 진단에 쓴다.
@@ -183,12 +210,14 @@ impl App {
         }
         let stats = self.tray.cache_stats();
         logging::info(format!(
-            "update #{}: cpu {} mem {} net down {} up {} | glyph cache {:.0}% (hit {} miss {} entries {}) icon swaps {}",
+            "update #{}: cpu {} mem {} net down {} up {} gpu {} vram {} | glyph cache {:.0}% (hit {} miss {} entries {}) icon swaps {}",
             self.ticks,
             self.last_cpu.as_deref().unwrap_or("-"),
             self.last_memory.as_deref().unwrap_or("-"),
             self.last_network_down.as_deref().unwrap_or("-"),
             self.last_network_up.as_deref().unwrap_or("-"),
+            self.last_gpu.as_deref().unwrap_or("-"),
+            self.last_gpu_vram.as_deref().unwrap_or("-"),
             stats.hit_ratio(),
             stats.hits,
             stats.misses,

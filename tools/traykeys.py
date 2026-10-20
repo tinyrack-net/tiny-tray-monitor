@@ -1,6 +1,8 @@
 """HKCU NotifyIconSettings 를 파싱해 tray-monitor 의 아이콘 키를 출력한다.
 
-아이콘 식별 키가 (실행 경로 + 등록 시점 툴팁) 에 묶이는지 확인하는 실험용 도구.
+진단용 도구. 아이콘 정체성은 `(ExecutablePath, UID)` 로 확인됐고, `InitialTooltip` 은
+키가 아니라 최초 등록 시점에 기록되는 값이다. GUID로 등록한 아이콘은 `IconGuid` 가
+정체성이고 `UID` 는 기록되지 않는다. 실측 근거는 docs/SPIKE.md §14.
 """
 
 import re
@@ -43,6 +45,8 @@ def query():
                     v.get("InitialTooltip", "<none>"),
                     key,
                     v.get("IsPromoted", "unset"),
+                    v.get("IconGuid", "-"),
+                    v.get("UID", "-"),
                 )
             )
     return sorted(rows)
@@ -51,8 +55,11 @@ def query():
 if __name__ == "__main__":
     rows = query()
     print(f"{len(rows)} icon keys for tray-monitor")
-    for tip, key, promoted in rows:
-        print(f"  promoted={promoted:<8} tooltip={tip!r:<18} key={key}")
+    for tip, key, promoted, guid, uid in rows:
+        print(
+            f"  promoted={promoted:<8} uid={uid:<6} tooltip={tip!r:<20} "
+            f"guid={guid} key={key}"
+        )
     if len(sys.argv) > 1:
         with open(sys.argv[1], "w", encoding="utf-8") as f:
             f.write("\n".join(f"{t}|{k}" for t, k, _ in rows))

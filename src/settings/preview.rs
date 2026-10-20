@@ -19,6 +19,8 @@ fn sample(metric: Metric) -> (&'static str, &'static str) {
         Metric::Memory => ("41", "%"),
         Metric::NetworkDown => ("1.7", "KB"),
         Metric::NetworkUp => ("341", "KB"),
+        Metric::Gpu => ("14", "%"),
+        Metric::GpuVram => ("75", "%"),
     }
 }
 
@@ -201,10 +203,10 @@ mod tests {
         let small = preview.strip(&draft(), Palette::dark(), 16, 1);
         let large = preview.strip(&draft(), Palette::dark(), 16, 3);
 
-        let expected = layout(4, 16, 1, 2);
+        let expected = layout(Metric::ALL.len(), 16, 1, 2);
         assert_eq!((small.width, small.height), expected);
 
-        let expected = layout(4, 48, 3, 6);
+        let expected = layout(Metric::ALL.len(), 48, 3, 6);
         assert_eq!((large.width, large.height), expected);
     }
 
