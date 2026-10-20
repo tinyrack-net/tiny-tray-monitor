@@ -68,6 +68,8 @@ Right-click any of the icons.
 | CPU / Memory / Network down (DN) / Network up (UP) | Show or hide that readout. The last visible one cannot be turned off |
 | Run at sign-in | Adds or removes the `HKCU\...\Run` entry (or the package startup task) |
 | Count virtual adapters | Include Hyper-V, VPN and similar adapters in the network total |
+| Show labels | Draw the CPU/MEM/DN/UP label above each value. Turn it off to make the value larger |
+| Show units | Append `%`/`K`/`M`/`G` to each value. Turn it off to keep values to three characters and draw them larger |
 | Open config file | Opens `config.toml` in your default editor |
 | Exit | Stops tray-monitor |
 
@@ -84,6 +86,7 @@ already running.
 | Readouts | CPU, memory, network down and up. The last one cannot be turned off, and the preview shows what the tray icons look like right now |
 | Update every | 250 ms to 10 s. Pick a preset or type an exact number of milliseconds |
 | Colours | One colour per readout, or a single colour from the taskbar theme |
+| Labels | Show the CPU/MEM/DN/UP label above each value. Turning it off swaps in a taller value face, so the number is larger |
 | Network | Count virtual adapters (Hyper-V, VPN, vSwitch) in the network total |
 | Startup | Run at sign-in |
 | Buttons | Open `config.toml`, open the log file, reset everything in `config.toml` to the defaults |
@@ -103,6 +106,8 @@ config from `%APPDATA%\tray-monitor` is copied there on the first packaged run.
 poll_interval_ms = 1000          # 250 ~ 10000
 exclude_virtual_adapters = true  # skip adapters that mirror physical traffic
 color_mode = "metric"            # "metric" = one colour per readout, "theme" = single colour
+show_labels = true               # false = drop the label row and enlarge the value
+show_units = true                # false = drop %/K/M/G and enlarge the value further
 
 [show]
 cpu = true
@@ -149,19 +154,25 @@ keyboard launchers.
 | Memory | `GlobalMemoryStatusEx` |
 | Network down / up | `GetIfTable2` byte counters, loopback and tunnel interfaces excluded |
 
-Values are formatted to fit a square icon and rendered with GDI into a 32bpp DIB, downsampled
-from an 8x supersample, then handed to `Shell_NotifyIcon` as an `HICON`. A 16px icon (100%
-display scaling) leaves room for a 5px label and a 9px value, which is why the values are
-never longer than four characters. Measurements and the reasoning behind the layout are in
-[docs/SPIKE.md](docs/SPIKE.md).
+Values are formatted to fit a square icon and drawn with a built-in 1-bit pixel font
+(a 5px label over a 9px value) into an RGBA bitmap, then handed to `Shell_NotifyIcon` as an
+`HICON`. There is no anti-aliasing and no GDI text: the glyph table is generated from
+`tools/pixelfont.py`, so the same input always produces the same pixels. The 16px master is
+scaled to the tray size with nearest-neighbour, which keeps the result 1-bit at every display
+scale. The label row and the unit suffix can each be turned off. Hiding the label swaps the 9px
+value for a 10px one; hiding the units as well keeps values to three characters and swaps the
+value for a 13px one. The values are never longer than four characters. Measurements and the
+reasoning behind the layout are in
+[docs/SPIKE.md](docs/SPIKE.md) and
+[docs/PIXEL-FONT.md](docs/PIXEL-FONT.md).
 
 Idle cost measured on a 2560x1440 100% display: about **19 MB** of working set (3 MB private,
 216 handles, all steady) and **0.4%** of one CPU core at a one second interval.
 
-The label row is 5px tall on a 16px icon, which is too small for an arrow: `↓` and `↑`
-collapse into the same thin stroke. `DN` and `UP` stay readable, and the two readouts
-also use different colours. Measurements for every candidate are in
-[docs/PLAN.md](docs/PLAN.md).
+The label row is 5px tall. `DN` and `UP` stay readable, and the two readouts also use
+different colours; an arrow was rejected because two arrows are harder to tell apart than two
+words at this size. Measurements for every candidate are in
+[docs/PLAN.md](docs/PLAN.md) §11.
 
 ## Limitations
 

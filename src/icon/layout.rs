@@ -1,14 +1,23 @@
 //! 아이콘 레이아웃 정책.
 //!
-//! 16px 정사각형 아이콘에 라벨과 값을 2줄로 쌓기 위한 값들은 실측으로 정했다.
-//! (docs/SPIKE.md 의 "라벨 + 값 2줄 레이아웃 실측" 참고)
+//! 글리프는 16px master 하나뿐이고 배율은 [super::render::scale_nearest]가 처리한다.
+//! 여기서는 master 안에서 라벨과 값을 어떻게 쌓을지만 정한다.
+//!
+//! 값 줄을 [super::pixel::Face::Value](3x9)로 두는 이유는
+//! [docs/PIXEL-FONT.md](../../docs/PIXEL-FONT.md) 참고.
+//!
+//! 라벨을 숨기면 값만 [Face::ValueLarge](4x10), 라벨과 단위를 모두 숨기면
+//! 값이 3글자 이하라 [Face::ValueHuge](4x13)로 키운다.
 
-use super::render::Fit;
+use super::pixel::{Face, TRACKING};
 
-/// 라벨(작게) + 값(크게) 2줄 레이아웃.
+/// 라벨 밝기. 값을 앞세우기 위해 뒤로 물린다.
+const LABEL_ALPHA: u8 = 190;
+
+/// 라벨(작게) + 값(크게) 2줄 레이아웃. master(16px) 기준 값이다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StackSpec {
-    /// 라벨 줄 높이(px)
+    /// 라벨 줄 높이(px). 라벨을 숨기면 0.
     pub label_h: i32,
     /// 값 줄 높이(px)
     pub value_h: i32,
@@ -16,8 +25,10 @@ pub struct StackSpec {
     pub gap: i32,
     /// 라벨 밝기. 값을 앞세우기 위해 뒤로 물린다.
     pub label_alpha: u8,
-    /// 값이 박스 폭을 넘을 때의 처리
-    pub value_fit: Fit,
+    /// 라벨 줄을 그리는가. false면 값만 크게 그린다.
+    pub show_label: bool,
+    /// 값 줄에 쓸 글리프 표.
+    pub value_face: Face,
 }
 
 impl StackSpec {
@@ -27,31 +38,25 @@ impl StackSpec {
     }
 }
 
-/// 아이콘 크기에 맞는 레이아웃.
+/// master 레이아웃. `show_label`과 `show_units`에 따라 결정된다.
 ///
-/// 16px에서 라벨 5 / 값 9 / 간격 1 이 실측 최적값이다.
-/// 값은 가로로 압축해 높이를 살린다(비율 유지로 넣으면 6px까지 납작해진다).
-pub fn stack_spec(px: i32) -> StackSpec {
-    let px = px.max(8);
-    let unit = px as f32 / 16.0;
-    let mut label_h = (5.0 * unit).round().max(3.0) as i32;
-    let mut value_h = (9.0 * unit).round().max(4.0) as i32;
-    let gap = if px >= 24 { 2 } else { 1 };
-
-    // 블록이 아이콘보다 커지면 값부터 줄인다.
-    while label_h + gap + value_h > px && value_h > 4 {
-        value_h -= 1;
-    }
-    while label_h + gap + value_h > px && label_h > 3 {
-        label_h -= 1;
-    }
-
+/// 단위를 숨기면 값이 3글자 이하가 되어 간격 1px을 써도 16px에 들어가므로
+/// 가장 큰 글리프를 쓴다.
+pub fn stack_spec(show_label: bool, show_units: bool) -> StackSpec {
+    let value_face = if show_label {
+        Face::Value
+    } else if show_units {
+        Face::ValueLarge
+    } else {
+        Face::ValueHuge
+    };
     StackSpec {
-        label_h,
-        value_h,
-        gap,
-        label_alpha: 190,
-        value_fit: Fit::Squeeze,
+        label_h: if show_label { Face::Label.height() } else { 0 },
+        value_h: value_face.height(),
+        gap: if show_label { TRACKING } else { 0 },
+        label_alpha: LABEL_ALPHA,
+        show_label,
+        value_face,
     }
 }
 
@@ -77,13 +82,12 @@ impl Metric {
         Metric::NetworkUp,
     ];
 
-    /// 아이콘에 넣는 라벨. 16px에서는 3자 이하만 읽힌다.
+    /// 아이콘에 넣는 라벨. 글리프 표는 [super::glyphs::LABEL]에 있다.
     pub fn label(self) -> &'static str {
         match self {
             Metric::Cpu => "CPU",
             Metric::Memory => "MEM",
-            // 화살표(↓/↑)는 16px(라벨 5px)에서 얇은 선으로 뭉개져 구분되지 않는다.
-            // 후보 비교는 docs/PLAN.md 참고.
+            // 화살표(↓/↑)는 라벨이 2글자보다 넓고, 색과 함께 보면 DN/UP이 더 명확하다.
             Metric::NetworkDown => "DN",
             Metric::NetworkUp => "UP",
         }
@@ -112,41 +116,55 @@ impl Metric {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::icon::pixel::MASTER_PX;
 
     #[test]
-    fn sixteen_pixels_matches_the_measured_layout() {
-        let spec = stack_spec(16);
+    fn master_layout_is_the_measured_one() {
+        let spec = stack_spec(true, true);
         assert_eq!(spec.label_h, 5);
         assert_eq!(spec.value_h, 9);
         assert_eq!(spec.gap, 1);
         assert_eq!(spec.block_height(), 15);
-        assert_eq!(spec.value_fit, Fit::Squeeze);
+        assert_eq!(spec.label_alpha, 190);
+        assert!(spec.show_label);
+        assert_eq!(spec.value_face, Face::Value);
     }
 
     #[test]
-    fn block_always_fits_and_value_stays_readable() {
-        for px in [8, 12, 16, 20, 24, 32, 40, 48, 64, 96] {
-            let spec = stack_spec(px);
-            assert!(
-                spec.block_height() <= px,
-                "px={px} block={}",
-                spec.block_height()
-            );
-            assert!(spec.label_h >= 3, "px={px} label_h={}", spec.label_h);
-            assert!(spec.value_h >= 4, "px={px} value_h={}", spec.value_h);
-            assert!(
-                spec.value_h >= spec.label_h,
-                "px={px} 값이 라벨보다 작으면 안 된다"
-            );
+    fn value_only_layout_uses_the_large_face() {
+        let spec = stack_spec(false, true);
+        assert_eq!(spec.label_h, 0);
+        assert_eq!(spec.value_h, 10);
+        assert_eq!(spec.gap, 0);
+        assert_eq!(spec.block_height(), 10);
+        assert!(!spec.show_label);
+        assert_eq!(spec.value_face, Face::ValueLarge);
+    }
+
+    /// 단위를 숨기면 값이 3글자 이하라 가장 큰 글리프를 쓴다.
+    #[test]
+    fn unit_less_value_only_layout_uses_the_huge_face() {
+        let spec = stack_spec(false, false);
+        assert_eq!(spec.label_h, 0);
+        assert_eq!(spec.value_h, 13);
+        assert_eq!(spec.gap, 0);
+        assert_eq!(spec.block_height(), 13);
+        assert_eq!(spec.value_face, Face::ValueHuge);
+    }
+
+    #[test]
+    fn block_fits_the_master() {
+        for show_label in [true, false] {
+            for show_units in [true, false] {
+                let spec = stack_spec(show_label, show_units);
+                assert!(
+                    spec.block_height() <= MASTER_PX,
+                    "block={} master={MASTER_PX}",
+                    spec.block_height()
+                );
+                assert!(spec.value_h >= spec.label_h, "값이 라벨보다 작으면 안 된다");
+            }
         }
-    }
-
-    #[test]
-    fn layout_grows_with_the_icon() {
-        let small = stack_spec(16);
-        let large = stack_spec(32);
-        assert!(large.label_h > small.label_h);
-        assert!(large.value_h > small.value_h);
     }
 
     #[test]

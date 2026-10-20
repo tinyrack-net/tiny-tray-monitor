@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use crate::icon::{self, Bitmap, Color, Fit, GlyphCache, Metric};
+use crate::icon::{self, Bitmap, Color, GlyphCache, Metric};
 use crate::metrics;
 use crate::theme;
 
@@ -99,26 +99,57 @@ fn tag(metric: Metric) -> &'static str {
 }
 
 /// 지표별 대표 표시 값.
-fn sample_value(metric: Metric) -> &'static str {
-    match metric {
-        Metric::Cpu => "80%",
-        Metric::Memory => "77%",
-        Metric::NetworkDown => "24M",
-        Metric::NetworkUp => "1.2M",
+fn sample_value(metric: Metric, units: bool) -> &'static str {
+    match (metric, units) {
+        (Metric::Cpu, true) => "80%",
+        (Metric::Memory, true) => "77%",
+        (Metric::NetworkDown, true) => "24M",
+        (Metric::NetworkUp, true) => "1.2M",
+        (Metric::Cpu, false) => "80",
+        (Metric::Memory, false) => "77",
+        (Metric::NetworkDown, false) => "24",
+        (Metric::NetworkUp, false) => "1.2",
     }
 }
 
-/// 트레이에 넣을 라벨 후보. 같은 조건으로 렌더해 눈으로 고른다.
-const LABEL_CANDIDATES: [(&str, &str); 6] = [
-    ("arrow-dn", "↓"),
-    ("arrow-up", "↑"),
-    ("dn", "DN"),
-    ("up", "UP"),
-    ("rx", "RX"),
-    ("tx", "TX"),
+/// 넘침을 확인할 4글자 값 후보.
+const LONG_VALUES: [(&str, Metric, &str); 3] = [
+    ("cpu100", Metric::Cpu, "100%"),
+    ("dn1.2g", Metric::NetworkDown, "1.2G"),
+    ("dn999k", Metric::NetworkDown, "999K"),
 ];
 
-/// 아이콘 렌더 결과를 배경별로 덤프하고 실측 글리프 높이를 출력한다.
+/// 단위를 숨겼을 때의 가장 넓은 값(3글자). 확대 글리프에 들어가는지 확인한다.
+const WIDE_UNIT_LESS: [(&str, Metric, &str); 3] = [
+    ("cpu100", Metric::Cpu, "100"),
+    ("dn1.2", Metric::NetworkDown, "1.2"),
+    ("dn999", Metric::NetworkDown, "999"),
+];
+
+/// 배율이 master(16px)의 정수배인지 표시한다.
+fn scale_label(px: i32) -> String {
+    let master = icon::pixel::MASTER_PX;
+    if px % master == 0 {
+        format!("{}x", px / master)
+    } else {
+        format!("NN {:.2}x", px as f32 / master as f32)
+    }
+}
+
+/// 알파 계조(0 제외). 1비트면 값이 하나뿐이어야 한다.
+fn alpha_levels(bitmap: &Bitmap) -> Vec<u8> {
+    let mut levels: Vec<u8> = bitmap
+        .rgba
+        .chunks_exact(4)
+        .map(|pixel| pixel[3])
+        .filter(|alpha| *alpha > 0)
+        .collect();
+    levels.sort_unstable();
+    levels.dedup();
+    levels
+}
+
+/// 아이콘 렌더 결과를 배경별·px별로 덤프하고 1비트 여부를 출력한다.
 pub fn dump() {
     const ZOOM: i32 = 16;
 
@@ -132,17 +163,14 @@ pub fn dump() {
         }
     );
 
-    println!(
-        "{:<6} {:>8} {:>8} {:>8}  설명",
-        "px", "label_h", "value_h", "block"
-    );
-    for px in [16, 20, 24, 32] {
-        let spec = icon::stack_spec(px);
+    let spec = icon::stack_spec(true, true);
+    println!();
+    println!("{:<6} {:>10} {:>8}  비고", "px", "배율", "block");
+    for px in [16, 20, 24, 28, 32, 48] {
         println!(
-            "{:<6} {:>8} {:>8} {:>8}  {}",
+            "{:<6} {:>10} {:>8}  {}",
             px,
-            spec.label_h,
-            spec.value_h,
+            scale_label(px),
             spec.block_height(),
             if spec.block_height() <= px {
                 "ok"
@@ -159,72 +187,117 @@ pub fn dump() {
 
     for (name, background, palette) in backgrounds {
         let mut cache = GlyphCache::new(GlyphCache::DEFAULT_CAPACITY);
-        for px in [16, 24, 32] {
-            let spec = icon::stack_spec(px);
-            for metric in Metric::ALL {
+        // 라벨/단위 조합 네 가지를 모두 덤프한다.
+        for (prefix, show_label, show_units) in [
+            ("px", true, true),
+            ("nounit_px", true, false),
+            ("nolabel_px", false, true),
+            ("nolabel_nounit_px", false, false),
+        ] {
+            let spec = icon::stack_spec(show_label, show_units);
+            for px in [16, 20, 24, 32] {
+                for metric in Metric::ALL {
+                    let bitmap = icon::stacked(
+                        &mut cache,
+                        metric.label(),
+                        sample_value(metric, show_units),
+                        px,
+                        spec,
+                        palette.label,
+                        palette.value(metric),
+                    );
+                    let path = format!("out/{name}_{prefix}{px}_{}@{ZOOM}x.bmp", tag(metric));
+                    if let Err(error) = write_bmp(&path, &bitmap, ZOOM, background) {
+                        eprintln!("{path}: {error}");
+                    }
+                }
+            }
+        }
+
+        // 가장 넓은 값들이라도 16px master에 들어가는지 확인한다.
+        for (id, metric, value) in LONG_VALUES {
+            for (prefix, show_label) in [("long", true), ("nolabel_long", false)] {
+                let spec = icon::stack_spec(show_label, true);
                 let bitmap = icon::stacked(
                     &mut cache,
                     metric.label(),
-                    sample_value(metric),
-                    px,
+                    value,
+                    16,
                     spec,
                     palette.label,
                     palette.value(metric),
                 );
-                let path = format!("out/{name}_px{px}_{}@{ZOOM}x.bmp", tag(metric));
+                let path = format!("out/{name}_{prefix}_{id}@{ZOOM}x.bmp");
                 if let Err(error) = write_bmp(&path, &bitmap, ZOOM, background) {
                     eprintln!("{path}: {error}");
                 }
             }
         }
 
-        // 16px에서 라벨 후보를 값과 함께 렌더한다.
-        let spec = icon::stack_spec(16);
-        for (id, label) in LABEL_CANDIDATES {
+        // 단위를 숨기면 3글자 이하라 확대 글리프에도 들어간다.
+        for (id, metric, value) in WIDE_UNIT_LESS {
+            let spec = icon::stack_spec(false, false);
             let bitmap = icon::stacked(
                 &mut cache,
-                label,
-                "24M",
+                metric.label(),
+                value,
                 16,
                 spec,
                 palette.label,
-                palette.network,
+                palette.value(metric),
             );
-            let path = format!("out/lab_{name}_{id}@{ZOOM}x.bmp");
+            let path = format!("out/{name}_nounit_long_{id}@{ZOOM}x.bmp");
             if let Err(error) = write_bmp(&path, &bitmap, ZOOM, background) {
                 eprintln!("{path}: {error}");
             }
         }
     }
 
+    // 배율별로 1비트(계조 0/라벨/값)를 유지하는지 눈이 아니라 값으로 확인한다.
     println!();
-    println!("{:<12} {:>9} {:>9}  비고", "라벨", "label_h", "value_h");
-    let spec = icon::stack_spec(16);
-    let probe = Color(255, 255, 255);
-    for (id, label) in LABEL_CANDIDATES
-        .iter()
-        .copied()
-        .chain([("cpu(기준)", "CPU"), ("mem(기준)", "MEM")])
-    {
-        let label_h = icon::render::render_text(label, 16, spec.label_h, Fit::Uniform, probe, 255)
-            .map(|bitmap| bitmap.glyph_h)
-            .unwrap_or(0);
-        let value_h = icon::render::render_text(
-            sample_value(Metric::NetworkDown),
-            16,
-            spec.value_h,
-            spec.value_fit,
-            probe,
-            255,
-        )
-        .map(|bitmap| bitmap.glyph_h)
-        .unwrap_or(0);
-        println!("{:<12} {:>9} {:>9}", id, label_h, value_h);
+    println!(
+        "{:<6} {:>10} {:>16}  라벨+단위 / 라벨만 / 값만 / 값만+단위없음",
+        "px", "배율", "block"
+    );
+    let mut cache = GlyphCache::new(GlyphCache::DEFAULT_CAPACITY);
+    let white = Color(255, 255, 255);
+    for px in [16, 20, 24, 28, 32, 48] {
+        let render = |cache: &mut GlyphCache, label: bool, units: bool, value: &str| {
+            icon::stacked(
+                cache,
+                "CPU",
+                value,
+                px,
+                icon::stack_spec(label, units),
+                white,
+                white,
+            )
+        };
+        let labeled = render(&mut cache, true, true, "100%");
+        let label_only = render(&mut cache, true, false, "100");
+        let value_only = render(&mut cache, false, true, "100%");
+        let unit_less = render(&mut cache, false, false, "100");
+        println!(
+            "{:<6} {:>10} {:>16}  {:?} / {:?} / {:?} / {:?}",
+            px,
+            scale_label(px),
+            spec.block_height(),
+            alpha_levels(&labeled),
+            alpha_levels(&label_only),
+            alpha_levels(&value_only),
+            alpha_levels(&unit_less)
+        );
     }
 
     println!();
-    println!("out/{{dark,light}}_px{{16,24,32}}_{{CPU,MEM,NETD,NETU}}@{ZOOM}x.bmp");
-    println!("out/lab_{{dark,light}}_{{arrow-dn,arrow-up,dn,up,rx,tx}}@{ZOOM}x.bmp");
+    println!("out/{{dark,light}}_px{{16,20,24,32}}_{{CPU,MEM,NETD,NETU}}@{ZOOM}x.bmp");
+    println!("out/{{dark,light}}_nounit_px{{16,20,24,32}}_{{CPU,MEM,NETD,NETU}}@{ZOOM}x.bmp");
+    println!("out/{{dark,light}}_nolabel_px{{16,20,24,32}}_{{CPU,MEM,NETD,NETU}}@{ZOOM}x.bmp");
+    println!(
+        "out/{{dark,light}}_nolabel_nounit_px{{16,20,24,32}}_{{CPU,MEM,NETD,NETU}}@{ZOOM}x.bmp"
+    );
+    println!("out/{{dark,light}}_{{long,nolabel_long}}_{{cpu100,dn1.2g,dn999k}}@{ZOOM}x.bmp");
+    println!("out/{{dark,light}}_nounit_long_{{cpu100,dn1.2,dn999}}@{ZOOM}x.bmp");
 }
 
 /// 1초마다 지표를 출력한다.
@@ -318,17 +391,46 @@ mod tests {
     #[test]
     fn every_metric_has_a_sample_value() {
         for metric in Metric::ALL {
-            let value = sample_value(metric);
-            assert!(!value.is_empty(), "{metric:?}");
-            assert!(value.chars().count() <= 4, "{metric:?}: {value}");
+            for units in [true, false] {
+                let value = sample_value(metric, units);
+                assert!(!value.is_empty(), "{metric:?}");
+                let budget = if units { 4 } else { 3 };
+                assert!(value.chars().count() <= budget, "{metric:?}: {value}");
+            }
         }
     }
 
     #[test]
-    fn label_candidates_are_comparable() {
-        assert!(LABEL_CANDIDATES.len() >= 4);
-        for (id, label) in LABEL_CANDIDATES {
-            assert!(!id.is_empty() && !label.is_empty());
+    fn long_values_are_the_widest_real_ones() {
+        for (id, _, value) in LONG_VALUES {
+            assert!(!id.is_empty());
+            assert_eq!(value.chars().count(), 4, "{value}");
         }
+    }
+
+    /// 단위를 숨긴 값은 3글자 이하라 확대 글리프에 들어간다.
+    #[test]
+    fn unit_less_values_fit_the_huge_face() {
+        for (id, _, value) in WIDE_UNIT_LESS {
+            assert!(!id.is_empty());
+            assert_eq!(value.chars().count(), 3, "{value}");
+            assert!(icon::pixel::measure(value, icon::Face::ValueHuge) <= icon::pixel::MASTER_PX);
+        }
+    }
+
+    #[test]
+    fn scale_labels_distinguish_integer_multiples() {
+        assert_eq!(scale_label(16), "1x");
+        assert_eq!(scale_label(32), "2x");
+        assert!(scale_label(20).starts_with("NN"));
+        assert!(scale_label(24).starts_with("NN"));
+    }
+
+    #[test]
+    fn alpha_levels_reports_each_distinct_alpha() {
+        let mut bitmap = Bitmap::transparent(2, 1);
+        bitmap.set(0, 0, Color(0, 0, 0), 190);
+        bitmap.set(1, 0, Color(0, 0, 0), 255);
+        assert_eq!(alpha_levels(&bitmap), vec![190, 255]);
     }
 }

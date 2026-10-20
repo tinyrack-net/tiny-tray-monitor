@@ -87,6 +87,11 @@ pub struct Config {
     /// 가상 어댑터를 집계에서 뺀다. 물리 NIC와 가상 스위치가 같은 트래픽을
     /// 두 번 세는 것을 막는다.
     pub exclude_virtual_adapters: bool,
+    /// 아이콘에 지표 라벨(CPU/MEM/DN/UP)을 함께 표시한다.
+    /// 끄면 라벨 줄을 빼고 값만 크게 표시한다.
+    pub show_labels: bool,
+    /// 값에 단위(`%`/`K`/`M`/`G`)를 붙인다. 끄면 숫자만 표시한다.
+    pub show_units: bool,
 }
 
 impl Default for Config {
@@ -96,6 +101,8 @@ impl Default for Config {
             show: Show::default(),
             color_mode: ColorMode::default(),
             exclude_virtual_adapters: true,
+            show_labels: true,
+            show_units: true,
         }
     }
 }
@@ -287,6 +294,8 @@ mod tests {
             },
             color_mode: ColorMode::Theme,
             exclude_virtual_adapters: false,
+            show_labels: false,
+            show_units: false,
         };
         let text = toml::to_string_pretty(&config).expect("serialize");
         let parsed: Config = toml::from_str(&text).expect("deserialize");

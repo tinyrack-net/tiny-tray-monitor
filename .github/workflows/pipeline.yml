@@ -98,6 +98,8 @@ jobs:
           path: artifact
       - name: Check the committed assets
         run: python tools/make_assets.py --check
+      - name: Check the generated glyph table
+        run: python tools/pixelfont.py --check
       - name: Build the installer
         shell: pwsh
         run: pwsh -NoProfile -File ./packaging/windows/build-installer.ps1 -Exe artifact/tray-monitor.exe -OutputDir dist

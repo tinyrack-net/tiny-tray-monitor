@@ -34,6 +34,8 @@ pub const MENU_SHOW: [&str; 4] = [
 ];
 pub const MENU_AUTOSTART: &str = "autostart";
 pub const MENU_VIRTUAL: &str = "count-virtual-adapters";
+pub const MENU_LABELS: &str = "show-labels";
+pub const MENU_UNITS: &str = "show-units";
 pub const MENU_SETTINGS: &str = "settings";
 pub const MENU_OPEN_CONFIG: &str = "open-config";
 pub const MENU_EXIT: &str = "exit";
@@ -56,6 +58,8 @@ pub struct MenuHandles {
     pub show: Vec<CheckMenuItem>,
     pub autostart: CheckMenuItem,
     pub virtual_adapters: CheckMenuItem,
+    pub labels: CheckMenuItem,
+    units: CheckMenuItem,
     about: MenuItem,
     settings: MenuItem,
     open_config: MenuItem,
@@ -91,6 +95,16 @@ impl MenuHandles {
                 .id(MenuId::new(MENU_VIRTUAL))
                 .checked(!config.exclude_virtual_adapters)
                 .build(),
+            labels: CheckMenuItemBuilder::new()
+                .text("Show labels")
+                .id(MenuId::new(MENU_LABELS))
+                .checked(config.show_labels)
+                .build(),
+            units: CheckMenuItemBuilder::new()
+                .text("Show units")
+                .id(MenuId::new(MENU_UNITS))
+                .checked(config.show_units)
+                .build(),
             about: MenuItemBuilder::new()
                 .text(format!("tray-monitor v{}", env!("CARGO_PKG_VERSION")))
                 .enabled(false)
@@ -123,6 +137,8 @@ impl MenuHandles {
         self.autostart.set_checked(autostart);
         self.virtual_adapters
             .set_checked(!config.exclude_virtual_adapters);
+        self.labels.set_checked(config.show_labels);
+        self.units.set_checked(config.show_units);
     }
 
     /// 같은 아이템을 공유하는 새 메뉴. 아이콘마다 하나씩 필요하다.
@@ -137,6 +153,8 @@ impl MenuHandles {
             &self.separators[1],
             &self.autostart,
             &self.virtual_adapters,
+            &self.labels,
+            &self.units,
             &self.separators[2],
             &self.settings,
             &self.open_config,
@@ -165,6 +183,8 @@ pub struct Tray {
     cache: GlyphCache,
     palette: Palette,
     color_mode: ColorMode,
+    show_labels: bool,
+    show_units: bool,
     renders: u64,
 }
 
@@ -195,7 +215,7 @@ impl Tray {
         autostart: bool,
         guids: Option<[u128; 4]>,
     ) -> Result<Self, String> {
-        let spec = icon::stack_spec(px);
+        let spec = icon::stack_spec(config.show_labels, config.show_units);
         let handles = MenuHandles::new(config, autostart);
         let mut cache = GlyphCache::new(GlyphCache::DEFAULT_CAPACITY);
         let mut slots = Vec::with_capacity(Metric::ALL.len());
@@ -271,6 +291,8 @@ impl Tray {
             cache,
             palette,
             color_mode: config.color_mode,
+            show_labels: config.show_labels,
+            show_units: config.show_units,
             renders: 0,
         })
     }
@@ -311,6 +333,30 @@ impl Tray {
         }
         self.palette = palette;
         self.color_mode = color_mode;
+        for slot in &mut self.slots {
+            slot.dirty = true;
+        }
+    }
+
+    /// 라벨 표시를 바꾼다. 다음 갱신에서 다시 그린다.
+    pub fn set_show_labels(&mut self, show_labels: bool) {
+        if self.show_labels == show_labels {
+            return;
+        }
+        self.show_labels = show_labels;
+        self.spec = icon::stack_spec(show_labels, self.show_units);
+        for slot in &mut self.slots {
+            slot.dirty = true;
+        }
+    }
+
+    /// 단위 표시를 바꾼다. 라벨과 함께 값 글리프 크기를 정한다.
+    pub fn set_show_units(&mut self, show_units: bool) {
+        if self.show_units == show_units {
+            return;
+        }
+        self.show_units = show_units;
+        self.spec = icon::stack_spec(self.show_labels, show_units);
         for slot in &mut self.slots {
             slot.dirty = true;
         }
@@ -401,6 +447,8 @@ mod tests {
         let mut ids: Vec<&str> = MENU_SHOW.to_vec();
         ids.push(MENU_AUTOSTART);
         ids.push(MENU_VIRTUAL);
+        ids.push(MENU_LABELS);
+        ids.push(MENU_UNITS);
         ids.push(MENU_SETTINGS);
         ids.push(MENU_OPEN_CONFIG);
         ids.push(MENU_EXIT);
