@@ -3,7 +3,7 @@
 # make validate : 커밋 전 필수 검사 (CI 의 Quality Gate 와 같은 검사)
 # make dump     : 아이콘 렌더 결과를 덤프하고 비교 시트를 만든다
 
-.PHONY: validate fmt clippy test run build install probe interfaces dump assets installer msix package clean
+.PHONY: validate fmt clippy test run build install probe interfaces dump glyphs assets installer msix package clean
 
 validate: fmt clippy test
 
@@ -31,8 +31,17 @@ interfaces:
 # 아이콘 레이아웃을 바꿨다면 시트를 눈으로 확인한다.
 dump:
 	cargo run --release -- --dump
-	python tools/icon_sheet.py out/sheet-dark.bmp 16 dark_px16 dark_px24 dark_px32
-	python tools/icon_sheet.py out/sheet-light.bmp 16 light_px16 light_px24 light_px32
+	python tools/icon_sheet.py out/sheet-dark.bmp 16 dark_px16 dark_px20 dark_px24 dark_px32
+	python tools/icon_sheet.py out/sheet-light.bmp 16 light_px16 light_px20 light_px24 light_px32
+	python tools/icon_sheet.py out/sheet-nolabel-dark.bmp 16 dark_nolabel_px16 dark_nolabel_px20 dark_nolabel_px24 dark_nolabel_px32
+	python tools/icon_sheet.py out/sheet-nolabel-light.bmp 16 light_nolabel_px16 light_nolabel_px20 light_nolabel_px24 light_nolabel_px32
+
+# 글리프 표를 다시 만든다. 결과는 커밋한다.
+glyphs:
+	python tools/pixelfont.py
+
+glyphs-check:
+	python tools/pixelfont.py --check
 
 # 아이콘/타일 자산을 다시 만든다. 결과는 커밋한다.
 assets:

@@ -43,6 +43,8 @@ pub const IDC_VERSION: i32 = 1014;
 pub const IDC_OPEN_CONFIG: i32 = 1015;
 pub const IDC_OPEN_LOG: i32 = 1016;
 pub const IDC_RESET: i32 = 1017;
+pub const IDC_LABELS: i32 = 1018;
+pub const IDC_UNITS: i32 = 1019;
 
 /// 닫기 버튼과 Esc가 보내는 id.
 pub const IDC_CLOSE: i32 = 2;
@@ -198,6 +200,14 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
             draft.count_virtual = !draft.count_virtual;
             Ok(())
         }),
+        IDC_LABELS => commit(hwnd, |draft| {
+            draft.show_labels = !draft.show_labels;
+            Ok(())
+        }),
+        IDC_UNITS => commit(hwnd, |draft| {
+            draft.show_units = !draft.show_units;
+            Ok(())
+        }),
         IDC_AUTOSTART => {
             // WM_COMMAND은 input-synchronous 호출이다. 여기서 StartupTask의
             // RequestEnableAsync를 부르면 RPC_E_CANTCALLOUT_ININPUTSYNCCALL로
@@ -250,6 +260,8 @@ fn sync_controls(hwnd: HWND, draft: &SettingsDraft) {
     );
     win32::dialog::set_check(hwnd, IDC_COLOR_THEME, draft.color_mode == ColorMode::Theme);
     win32::dialog::set_check(hwnd, IDC_VIRTUAL, draft.count_virtual);
+    win32::dialog::set_check(hwnd, IDC_LABELS, draft.show_labels);
+    win32::dialog::set_check(hwnd, IDC_UNITS, draft.show_units);
     win32::dialog::set_check(hwnd, IDC_AUTOSTART, draft.autostart);
     sync_interval(hwnd, draft.poll_interval_ms);
     sync_preview(hwnd, draft);
@@ -425,6 +437,8 @@ mod tests {
             ("IDC_OPEN_CONFIG", IDC_OPEN_CONFIG),
             ("IDC_OPEN_LOG", IDC_OPEN_LOG),
             ("IDC_RESET", IDC_RESET),
+            ("IDC_LABELS", IDC_LABELS),
+            ("IDC_UNITS", IDC_UNITS),
         ];
 
         for (name, value) in expected {

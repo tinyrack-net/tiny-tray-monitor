@@ -17,29 +17,45 @@ fn scale(mut value: f64, limit: f64) -> (f64, usize) {
 
 /// 사용률(%)을 표시 문자열로. 최대 4자("100%").
 pub fn percent(value: f64) -> String {
+    percent_unit(value, true)
+}
+
+/// 사용률을 표시 문자열로. `units`가 false면 `%`를 뺀다(최대 3자).
+pub fn percent_unit(value: f64, units: bool) -> String {
     if !value.is_finite() || value <= 0.0 {
-        return "0%".to_string();
+        return if units {
+            "0%".to_string()
+        } else {
+            "0".to_string()
+        };
     }
     let v = value.min(100.0);
-    if v >= 99.5 {
-        "100%".to_string()
+    let number = if v >= 99.5 { 100 } else { v.round() as i64 };
+    if units {
+        format!("{number}%")
     } else {
-        format!("{}%", v.round() as i64)
+        number.to_string()
     }
 }
 
 /// 초당 바이트를 최대 4자로 압축한다. ("512", "1.0K", "24M", "1.2G")
 pub fn rate(bytes_per_sec: f64) -> String {
+    rate_unit(bytes_per_sec, true)
+}
+
+/// 초당 바이트를 압축한다. `units`가 false면 K/M/G 접미사를 뺀다(최대 3자).
+pub fn rate_unit(bytes_per_sec: f64, units: bool) -> String {
     let v = if bytes_per_sec.is_finite() {
         bytes_per_sec.max(0.0)
     } else {
         0.0
     };
     let (scaled, unit) = scale(v, 999.5);
+    let suffix = if units { UNITS[unit] } else { "" };
     if unit > 0 && scaled < 9.95 {
-        format!("{scaled:.1}{}", UNITS[unit])
+        format!("{scaled:.1}{suffix}")
     } else {
-        format!("{}{}", scaled.round() as i64, UNITS[unit])
+        format!("{}{suffix}", scaled.round() as i64)
     }
 }
 
@@ -119,6 +135,30 @@ mod tests {
         for i in 0..=1000 {
             let s = percent(i as f64 / 10.0);
             assert!(s.chars().count() <= 4, "percent({i}) = {s}");
+        }
+    }
+
+    #[test]
+    fn unit_less_forms_drop_the_suffix() {
+        assert_eq!(percent_unit(80.4, false), "80");
+        assert_eq!(percent_unit(100.0, false), "100");
+        assert_eq!(percent_unit(-1.0, false), "0");
+        assert_eq!(rate_unit(1024.0, false), "1.0");
+        assert_eq!(rate_unit(24.0 * 1024.0, false), "24");
+        assert_eq!(rate_unit(512.0, false), "512");
+        assert_eq!(rate_unit(0.0, false), "0");
+    }
+
+    /// 단위를 빼면 3자를 넘지 않아야 확대 글리프에 들어간다.
+    #[test]
+    fn unit_less_forms_never_exceed_three_chars() {
+        let mut v = 0.0f64;
+        while v < 10.0 * 1024.0 * 1024.0 * 1024.0 {
+            assert!(rate_unit(v, false).chars().count() <= 3, "rate_unit({v})");
+            v = v * 1.07 + 1.0;
+        }
+        for i in 0..=1000 {
+            assert!(percent_unit(i as f64 / 10.0, false).chars().count() <= 3);
         }
     }
 

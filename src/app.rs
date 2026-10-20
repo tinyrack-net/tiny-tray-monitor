@@ -141,20 +141,24 @@ impl App {
     }
 
     fn apply(&mut self, sample: metrics::Sample) {
+        let units = self.store.config.show_units;
+
         if let Some(cpu) = sample.cpu_percent {
-            self.last_cpu = Some(format::percent(cpu));
+            let value = format::percent_unit(cpu, units);
+            self.last_cpu = Some(value.clone());
             self.tray.update(
                 Metric::Cpu,
-                format::percent(cpu),
+                value,
                 format!("CPU {} busy", format::percent(cpu)),
             );
         }
 
         if let Some(memory) = sample.memory {
-            self.last_memory = Some(format::percent(memory.percent));
+            let value = format::percent_unit(memory.percent, units);
+            self.last_memory = Some(value.clone());
             self.tray.update(
                 Metric::Memory,
-                format::percent(memory.percent),
+                value,
                 format!(
                     "Memory {} used  ({} of {})",
                     format::percent(memory.percent),
@@ -166,8 +170,8 @@ impl App {
 
         if let Some(net) = sample.net {
             // 방향별로 아이콘을 나눠 쓴다. 툴팁은 두 방향을 함께 보여준다.
-            let down = format::rate(net.down);
-            let up = format::rate(net.up);
+            let down = format::rate_unit(net.down, units);
+            let up = format::rate_unit(net.up, units);
             let tooltip = format!(
                 "Network down {}  up {}",
                 format::rate_long(net.down),
@@ -215,6 +219,8 @@ impl App {
             tray::MENU_SETTINGS => self.request_settings(),
             tray::MENU_AUTOSTART => self.toggle_autostart(),
             tray::MENU_VIRTUAL => self.toggle_virtual_adapters(),
+            tray::MENU_LABELS => self.toggle_labels(),
+            tray::MENU_UNITS => self.toggle_units(),
             tray::MENU_OPEN_CONFIG => tray::open_config_file(),
             tray::MENU_EXIT => {
                 logging::info("메뉴에서 종료를 선택했다");
@@ -312,6 +318,16 @@ impl App {
                 ));
                 None
             }
+            Effect::ShowLabels(labels) => {
+                self.tray.set_show_labels(*labels);
+                logging::info(format!("라벨 표시 = {labels}"));
+                None
+            }
+            Effect::ShowUnits(units) => {
+                self.tray.set_show_units(*units);
+                logging::info(format!("단위 표시 = {units}"));
+                None
+            }
             Effect::Autostart(enabled) => match startup::set(*enabled) {
                 Ok(()) => {
                     logging::info(format!("자동 실행 = {enabled}"));
@@ -351,6 +367,20 @@ impl App {
         let applied = self.draft();
         let mut next = applied.clone();
         next.count_virtual = !applied.count_virtual;
+        self.apply_from_menu(&model::diff(&applied, &next));
+    }
+
+    fn toggle_labels(&mut self) {
+        let applied = self.draft();
+        let mut next = applied.clone();
+        next.show_labels = !applied.show_labels;
+        self.apply_from_menu(&model::diff(&applied, &next));
+    }
+
+    fn toggle_units(&mut self) {
+        let applied = self.draft();
+        let mut next = applied.clone();
+        next.show_units = !applied.show_units;
         self.apply_from_menu(&model::diff(&applied, &next));
     }
 

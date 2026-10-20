@@ -27,6 +27,8 @@ Run the validation loop after changes:
   before and after the change, at every icon size and on both taskbar backgrounds.
 - **Icon assets:** after editing `tools/make_assets.py`, run it and commit the results;
   `python tools/make_assets.py --check` is part of the package job.
+- **Glyph table:** after editing `tools/pixelfont.py`, run it and commit `src/icon/glyphs.rs`;
+  `python tools/pixelfont.py --check` is part of the package job.
 - **Packaging changes:** `make package` and then run the installer and MSIX checks in
   [docs/PACKAGING.md](docs/PACKAGING.md) §5. CI builds both on every pull request.
 
@@ -39,7 +41,7 @@ Run the validation loop after changes:
 | `src/runtime.rs` | The `App` in thread-local storage, shared by the timer and the message loop |
 | `src/timer.rs` | Hidden window that owns the refresh timer |
 | `src/metrics/` | CPU, memory and network sampling plus value formatting |
-| `src/icon/` | GDI rasteriser, downsampling, layout policy and the glyph cache |
+| `src/icon/` | 1-bit glyph table, pixel renderer, layout policy and the glyph cache |
 | `src/tray/` | Tray slots, the context menu and the first-run onboarding |
 | `src/config.rs` | `config.toml` / `state.toml` |
 | `src/platform.rs` | Package detection and the config/data locations (`LocalState` for MSIX) |
@@ -63,11 +65,10 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
    startup and use `set_visible(false)` to hide one. When adding a metric, append it to
    `Metric::ALL`: inserting one shifts every later ID and silently moves the user's promoted
    icons to different readouts.
-2. **A label gets five pixels at 16px.** Anything wider than three characters, or any glyph
-   whose meaning lives in a thin stroke (arrows), is unreadable. Compare candidates with
-   `make dump` and the sheet before choosing.
-3. **Never pass an empty string to GDI.** `DrawTextW` dereferences the dangling pointer of an
-   empty slice and the process dies. `icon::gdi::rasterize` rejects empty input.
+2. **The label row is five pixels at 16px.** Anything longer than three characters overflows
+   the icon. Compare candidates with `make dump` and the sheet before choosing.
+3. **Never pass an empty string to a renderer.** GDI `DrawTextW` dereferenced the dangling
+   pointer of an empty slice and killed the process; the pixel renderer returns `None` instead.
 4. **Read luminance from the red channel of a BI_RGB DIB.** GDI fills B, G and R and leaves the
    reserved byte at zero, so the alpha channel is always 0.
 5. **Do not take the timer on the thread queue.** `SetTimer(None, ...)` posts `WM_TIMER` to the
@@ -80,8 +81,8 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
    returns false when the app is borrowed.
 8. **Keep the executable path stable.** The tray setting is keyed on it, so an update that moves
    the binary resets the user's choice. Release archives extract in place.
-9. **Cache glyph renderings.** Recreating the font and device context every second doubles CPU
-   use. Values are a small finite set, so a per-string cache keeps the hit rate high.
+9. **Cache glyph renderings.** The pixel renderer is cheap, but values are a small finite set, so
+   a per-string cache avoids re-allocating a bitmap on every tick. The hit rate is in the log.
 10. **`rc.exe` has no default include path, and comctl32 v6 misreports its version.** Run
     outside a developer prompt, the resource compiler fails on `#include <windows.h>`
     (`RC1015`) unless the SDK include directories are passed; `embed-resource` fills
@@ -161,11 +162,11 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
 
 ## Testing
 
-- Pure logic (value formatting, delta arithmetic, layout selection, config parsing, downsampling
-  and glyph caching) is unit tested with `cargo test` and needs no display.
-- Icon rendering is tested with invariants (ink stays inside the box, glyph heights match the
-  layout policy, GDI handles do not leak) rather than pixel hashes: anti-aliasing differs between
-  Windows versions.
+- Pure logic (value formatting, delta arithmetic, layout selection, config parsing, the glyph
+  table and glyph caching) is unit tested with `cargo test` and needs no display.
+- The pixel font is deterministic, so icon rendering is tested with exact pixels plus invariants
+  (glyph table shape, string widths, output stays 1-bit at every scale). The only GDI left is the
+  preview DIB, where handle leaks are checked.
 - The tray itself has no automated test. Use `make run`, then check the readouts, the context
   menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. The log records a heartbeat every 60 updates
   with the current values and the glyph cache hit rate.

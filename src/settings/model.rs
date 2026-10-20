@@ -18,6 +18,10 @@ pub struct SettingsDraft {
     /// 가상 어댑터를 집계에 넣는가. `Config`에는 반대 의미로 저장된다.
     pub count_virtual: bool,
     pub autostart: bool,
+    /// 라벨(CPU/MEM/DN/UP)을 표시하는가.
+    pub show_labels: bool,
+    /// 값에 단위(`%`/`K`/`M`/`G`)를 붙이는가.
+    pub show_units: bool,
 }
 
 impl SettingsDraft {
@@ -28,6 +32,8 @@ impl SettingsDraft {
             color_mode: config.color_mode,
             count_virtual: !config.exclude_virtual_adapters,
             autostart,
+            show_labels: config.show_labels,
+            show_units: config.show_units,
         }
     }
 
@@ -63,6 +69,8 @@ pub enum Effect {
     ColorMode(ColorMode),
     CountVirtual(bool),
     Autostart(bool),
+    ShowLabels(bool),
+    ShowUnits(bool),
 }
 
 impl Effect {
@@ -76,6 +84,8 @@ impl Effect {
             Effect::ColorMode(mode) => config.color_mode = *mode,
             Effect::CountVirtual(count) => config.exclude_virtual_adapters = !*count,
             Effect::Autostart(_) => {}
+            Effect::ShowLabels(labels) => config.show_labels = *labels,
+            Effect::ShowUnits(units) => config.show_units = *units,
         }
     }
 }
@@ -118,6 +128,14 @@ pub fn diff(applied: &SettingsDraft, next: &SettingsDraft) -> Vec<Effect> {
 
     if applied.autostart != next.autostart {
         effects.push(Effect::Autostart(next.autostart));
+    }
+
+    if applied.show_labels != next.show_labels {
+        effects.push(Effect::ShowLabels(next.show_labels));
+    }
+
+    if applied.show_units != next.show_units {
+        effects.push(Effect::ShowUnits(next.show_units));
     }
 
     effects
@@ -236,6 +254,14 @@ mod tests {
         let mut autostart = applied.clone();
         autostart.autostart = true;
         assert_eq!(diff(&applied, &autostart), vec![Effect::Autostart(true)]);
+
+        let mut labels = applied.clone();
+        labels.show_labels = false;
+        assert_eq!(diff(&applied, &labels), vec![Effect::ShowLabels(false)]);
+
+        let mut units = applied.clone();
+        units.show_units = false;
+        assert_eq!(diff(&applied, &units), vec![Effect::ShowUnits(false)]);
     }
 
     /// 여러 항목이 바뀌면 지표 순서대로 한 번에 나온다.
@@ -268,12 +294,16 @@ mod tests {
         Effect::ColorMode(ColorMode::Theme).apply_to_config(&mut config);
         Effect::CountVirtual(true).apply_to_config(&mut config);
         Effect::Autostart(true).apply_to_config(&mut config);
+        Effect::ShowLabels(false).apply_to_config(&mut config);
+        Effect::ShowUnits(false).apply_to_config(&mut config);
 
         assert_eq!(config.poll_interval_ms, 500);
         assert!(!config.show.network_down);
         assert_eq!(config.color_mode, ColorMode::Theme);
         assert!(!config.exclude_virtual_adapters, "count와 exclude는 반대다");
         assert!(config.show.cpu, "자동 실행은 설정 파일과 무관하다");
+        assert!(!config.show_labels);
+        assert!(!config.show_units);
     }
 
     /// 창에서 읽은 값과 저장되는 값이 서로 오갈 수 있어야 한다.
@@ -290,10 +320,14 @@ mod tests {
             },
             color_mode: ColorMode::Theme,
             exclude_virtual_adapters: false,
+            show_labels: false,
+            show_units: false,
         };
         let draft = SettingsDraft::from_config(&config, true);
         assert!(draft.count_virtual, "exclude=false 이면 집계에 포함한다");
         assert!(draft.autostart);
+        assert!(!draft.show_labels);
+        assert!(!draft.show_units);
 
         let mut restored = config.clone();
         for effect in diff(

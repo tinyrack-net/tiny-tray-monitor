@@ -12,12 +12,17 @@ use crate::theme::Palette;
 pub const SCALE: i32 = 3;
 
 /// 지표별 표본 값. 아이콘에서 값이 차지하는 폭을 보여주는 것이 목적이다.
-fn sample(metric: Metric) -> &'static str {
-    match metric {
-        Metric::Cpu => "34%",
-        Metric::Memory => "41%",
-        Metric::NetworkDown => "1.7K",
-        Metric::NetworkUp => "341K",
+/// 단위를 숨기면 값이 3글자 이하가 되어 더 큰 글리프가 쓰인다.
+fn sample(metric: Metric, units: bool) -> &'static str {
+    match (metric, units) {
+        (Metric::Cpu, true) => "34%",
+        (Metric::Memory, true) => "41%",
+        (Metric::NetworkDown, true) => "1.7K",
+        (Metric::NetworkUp, true) => "341K",
+        (Metric::Cpu, false) => "34",
+        (Metric::Memory, false) => "41",
+        (Metric::NetworkDown, false) => "1.7",
+        (Metric::NetworkUp, false) => "341",
     }
 }
 
@@ -68,13 +73,13 @@ impl Preview {
         let mut out = Bitmap::transparent(width, height);
         fill(&mut out, palette.taskbar());
 
-        let spec = icon::stack_spec(px);
+        let spec = icon::stack_spec(draft.show_labels, draft.show_units);
         for (index, metric) in metrics.iter().enumerate() {
             let (label_color, value_color) = palette.colors(draft.color_mode, *metric);
             let glyph = icon::stacked(
                 &mut self.cache,
                 metric.label(),
-                sample(*metric),
+                sample(*metric, draft.show_units),
                 px,
                 spec,
                 label_color,
