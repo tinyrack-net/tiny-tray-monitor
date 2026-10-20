@@ -20,6 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ICON = ROOT / "resources" / "app.ico"
 MSIX = ROOT / "resources" / "msix"
+# Partner Center Store listing logo. Not part of the MSIX package.
+STORE = ROOT / "resources" / "store"
 
 # 트레이 아이콘과 같은 계열의 색. 배경은 작업 표시줄과 구분되는 어두운 회색이다.
 BACKGROUND = (28, 32, 38, 255)
@@ -166,6 +168,8 @@ def outputs() -> dict[Path, bytes]:
     }
     for name, (width, height) in tiles.items():
         files[MSIX / name] = _png(width, height)
+    # Store listing logo (Partner Center requires 300x300).
+    files[STORE / "StoreLogo300.png"] = _png(300, 300)
     return files
 
 
