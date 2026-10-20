@@ -469,7 +469,7 @@ pub mod dark {
         SetWindowTheme, TMT_TEXTCOLOR,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        BS_AUTORADIOBUTTON, BS_RADIOBUTTON, BS_TYPEMASK, EnumChildWindows, GWL_STYLE,
+        BS_AUTORADIOBUTTON, BS_GROUPBOX, BS_RADIOBUTTON, BS_TYPEMASK, EnumChildWindows, GWL_STYLE,
         GetClassNameW, GetWindowLongW, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT,
         WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
     };
@@ -601,6 +601,8 @@ pub mod dark {
         });
         if dark && is_radio(child) {
             paint_radio(child);
+        } else if dark && is_group_box(child) {
+            paint_group_box(child);
         } else {
             paint_theme(child, dark);
         }
@@ -616,16 +618,28 @@ pub mod dark {
         let _ = unsafe { SetWindowTheme(hwnd, application, PCWSTR::null()) };
     }
 
-    /// 라디오 버튼인가. 라디오만 다크 테마가 따로 필요하다([paint_radio]).
-    fn is_radio(hwnd: HWND) -> bool {
+    /// `Button` 클래스 컨트롤의 종류(`BS_*`). 버튼이 아니면 `None`.
+    fn button_kind(hwnd: HWND) -> Option<i32> {
         let mut class = [0u16; 16];
         let length = unsafe { GetClassNameW(hwnd, &mut class) };
         let is_button = usize::try_from(length)
             .ok()
             .and_then(|length| class.get(..length))
             .is_some_and(|name| String::from_utf16_lossy(name).eq_ignore_ascii_case("Button"));
-        let kind = unsafe { GetWindowLongW(hwnd, GWL_STYLE) } & BS_TYPEMASK;
-        is_button && (kind == BS_RADIOBUTTON || kind == BS_AUTORADIOBUTTON)
+        if !is_button {
+            return None;
+        }
+        Some(unsafe { GetWindowLongW(hwnd, GWL_STYLE) } & BS_TYPEMASK)
+    }
+
+    /// 라디오 버튼인가. 라디오만 다크 테마가 따로 필요하다([paint_radio]).
+    fn is_radio(hwnd: HWND) -> bool {
+        matches!(button_kind(hwnd), Some(BS_RADIOBUTTON | BS_AUTORADIOBUTTON))
+    }
+
+    /// 그룹 박스인가. 그룹도 라디오처럼 다크 테마가 글자색을 정의하지 않는다([paint_group_box]).
+    fn is_group_box(hwnd: HWND) -> bool {
+        matches!(button_kind(hwnd), Some(BS_GROUPBOX))
     }
 
     /// 라디오 버튼에 다크 테마를 입힌다.
@@ -641,6 +655,17 @@ pub mod dark {
                 return;
             }
         }
+        // 빈 문자열은 이 컨트롤의 비주얼 스타일을 끈다.
+        let _ = unsafe { SetWindowTheme(hwnd, w!(""), w!("")) };
+    }
+
+    /// 그룹 박스의 비주얼 스타일을 끈다.
+    ///
+    /// `DarkMode_Explorer::Button`은 그룹 박스 캡션의 글자색을 정의하지 않아, 캡션이 검정으로
+    /// 그려져 어두운 배경에서 보이지 않는다(build 26300 실측). 스타일을 끄면 클래식 그룹
+    /// 박스가 `WM_CTLCOLORSTATIC`의 글자색([TEXT])으로 캡션을 그린다. 프레임도 클래식으로
+    /// 그려지지만 어두운 테마보다 대비가 오히려 낫다.
+    fn paint_group_box(hwnd: HWND) {
         // 빈 문자열은 이 컨트롤의 비주얼 스타일을 끈다.
         let _ = unsafe { SetWindowTheme(hwnd, w!(""), w!("")) };
     }

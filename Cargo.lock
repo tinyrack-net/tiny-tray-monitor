@@ -1109,7 +1109,7 @@ dependencies = [
 
 [[package]]
 name = "tray-monitor"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "embed-resource",
  "serde",
