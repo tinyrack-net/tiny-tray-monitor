@@ -47,7 +47,9 @@ TinyTrayManager is open source (MIT). The Microsoft Store build uses the Windows
 
 Requires Windows 10 version 1809 or later.
 
-## What's new (first release)
+## What's new (0.8.0)
 
-- First Microsoft Store release.
-- Fixed per-readout icons so the tray layout survives package updates.
+- Added GPU usage and VRAM readouts.
+- Localised the settings window, tray menu and tooltips (English, Korean, Japanese).
+- Redrew the tray icons with a crisper 1-bit pixel font.
+- Reworked the settings layout and moved the units into the icon caption.
