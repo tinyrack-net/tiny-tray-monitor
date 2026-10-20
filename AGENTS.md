@@ -130,10 +130,12 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     `win32::set_guid_tooltip` sends `NIM_MODIFY` with `NIF_TIP | NIF_GUID` directly, and `Tray`
     uses it whenever a slot has a GUID. The same call also serves as the first registration
     probe; re-check both when the crate is upgraded.
-20. **`DarkMode_Explorer` has no radio button text colour.** Its `Button` class defines
-    `TMT_TEXTCOLOR` for checkboxes only, so themed radio buttons draw black text on the dark
-    dialog background. `win32::dark::paint_radio` gives radio buttons `DarkMode_DarkTheme`
-    and falls back to turning the visual style off. `docs/SPIKE.md` §11-5.
+20. **`DarkMode_Explorer` has no radio button or group box text colour.** Its `Button` class
+    defines `TMT_TEXTCOLOR` for checkboxes only, so themed radio buttons and group box
+    captions draw black text on the dark dialog background. `win32::dark::paint_radio` gives
+    radio buttons `DarkMode_DarkTheme` and falls back to turning the visual style off;
+    `paint_group_box` turns the style off outright so the caption uses the
+    `WM_CTLCOLORSTATIC` colour. `docs/SPIKE.md` §11-5, §13-6.
 21. **Menu clicks must not wait for the main loop.** A modal loop (the settings window, a
     message box) stops the main loop, so events read from `MenuEvent::receiver()` piled up until
     the dialog closed. `main.rs` installs `MenuEvent::set_event_handler`, which calls
