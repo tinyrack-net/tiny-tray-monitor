@@ -94,15 +94,6 @@ impl Metric {
             Metric::NetworkUp => "network-up",
         }
     }
-
-    pub fn tooltip_name(self) -> &'static str {
-        match self {
-            Metric::Cpu => "CPU",
-            Metric::Memory => "Memory",
-            Metric::NetworkDown => "Network down",
-            Metric::NetworkUp => "Network up",
-        }
-    }
 }
 
 #[cfg(test)]

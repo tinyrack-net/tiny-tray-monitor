@@ -15,6 +15,7 @@
 mod app;
 mod config;
 mod devtools;
+mod i18n;
 mod icon;
 mod ipc;
 mod logging;
@@ -90,6 +91,8 @@ fn main() {
     let dpi_set_at_runtime = win32::set_dpi_awareness();
     logging::init();
     install_panic_hook();
+    // App이 `config.toml`의 언어를 적용하기 전까지 쓸 기본값. 실패 알림도 이 언어로 나간다.
+    i18n::use_system_language();
     // 매니페스트의 DPI 선언이 실제로 링크되었는지 로그로 확인한다(실패하면 런타임 폴백이다).
     logging::info(if dpi_set_at_runtime {
         "DPI: set PerMonitorV2 at runtime (no manifest)"
@@ -104,7 +107,7 @@ fn main() {
             return;
         }
         logging::info("already running, exiting");
-        win32::inform(PRODUCT_NAME, &format!("{PRODUCT_NAME} is already running."));
+        win32::inform(PRODUCT_NAME, &i18n::already_running(PRODUCT_NAME));
         return;
     }
 
@@ -115,10 +118,7 @@ fn main() {
         Ok(app) => app,
         Err(error) => {
             logging::error(format!("startup failed: {error}"));
-            win32::inform(
-                PRODUCT_NAME,
-                &format!("{PRODUCT_NAME} could not start.\n\n{error}"),
-            );
+            win32::inform(PRODUCT_NAME, &i18n::start_failed(PRODUCT_NAME, &error));
             return;
         }
     };
@@ -137,10 +137,7 @@ fn main() {
         Ok(timer) => timer,
         Err(error) => {
             logging::error(format!("could not create the timer: {error}"));
-            win32::inform(
-                PRODUCT_NAME,
-                &format!("{PRODUCT_NAME} could not start.\n\n{error}"),
-            );
+            win32::inform(PRODUCT_NAME, &i18n::start_failed(PRODUCT_NAME, &error));
             return;
         }
     };

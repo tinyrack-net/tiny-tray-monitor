@@ -4,6 +4,7 @@
 //! 없어서 전부 단위 테스트로 검증한다: 값 보정, 마지막 지표 규칙, 바뀐 항목만 뽑아내기.
 
 use crate::config::{ColorMode, Config, MAX_POLL_INTERVAL_MS, MIN_POLL_INTERVAL_MS, Show};
+use crate::i18n::Language;
 use crate::icon::Metric;
 
 /// 콤보에 넣는 폴링 주기(ms).
@@ -18,6 +19,19 @@ pub struct SettingsDraft {
     /// 가상 어댑터를 집계에 넣는가. `Config`에는 반대 의미로 저장된다.
     pub count_virtual: bool,
     pub autostart: bool,
+    pub language: Language,
+}
+
+/// [SettingsDraft::validate]가 값을 바로잡을 때 남기는 메모.
+///
+/// 문자열이 아니라 값으로 돌려준다. 같은 메모를 로그에는 영문으로, 상태줄에는 지금
+/// 언어로 보여 줘야 하기 때문이다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Note {
+    /// 주기를 허용 범위로 잘랐다.
+    IntervalClamped { from: u64, to: u64 },
+    /// 표시 항목이 하나도 없어 CPU를 켰다.
+    NoReadoutEnabled,
 }
 
 impl SettingsDraft {
@@ -28,26 +42,27 @@ impl SettingsDraft {
             color_mode: config.color_mode,
             count_virtual: !config.exclude_virtual_adapters,
             autostart,
+            language: config.language,
         }
     }
 
-    /// 범위를 벗어난 값을 바로잡고, 바꾼 항목을 사람이 읽을 수 있게 돌려준다.
-    pub fn validate(&mut self) -> Vec<String> {
+    /// 범위를 벗어난 값을 바로잡고, 바꾼 항목을 돌려준다.
+    pub fn validate(&mut self) -> Vec<Note> {
         let mut notes = Vec::new();
 
         let clamped = self
             .poll_interval_ms
             .clamp(MIN_POLL_INTERVAL_MS, MAX_POLL_INTERVAL_MS);
         if clamped != self.poll_interval_ms {
-            notes.push(format!(
-                "poll_interval_ms {} -> {clamped}",
-                self.poll_interval_ms
-            ));
+            notes.push(Note::IntervalClamped {
+                from: self.poll_interval_ms,
+                to: clamped,
+            });
             self.poll_interval_ms = clamped;
         }
 
         if self.show.count() == 0 {
-            notes.push("no readout is shown, turning CPU on".to_string());
+            notes.push(Note::NoReadoutEnabled);
             self.show.cpu = true;
         }
 
@@ -63,6 +78,7 @@ pub enum Effect {
     ColorMode(ColorMode),
     CountVirtual(bool),
     Autostart(bool),
+    Language(Language),
 }
 
 impl Effect {
@@ -75,18 +91,23 @@ impl Effect {
             Effect::Visible(metric, visible) => config.show.set(*metric, *visible),
             Effect::ColorMode(mode) => config.color_mode = *mode,
             Effect::CountVirtual(count) => config.exclude_virtual_adapters = !*count,
+            Effect::Language(language) => config.language = *language,
             Effect::Autostart(_) => {}
         }
     }
 }
 
+/// 마지막으로 남은 지표를 끄려 했다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LastReadout;
+
 /// 지표 표시를 바꾼다. 마지막 남은 하나는 끌 수 없다.
 ///
 /// 전부 끄면 트레이에서 아이콘이 사라져 되돌릴 방법이 없다. 설정 창과 트레이 메뉴가 같은
-/// 규칙을 쓰도록 여기에 둔다.
-pub fn set_visible(show: &mut Show, metric: Metric, visible: bool) -> Result<(), String> {
+/// 규칙을 쓰도록 여기에 둔다. 문구는 [crate::i18n::t]의 `last_readout_error`를 쓴다.
+pub fn set_visible(show: &mut Show, metric: Metric, visible: bool) -> Result<(), LastReadout> {
     if !visible && show.get(metric) && show.count() <= 1 {
-        return Err("the last readout cannot be turned off".to_string());
+        return Err(LastReadout);
     }
     show.set(metric, visible);
     Ok(())
@@ -120,16 +141,11 @@ pub fn diff(applied: &SettingsDraft, next: &SettingsDraft) -> Vec<Effect> {
         effects.push(Effect::Autostart(next.autostart));
     }
 
-    effects
-}
-
-/// 콤보에 보여줄 주기 표기.
-pub fn interval_label(ms: u64) -> String {
-    match ms {
-        1_000 => "1 second".to_string(),
-        _ if ms % 1_000 == 0 => format!("{} seconds", ms / 1_000),
-        _ => format!("{ms} ms"),
+    if applied.language != next.language {
+        effects.push(Effect::Language(next.language));
     }
+
+    effects
 }
 
 /// 프리셋에 있는 값인가. 아니면 콤보에서 `Custom`을 골라야 한다.
@@ -166,11 +182,23 @@ mod tests {
     #[test]
     fn validate_clamps_the_interval() {
         let mut too_fast = draft(1);
-        assert_eq!(too_fast.validate().len(), 1);
+        assert_eq!(
+            too_fast.validate(),
+            vec![Note::IntervalClamped {
+                from: 1,
+                to: MIN_POLL_INTERVAL_MS
+            }]
+        );
         assert_eq!(too_fast.poll_interval_ms, MIN_POLL_INTERVAL_MS);
 
         let mut too_slow = draft(60_000);
-        assert_eq!(too_slow.validate().len(), 1);
+        assert_eq!(
+            too_slow.validate(),
+            vec![Note::IntervalClamped {
+                from: 60_000,
+                to: MAX_POLL_INTERVAL_MS
+            }]
+        );
         assert_eq!(too_slow.poll_interval_ms, MAX_POLL_INTERVAL_MS);
 
         let mut fine = draft(MAX_POLL_INTERVAL_MS);
@@ -183,8 +211,7 @@ mod tests {
         for metric in Metric::ALL {
             empty.show.set(metric, false);
         }
-        let notes = empty.validate();
-        assert_eq!(notes.len(), 1);
+        assert_eq!(empty.validate(), vec![Note::NoReadoutEnabled]);
         assert!(empty.show.cpu, "전부 꺼지면 아이콘이 사라진다");
     }
 
@@ -198,7 +225,7 @@ mod tests {
         assert_eq!(show.count(), 1);
 
         let error = set_visible(&mut show, Metric::Cpu, false).expect_err("마지막은 못 끈다");
-        assert!(error.contains("last readout"), "{error}");
+        assert_eq!(error, LastReadout);
         assert!(show.cpu, "실패하면 값을 바꾸지 않는다");
 
         // 이미 꺼져 있는 지표를 다시 끄는 것은 막을 이유가 없다.
@@ -236,6 +263,13 @@ mod tests {
         let mut autostart = applied.clone();
         autostart.autostart = true;
         assert_eq!(diff(&applied, &autostart), vec![Effect::Autostart(true)]);
+
+        let mut language = applied.clone();
+        language.language = Language::Ja;
+        assert_eq!(
+            diff(&applied, &language),
+            vec![Effect::Language(Language::Ja)]
+        );
     }
 
     /// 여러 항목이 바뀌면 지표 순서대로 한 번에 나온다.
@@ -267,11 +301,13 @@ mod tests {
         Effect::Visible(Metric::NetworkDown, false).apply_to_config(&mut config);
         Effect::ColorMode(ColorMode::Theme).apply_to_config(&mut config);
         Effect::CountVirtual(true).apply_to_config(&mut config);
+        Effect::Language(Language::Ko).apply_to_config(&mut config);
         Effect::Autostart(true).apply_to_config(&mut config);
 
         assert_eq!(config.poll_interval_ms, 500);
         assert!(!config.show.network_down);
         assert_eq!(config.color_mode, ColorMode::Theme);
+        assert_eq!(config.language, Language::Ko);
         assert!(!config.exclude_virtual_adapters, "count와 exclude는 반대다");
         assert!(config.show.cpu, "자동 실행은 설정 파일과 무관하다");
     }
@@ -290,10 +326,12 @@ mod tests {
             },
             color_mode: ColorMode::Theme,
             exclude_virtual_adapters: false,
+            language: Language::Ja,
         };
         let draft = SettingsDraft::from_config(&config, true);
         assert!(draft.count_virtual, "exclude=false 이면 집계에 포함한다");
         assert!(draft.autostart);
+        assert_eq!(draft.language, Language::Ja);
 
         let mut restored = config.clone();
         for effect in diff(
@@ -303,14 +341,6 @@ mod tests {
             effect.apply_to_config(&mut restored);
         }
         assert_eq!(restored, config);
-    }
-
-    #[test]
-    fn interval_labels_read_naturally() {
-        assert_eq!(interval_label(250), "250 ms");
-        assert_eq!(interval_label(1_000), "1 second");
-        assert_eq!(interval_label(5_000), "5 seconds");
-        assert_eq!(interval_label(750), "750 ms");
     }
 
     #[test]

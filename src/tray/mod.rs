@@ -18,6 +18,7 @@ use tray_icon::menu::{
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 use crate::config::{ColorMode, Config};
+use crate::i18n;
 use crate::icon::{self, GlyphCache, Metric};
 use crate::logging;
 use crate::metrics::format::Reading;
@@ -72,7 +73,7 @@ impl MenuHandles {
             .enumerate()
             .map(|(index, metric)| {
                 CheckMenuItemBuilder::new()
-                    .text(metric.tooltip_name())
+                    .text(i18n::metric_label(*metric))
                     .id(MenuId::new(MENU_SHOW[index]))
                     .checked(config.show.get(*metric))
                     .build()
@@ -90,10 +91,10 @@ impl MenuHandles {
                 .enabled(false)
                 .build(),
             settings: MenuItemBuilder::new()
-                .text("Settings…")
+                .text(i18n::t().menu_settings)
                 .id(MenuId::new(MENU_SETTINGS))
                 .build(),
-            exit: PredefinedMenuItem::quit(Some("Exit")),
+            exit: PredefinedMenuItem::quit(Some(i18n::t().menu_exit)),
             separators: vec![
                 PredefinedMenuItem::separator(),
                 PredefinedMenuItem::separator(),
@@ -109,6 +110,17 @@ impl MenuHandles {
         for (index, metric) in Metric::ALL.iter().enumerate() {
             self.show[index].set_checked(config.show.get(*metric));
         }
+    }
+
+    /// 언어가 바뀌었을 때 메뉴 글자를 다시 입힌다.
+    ///
+    /// 트레이 아이콘은 재생성하지 않는다(승격 설정과 아이콘 id 보존). 메뉴 텍스트만 바꾼다.
+    pub fn relabel(&self) {
+        for (index, metric) in Metric::ALL.iter().enumerate() {
+            self.show[index].set_text(i18n::metric_label(*metric));
+        }
+        self.settings.set_text(i18n::t().menu_settings);
+        self.exit.set_text(i18n::t().menu_exit);
     }
 
     /// 같은 아이템을 공유하는 새 메뉴. 아이콘마다 하나씩 필요하다.
@@ -189,7 +201,7 @@ impl Tray {
                 .map_err(|e| format!("cannot create the icon: {e}"))?;
             let mut builder = TrayIconBuilder::new()
                 .with_icon(tray_icon)
-                .with_tooltip(metric.tooltip_name())
+                .with_tooltip(i18n::metric_label(metric))
                 .with_menu(Box::new(menu));
             let guid = guids.map(|set| set[index]);
             if let Some(guid) = guid {
@@ -203,7 +215,8 @@ impl Tray {
             // 한 번 보내 실제로 등록됐는지 확인하고, 실패하면 호출자가 GUID 없이
             // 다시 만들도록 오류를 돌려준다.
             if let Some(guid) = guid {
-                if !win32::set_guid_tooltip(tray.window_handle(), guid, metric.tooltip_name()) {
+                if !win32::set_guid_tooltip(tray.window_handle(), guid, i18n::metric_label(metric))
+                {
                     return Err(format!(
                         "could not register the fixed GUID of the {metric:?} icon"
                     ));
@@ -215,7 +228,7 @@ impl Tray {
                 tray,
                 guid,
                 value: placeholder(metric),
-                tooltip: metric.tooltip_name().to_string(),
+                tooltip: i18n::metric_label(metric).to_string(),
                 dirty: false,
             });
         }
@@ -269,6 +282,13 @@ impl Tray {
 
     pub fn menu_handles(&self) -> &MenuHandles {
         &self.handles
+    }
+
+    /// 언어가 바뀌면 메뉴 글자를 새 언어로 맞춘다.
+    ///
+    /// 툴팁은 다음 틱이 새 언어로 만들어 [`Tray::update`]의 문자열 비교에 걸려 갱신된다.
+    pub fn relabel(&mut self) {
+        self.handles.relabel();
     }
 
     /// 표시 여부를 바꾼다. 등록은 유지하므로 승격 설정이 보존된다.

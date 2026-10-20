@@ -44,6 +44,7 @@ Run the validation loop after changes:
 | `src/icon/` | 1-bit glyph table, pixel renderer, layout policy and the glyph cache |
 | `src/tray/` | Tray slots, the context menu and the first-run onboarding |
 | `src/config.rs` | `config.toml` / `state.toml` |
+| `src/i18n.rs` | The English / Korean / Japanese string tables and the current language |
 | `src/platform.rs` | Package detection and the config/data locations (`LocalState` for MSIX) |
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
 | `src/settings/` | The settings window: a pure model, the Win32 dialog and the icon preview |
@@ -143,6 +144,13 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     closes. `App::request_settings` and `settings::open` both go through
     `settings::dialog::focus`. A second launch calls `AllowSetForegroundWindow` before posting
     to the IPC window, because the running instance is in the background.
+23. **Every user-visible string lives in `src/i18n.rs` and the dialog text is filled at
+    runtime.** `resources/app.rc` keeps the layout but its captions are empty;
+    `settings/dialog.rs` fills them from the current table in `WM_INITDIALOG`, so the language
+    can change without reopening the window. Changing the language is an `Effect::Language`:
+    it calls `i18n::set_language`, `Tray::relabel` (menu `set_text`, never a new tray icon) and
+    the dialog refills its combos. `logging::tests::source_strings_are_english` skips
+    `i18n.rs`; `i18n::tests` keeps the English table free of CJK instead. `docs/SPIKE.md` §13.
 
 ## Merging
 
@@ -182,12 +190,11 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   (glyph table shape, string widths, output stays 1-bit at every scale). The only GDI left is the
   preview DIB, where handle leaks are checked.
 - The tray itself has no automated test. Use `make run`, then check the readouts, the context
-  menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. Log messages are English only;
-  `logging::tests::source_strings_are_english` rejects Hangul in any non-test string literal,
-  because `{error}`/`{note}` values end up in the log too. The log records a heartbeat every 60 updates
+  menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. The log records a heartbeat every 60 updates
   with the current values and the glyph cache hit rate.
 - Log messages are English only. `logging::tests::source_strings_are_english` rejects Hangul
-  in any non-test string literal, because `{error}`/`{note}` values end up in the log too.
+  in any non-test string literal, because `{error}`/`{note}` values end up in the log too. The
+  one exception is `src/i18n.rs`, whose English table is checked by `i18n::tests` instead.
   Comments and test assertions stay in Korean.
 - The installer and MSIX need a desktop session for their end-to-end checks; CI covers the
   silent install/uninstall and the `makeappx` round trip.

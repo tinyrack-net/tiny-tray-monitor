@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use tray_icon::TrayIconEvent;
 
 use crate::config::Store;
+use crate::i18n;
 use crate::icon::Metric;
 use crate::logging;
 use crate::metrics::{self, Sampler, format};
@@ -40,17 +41,20 @@ impl App {
         for note in store.config.validate() {
             logging::warn(format!("config corrected: {note}"));
         }
+        // 창·트레이 메뉴·툴팁이 쓸 언어를 먼저 정한다.
+        i18n::set_language(i18n::resolve(store.config.language));
 
         let palette = theme::current();
         let autostart = startup::is_enabled();
         // 트레이 메뉴도 작업 표시줄 테마를 따른다(메뉴는 창이 아니라 앱 단위로 칠해진다).
         crate::win32::dark::set_app_mode(!palette.light);
         logging::info(format!(
-            "config poll={}ms show={:?} color={:?} exclude_virtual={} autostart={autostart}",
+            "config poll={}ms show={:?} color={:?} exclude_virtual={} autostart={autostart} language={:?}",
             store.config.poll_interval_ms,
             store.config.show,
             store.config.color_mode,
-            store.config.exclude_virtual_adapters
+            store.config.exclude_virtual_adapters,
+            store.config.language
         ));
 
         let tray = Tray::new(px, &store.config, palette)?;
@@ -143,37 +147,27 @@ impl App {
         if let Some(cpu) = sample.cpu_percent {
             let value = format::percent_reading(cpu);
             self.last_cpu = Some(value.compact());
-            self.tray.update(
-                Metric::Cpu,
-                value,
-                format!("CPU {} busy", format::percent(cpu)),
-            );
+            let tooltip = i18n::cpu_tooltip(&format::percent(cpu));
+            self.tray.update(Metric::Cpu, value, tooltip);
         }
 
         if let Some(memory) = sample.memory {
             let value = format::percent_reading(memory.percent);
             self.last_memory = Some(value.compact());
-            self.tray.update(
-                Metric::Memory,
-                value,
-                format!(
-                    "Memory {} used  ({} of {})",
-                    format::percent(memory.percent),
-                    format::bytes(memory.used),
-                    format::bytes(memory.total)
-                ),
+            let tooltip = i18n::memory_tooltip(
+                &format::percent(memory.percent),
+                &format::bytes(memory.used),
+                &format::bytes(memory.total),
             );
+            self.tray.update(Metric::Memory, value, tooltip);
         }
 
         if let Some(net) = sample.net {
             // 방향별로 아이콘을 나눠 쓴다. 툴팁은 두 방향을 함께 보여준다.
             let down = format::rate_reading(net.down);
             let up = format::rate_reading(net.up);
-            let tooltip = format!(
-                "Network down {}  up {}",
-                format::rate_long(net.down),
-                format::rate_long(net.up)
-            );
+            let tooltip =
+                i18n::network_tooltip(&format::rate_long(net.down), &format::rate_long(net.up));
             self.last_network_down = Some(down.compact());
             self.last_network_up = Some(up.compact());
             self.tray.update(Metric::NetworkDown, down, tooltip.clone());
@@ -264,7 +258,7 @@ impl App {
         self.sync_menu_checks();
         if let Err(error) = self.store.save_config() {
             logging::warn(format!("could not save the config: {error}"));
-            problems.push(format!("Could not save the settings file: {error}"));
+            problems.push(i18n::save_failed(&error));
         }
         problems
     }
@@ -311,6 +305,12 @@ impl App {
                 logging::info(format!("count virtual adapters = {count}"));
                 None
             }
+            Effect::Language(language) => {
+                i18n::set_language(i18n::resolve(*language));
+                self.tray.relabel();
+                logging::info(format!("language = {language:?}"));
+                None
+            }
             Effect::Autostart(enabled) => match startup::set(*enabled) {
                 Ok(()) => {
                     logging::info(format!("run at sign-in = {enabled}"));
@@ -318,7 +318,7 @@ impl App {
                 }
                 Err(error) => {
                     logging::error(format!("could not change run at sign-in: {error}"));
-                    Some(format!("Could not update sign-in startup: {error}"))
+                    Some(i18n::autostart_failed(&error))
                 }
             },
         }
@@ -331,9 +331,12 @@ impl App {
 
         match model::set_visible(&mut next.show, metric, wanted) {
             Ok(()) => self.apply_from_menu(&model::diff(&applied, &next)),
-            Err(reason) => {
+            Err(model::LastReadout) => {
                 // 클릭이 무시됐으므로 체크 표시를 실제 값으로 되돌린다.
-                logging::warn(format!("{reason}: {}", metric.id()));
+                logging::warn(format!(
+                    "the last readout cannot be turned off: {}",
+                    metric.id()
+                ));
                 self.sync_menu_checks();
             }
         }

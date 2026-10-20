@@ -9,6 +9,7 @@
 use windows_registry::CURRENT_USER;
 
 use crate::config::State;
+use crate::i18n;
 use crate::win32;
 
 const NOTIFY_KEY: &str = r"Control Panel\NotifyIconSettings";
@@ -30,15 +31,13 @@ pub enum Promotion {
 impl Promotion {
     pub fn summary(self) -> String {
         match self {
-            Promotion::All => "the readouts are visible in the taskbar".to_string(),
-            Promotion::Some { promoted, total } if promoted > 0 => format!(
-                "{promoted} of {total} readouts are visible; the rest are hidden in the overflow area"
-            ),
-            // 아직 트레이 항목이 없거나 모두 숨겨진 경우다. 사용자가 해야 할 일은 같다.
-            Promotion::Some { .. } | Promotion::None => {
-                "the readouts are hidden in the taskbar overflow area".to_string()
+            Promotion::All => i18n::promotion_all().to_string(),
+            Promotion::Some { promoted, total } if promoted > 0 => {
+                i18n::promotion_some(promoted, total)
             }
-            Promotion::Unknown => "the tray settings could not be read".to_string(),
+            // 아직 트레이 항목이 없거나 모두 숨겨진 경우다. 사용자가 해야 할 일은 같다.
+            Promotion::Some { .. } | Promotion::None => i18n::promotion_hidden().to_string(),
+            Promotion::Unknown => i18n::promotion_unknown().to_string(),
         }
     }
 }
@@ -162,16 +161,7 @@ pub fn should_onboard(state: &State, promotion: Promotion) -> bool {
 }
 
 fn onboarding_text(promotion: Promotion) -> String {
-    let name = crate::PRODUCT_NAME;
-    format!(
-        "{name} is running.\n\n\
-         Windows hides new tray icons in the overflow area by default, so the\n\
-         CPU / Memory / Network readouts may not be visible in the taskbar yet.\n\n\
-         Current state: {}.\n\n\
-         Open the taskbar settings and turn on {name} under\n\
-         \"Other system tray icons\"?",
-        promotion.summary()
-    )
+    i18n::onboarding(crate::PRODUCT_NAME, &promotion.summary())
 }
 
 /// 안내 대화상자를 띄운다. 사용자가 수락하면 작업 표시줄 설정을 연다.

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::Language;
 use crate::icon::Metric;
 use crate::logging;
 
@@ -87,6 +88,8 @@ pub struct Config {
     /// 가상 어댑터를 집계에서 뺀다. 물리 NIC와 가상 스위치가 같은 트래픽을
     /// 두 번 세는 것을 막는다.
     pub exclude_virtual_adapters: bool,
+    /// UI 언어. `Auto`는 Windows 표시 언어를 따른다.
+    pub language: Language,
 }
 
 impl Default for Config {
@@ -96,6 +99,7 @@ impl Default for Config {
             show: Show::default(),
             color_mode: ColorMode::default(),
             exclude_virtual_adapters: true,
+            language: Language::default(),
         }
     }
 }
@@ -287,6 +291,7 @@ mod tests {
             },
             color_mode: ColorMode::Theme,
             exclude_virtual_adapters: false,
+            language: Language::Ja,
         };
         let text = toml::to_string_pretty(&config).expect("serialize");
         let parsed: Config = toml::from_str(&text).expect("deserialize");

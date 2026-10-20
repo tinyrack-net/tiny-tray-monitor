@@ -3,6 +3,9 @@
 //! `resources/app.rc`의 `IDD_SETTINGS` 템플릿을 띄운다. 값은 저장된 설정에서 읽어 오고,
 //! 컨트롤이 바뀔 때마다 바뀐 항목만 적용한다 — 저장 버튼이 없다(즉시 적용).
 //!
+//! 템플릿의 글자는 전부 비어 있고, `WM_INITDIALOG`에서 [crate::i18n]의 표로 채운다. 그래서
+//! 창을 닫지 않고 언어를 바꿀 수 있다.
+//!
 //! Win32 호출은 [crate::win32::dialog]에 모아 두었다. 이 모듈은 배치와 규칙만 다룬다.
 
 use std::cell::{Cell, RefCell};
@@ -14,6 +17,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use crate::config::{ColorMode, Config};
+use crate::i18n::{self, Lang, Language};
 use crate::icon::{self, Metric};
 use crate::logging;
 use crate::runtime;
@@ -33,6 +37,7 @@ pub const IDC_NETWORK_UP: i32 = 1004;
 pub const IDC_PREVIEW: i32 = 1005;
 pub const IDC_INTERVAL: i32 = 1006;
 pub const IDC_INTERVAL_EDIT: i32 = 1007;
+pub const IDC_INTERVAL_UNIT: i32 = 1008;
 pub const IDC_COLOR_METRIC: i32 = 1009;
 pub const IDC_COLOR_THEME: i32 = 1010;
 pub const IDC_VIRTUAL: i32 = 1011;
@@ -40,6 +45,19 @@ pub const IDC_AUTOSTART: i32 = 1012;
 pub const IDC_STATUS: i32 = 1013;
 pub const IDC_VERSION: i32 = 1014;
 pub const IDC_RESET: i32 = 1017;
+pub const IDC_GROUP_READOUTS: i32 = 1018;
+pub const IDC_HINT_READOUTS: i32 = 1019;
+pub const IDC_GROUP_UPDATE: i32 = 1020;
+pub const IDC_HINT_UPDATE: i32 = 1021;
+pub const IDC_GROUP_APPEARANCE: i32 = 1022;
+pub const IDC_HINT_APPEARANCE: i32 = 1023;
+pub const IDC_GROUP_STARTUP: i32 = 1024;
+pub const IDC_HINT_STARTUP: i32 = 1025;
+pub const IDC_LABEL_INTERVAL: i32 = 1026;
+pub const IDC_LABEL_LANGUAGE: i32 = 1027;
+pub const IDC_LANGUAGE: i32 = 1028;
+pub const IDC_HINT_VIRTUAL: i32 = 1029;
+pub const IDC_HINT_LANGUAGE: i32 = 1030;
 
 /// 닫기 버튼과 Esc가 보내는 id.
 pub const IDC_CLOSE: i32 = 2;
@@ -62,6 +80,8 @@ thread_local! {
     static APPLYING: Cell<bool> = const { Cell::new(false) };
     /// 열려 있는 설정 창. 트레이 메뉴가 바꾼 값을 창에 알릴 때 쓴다.
     static WINDOW: Cell<Option<HWND>> = const { Cell::new(None) };
+    /// 콤보 항목을 마지막으로 채운 언어. 언어가 바뀔 때만 다시 채운다.
+    static RENDERED: Cell<Option<Lang>> = const { Cell::new(None) };
 }
 
 /// 자동 시작 토글을 미룰 때 쓰는 창 메시지. `WM_APP` 영역.
@@ -161,6 +181,7 @@ fn dark() -> bool {
 /// 창을 닫는다. 다크 모드용 GDI 자원도 함께 돌려준다.
 fn finish(hwnd: HWND) {
     WINDOW.with(|slot| slot.set(None));
+    RENDERED.with(|slot| slot.set(None));
     win32::dark::forget();
     win32::dialog::end(hwnd);
 }
@@ -192,19 +213,14 @@ fn on_init(hwnd: HWND) {
     win32::dialog::bring_to_front(hwnd);
     apply_theme(hwnd);
 
-    for ms in model::INTERVAL_PRESETS {
-        win32::dialog::combo_add(hwnd, IDC_INTERVAL, &model::interval_label(ms));
-    }
-    win32::dialog::combo_add(hwnd, IDC_INTERVAL, "Custom…");
     win32::dialog::set_text(
         hwnd,
         IDC_VERSION,
         &format!("v{}", env!("CARGO_PKG_VERSION")),
     );
 
-    if let Some(draft) = current() {
-        sync_controls(hwnd, &draft);
-    }
+    let draft = current().unwrap_or_else(|| SettingsDraft::from_config(&Config::default(), false));
+    sync_controls(hwnd, &draft);
 }
 
 fn on_command(hwnd: HWND, wparam: WPARAM) {
@@ -221,6 +237,7 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
         IDC_RESET => reset(hwnd),
         IDC_INTERVAL if notification == CBN_SELCHANGE => interval_selected(hwnd),
         IDC_INTERVAL_EDIT if notification == EN_KILLFOCUS => interval_typed(hwnd),
+        IDC_LANGUAGE if notification == CBN_SELCHANGE => language_selected(hwnd),
         IDC_COLOR_METRIC => commit(hwnd, |draft| {
             draft.color_mode = ColorMode::Metric;
             Ok(())
@@ -263,7 +280,7 @@ fn commit(hwnd: HWND, change: impl FnOnce(&mut SettingsDraft) -> Result<(), Stri
         return;
     }
 
-    let mut messages = next.validate();
+    let mut messages: Vec<String> = next.validate().iter().map(note_text).collect();
     let effects = model::diff(&applied, &next);
     // 반영 실패는 알림 창이 아니라 상태줄로 알린다. 알림 창은 중첩 루프를 돌리고,
     // 그 동안 `App` 대여가 풀리지 않아 트레이 갱신이 멈춘다(실측).
@@ -273,8 +290,74 @@ fn commit(hwnd: HWND, change: impl FnOnce(&mut SettingsDraft) -> Result<(), Stri
     set_status(hwnd, &messages.join(" · "));
 }
 
+/// 값 보정 메모를 지금 언어의 문구로 바꾼다.
+fn note_text(note: &model::Note) -> String {
+    match note {
+        model::Note::IntervalClamped { from, to } => i18n::note_interval_clamped(*from, *to),
+        model::Note::NoReadoutEnabled => i18n::note_no_readout(),
+    }
+}
+
+/// 컨트롤의 글자를 지금 언어로 채운다.
+///
+/// 콤보 항목은 언어가 바뀔 때만 다시 채운다. 다시 채우면 선택이 풀리므로 매번 하지 않는다.
+fn apply_text(hwnd: HWND, draft: &SettingsDraft) {
+    let text = i18n::t();
+    win32::dialog::set_window_text(hwnd, text.window_title);
+    win32::dialog::set_text(hwnd, IDC_GROUP_READOUTS, text.group_readouts);
+    win32::dialog::set_text(hwnd, IDC_HINT_READOUTS, text.hint_readouts);
+    for (id, metric) in SHOW_CONTROLS {
+        win32::dialog::set_text(hwnd, id, i18n::metric_label(metric));
+    }
+    win32::dialog::set_text(hwnd, IDC_GROUP_UPDATE, text.group_update);
+    win32::dialog::set_text(hwnd, IDC_HINT_UPDATE, text.hint_update);
+    win32::dialog::set_text(hwnd, IDC_LABEL_INTERVAL, text.label_interval);
+    win32::dialog::set_text(hwnd, IDC_INTERVAL_UNIT, text.unit_ms);
+    win32::dialog::set_text(hwnd, IDC_GROUP_APPEARANCE, text.group_appearance);
+    win32::dialog::set_text(hwnd, IDC_HINT_APPEARANCE, text.hint_appearance);
+    win32::dialog::set_text(hwnd, IDC_COLOR_METRIC, text.color_metric);
+    win32::dialog::set_text(hwnd, IDC_COLOR_THEME, text.color_theme);
+    win32::dialog::set_text(hwnd, IDC_GROUP_STARTUP, text.group_startup);
+    win32::dialog::set_text(hwnd, IDC_HINT_STARTUP, text.hint_startup);
+    win32::dialog::set_text(hwnd, IDC_VIRTUAL, text.count_virtual);
+    win32::dialog::set_text(hwnd, IDC_HINT_VIRTUAL, text.hint_virtual);
+    win32::dialog::set_text(hwnd, IDC_AUTOSTART, text.autostart);
+    win32::dialog::set_text(hwnd, IDC_LABEL_LANGUAGE, text.label_language);
+    win32::dialog::set_text(hwnd, IDC_HINT_LANGUAGE, text.hint_language);
+    win32::dialog::set_text(hwnd, IDC_RESET, text.reset);
+    win32::dialog::set_text(hwnd, IDC_CLOSE, text.close);
+
+    if RENDERED.with(Cell::get) != Some(i18n::language()) {
+        fill_interval_combo(hwnd);
+        fill_language_combo(hwnd, draft.language);
+        RENDERED.with(|slot| slot.set(Some(i18n::language())));
+    } else {
+        // 언어는 그대로지만 선택은 값에 맞춘다.
+        win32::dialog::combo_select(hwnd, IDC_LANGUAGE, draft.language.index() as i32);
+    }
+}
+
+/// 주기 콤보를 프리셋 + `Custom…`으로 다시 채운다.
+fn fill_interval_combo(hwnd: HWND) {
+    win32::dialog::combo_reset(hwnd, IDC_INTERVAL);
+    for ms in model::INTERVAL_PRESETS {
+        win32::dialog::combo_add(hwnd, IDC_INTERVAL, &i18n::interval_label(ms));
+    }
+    win32::dialog::combo_add(hwnd, IDC_INTERVAL, i18n::t().custom_interval);
+}
+
+/// 언어 콤보를 다시 채우고 지금 값을 고른다.
+fn fill_language_combo(hwnd: HWND, language: Language) {
+    win32::dialog::combo_reset(hwnd, IDC_LANGUAGE);
+    for choice in Language::ALL {
+        win32::dialog::combo_add(hwnd, IDC_LANGUAGE, &i18n::language_name(choice));
+    }
+    win32::dialog::combo_select(hwnd, IDC_LANGUAGE, language.index() as i32);
+}
+
 /// 컨트롤을 값에 맞춘다.
 fn sync_controls(hwnd: HWND, draft: &SettingsDraft) {
+    apply_text(hwnd, draft);
     for (id, metric) in SHOW_CONTROLS {
         win32::dialog::set_check(hwnd, id, draft.show.get(metric));
     }
@@ -335,6 +418,7 @@ fn toggle_metric(hwnd: HWND, id: i32, metric: Metric) {
     let checked = win32::dialog::is_check(hwnd, id);
     commit(hwnd, |draft| {
         model::set_visible(&mut draft.show, metric, checked)
+            .map_err(|model::LastReadout| i18n::t().last_readout_error.to_string())
     });
 }
 
@@ -366,12 +450,28 @@ fn interval_typed(hwnd: HWND) {
         if let Some(applied) = current() {
             sync_interval(hwnd, applied.poll_interval_ms);
         }
-        set_status(hwnd, "Enter milliseconds (250 - 10000)");
+        set_status(hwnd, i18n::t().interval_range_error);
         return;
     };
 
     commit(hwnd, move |draft| {
         draft.poll_interval_ms = ms;
+        Ok(())
+    });
+}
+
+/// 언어 콤보를 바꿨을 때. 즉시 반영되고 창 글자도 그 자리에서 바뀐다.
+fn language_selected(hwnd: HWND) {
+    let selection = win32::dialog::combo_selection(hwnd, IDC_LANGUAGE);
+    let Some(language) = usize::try_from(selection)
+        .ok()
+        .and_then(Language::from_index)
+    else {
+        return;
+    };
+
+    commit(hwnd, move |draft| {
+        draft.language = language;
         Ok(())
     });
 }
@@ -391,7 +491,7 @@ fn reset(hwnd: HWND) {
 
     sync_controls(hwnd, &defaults);
 
-    let mut message = String::from("Reset to defaults");
+    let mut message = i18n::t().reset_done.to_string();
     if !problems.is_empty() {
         message.push_str(&format!(" · {}", problems.join(" · ")));
     }
@@ -446,6 +546,7 @@ mod tests {
             ("IDC_PREVIEW", IDC_PREVIEW),
             ("IDC_INTERVAL", IDC_INTERVAL),
             ("IDC_INTERVAL_EDIT", IDC_INTERVAL_EDIT),
+            ("IDC_INTERVAL_UNIT", IDC_INTERVAL_UNIT),
             ("IDC_COLOR_METRIC", IDC_COLOR_METRIC),
             ("IDC_COLOR_THEME", IDC_COLOR_THEME),
             ("IDC_VIRTUAL", IDC_VIRTUAL),
@@ -453,6 +554,19 @@ mod tests {
             ("IDC_STATUS", IDC_STATUS),
             ("IDC_VERSION", IDC_VERSION),
             ("IDC_RESET", IDC_RESET),
+            ("IDC_GROUP_READOUTS", IDC_GROUP_READOUTS),
+            ("IDC_HINT_READOUTS", IDC_HINT_READOUTS),
+            ("IDC_GROUP_UPDATE", IDC_GROUP_UPDATE),
+            ("IDC_HINT_UPDATE", IDC_HINT_UPDATE),
+            ("IDC_GROUP_APPEARANCE", IDC_GROUP_APPEARANCE),
+            ("IDC_HINT_APPEARANCE", IDC_HINT_APPEARANCE),
+            ("IDC_GROUP_STARTUP", IDC_GROUP_STARTUP),
+            ("IDC_HINT_STARTUP", IDC_HINT_STARTUP),
+            ("IDC_LABEL_INTERVAL", IDC_LABEL_INTERVAL),
+            ("IDC_LABEL_LANGUAGE", IDC_LABEL_LANGUAGE),
+            ("IDC_LANGUAGE", IDC_LANGUAGE),
+            ("IDC_HINT_VIRTUAL", IDC_HINT_VIRTUAL),
+            ("IDC_HINT_LANGUAGE", IDC_HINT_LANGUAGE),
         ];
 
         for (name, value) in expected {

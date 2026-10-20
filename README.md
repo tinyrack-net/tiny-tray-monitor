@@ -88,6 +88,7 @@ one window. There is only ever one settings window:
 | Colours | One colour per readout, or a single colour from the taskbar theme |
 | Network | Count virtual adapters (Hyper-V, VPN, vSwitch) in the network total |
 | Startup | Run at sign-in: adds or removes the `HKCU\...\Run` entry (or the package startup task) |
+| Language | `Automatic (system)`, English, 한국어 or 日本語. Applies at once to the window, the tray menu and the tooltips |
 | Buttons | Reset everything in `config.toml` to the defaults |
 
 There is no OK button: every change applies immediately and is written to `config.toml` at
@@ -105,6 +106,7 @@ config from `%APPDATA%\tray-monitor` is copied there on the first packaged run.
 poll_interval_ms = 1000          # 250 ~ 10000
 exclude_virtual_adapters = true  # skip adapters that mirror physical traffic
 color_mode = "metric"            # "metric" = one colour per readout, "theme" = single colour
+language = "auto"                # "auto" | "en" | "ko" | "ja"
 
 [show]
 cpu = true
@@ -116,8 +118,11 @@ network_up = true
 A `network = ...` setting written by v0.1.0 is migrated to `network_down` and
 `network_up` on the next start.
 
+`language = "auto"` follows the Windows display language. Only English, Korean and Japanese
+are bundled; any other language falls back to English. Logs are always written in English to
+`%LOCALAPPDATA%\tray-monitor\log.txt`.
+
 Deleted or broken files fall back to the defaults; a broken file is kept as `config.toml.bak`.
-Logs are written in English to `%LOCALAPPDATA%\tray-monitor\log.txt`.
 
 ## Command line
 
