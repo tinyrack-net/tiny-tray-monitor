@@ -3,9 +3,11 @@
 //! - CPU: `GetSystemTimes` 누적 시간 델타
 //! - 메모리: `GlobalMemoryStatusEx`
 //! - 네트워크: `GetIfTable2` 인터페이스별 누적 바이트 델타
+//! - GPU: `D3DKMTQueryStatistics` 노드 실행 시간 델타 및 전용 세그먼트 상주량
 
 pub mod cpu;
 pub mod format;
+pub mod gpu;
 pub mod memory;
 pub mod network;
 
@@ -15,6 +17,8 @@ pub struct Sample {
     pub cpu_percent: Option<f64>,
     pub memory: Option<memory::Memory>,
     pub net: Option<network::Rate>,
+    pub gpu_percent: Option<f64>,
+    pub gpu_vram: Option<gpu::GpuMemory>,
 }
 
 /// 세 지표를 함께 샘플링한다.
@@ -22,6 +26,7 @@ pub struct Sample {
 pub struct Sampler {
     cpu: cpu::CpuMeter,
     net: network::NetMeter,
+    gpu: gpu::GpuMeter,
 }
 
 impl Sampler {
@@ -30,6 +35,7 @@ impl Sampler {
         let mut sampler = Self {
             cpu: cpu::CpuMeter::new(),
             net: network::NetMeter::new(exclude_virtual_adapters),
+            gpu: gpu::GpuMeter::new(),
         };
         sampler.prime();
         sampler
@@ -39,19 +45,28 @@ impl Sampler {
     pub fn prime(&mut self) {
         self.cpu.reset();
         self.net.reset();
+        self.gpu.reset();
         let _ = self.net.sample();
+        let _ = self.gpu.sample();
     }
 
     pub fn sample(&mut self) -> Sample {
+        let gpu_sample = self.gpu.sample();
         Sample {
             cpu_percent: self.cpu.sample(),
             memory: memory::read(),
             net: self.net.sample(),
+            gpu_percent: gpu_sample.percent,
+            gpu_vram: gpu_sample.vram,
         }
     }
 
     pub fn set_exclude_virtual_adapters(&mut self, exclude: bool) {
         self.net.set_exclude_virtual(exclude);
+    }
+
+    pub fn gpu_adapter(&self) -> Option<&gpu::GpuAdapter> {
+        self.gpu.adapter()
     }
 }
 
@@ -73,6 +88,15 @@ mod tests {
 
         let net = sample.net.expect("네트워크");
         assert!(net.down >= 0.0 && net.up >= 0.0);
+
+        if sampler.gpu_adapter().is_some() {
+            if let Some(gpu) = sample.gpu_percent {
+                assert!((0.0..=100.0).contains(&gpu));
+            }
+            if let Some(vram) = sample.gpu_vram {
+                assert!((0.0..=100.0).contains(&vram.percent));
+            }
+        }
     }
 
     /// 절전 복귀를 흉내내면 값이 튀지 않고 다시 기준점을 잡아야 한다.

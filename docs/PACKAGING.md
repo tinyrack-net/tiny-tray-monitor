@@ -113,13 +113,14 @@ manifest 최소 형태(검증됨):
    - 대응: 지표별 고정 GUID(`tray::TRAY_GUIDS`)로 등록한다. Windows가 승격 설정을 GUID에
      묶으므로 경로가 바뀌어도 유지된다. 실측: 0.4.0.0 → 0.4.1.0(다른 폴더)로 등록을 바꿔도
      같은 4개 키가 새 경로로 옮겨지고 `IsPromoted=1`이 유지됐다(Windows 11 build 26300).
-   - 셸이 GUID를 거부하면 `Tray::build`가 `NotifyIconSettings` 항목을 확인한 뒤 GUID 없이
-     다시 등록한다. 아이콘은 보이지만 승격은 초기화되므로 `should_onboard`가 다시 안내한다.
+   - 셸이 GUID 등록을 실제로 거부할 때(`NIM_ADD` 또는 `NIF_GUID` 툴팁 갱신 실패)만 GUID
+     없이 다시 등록한다. 아이콘은 보이지만 승격은 경로에 묶이므로 `should_onboard`가 다시
+     안내한다. `NotifyIconSettings` 키가 없다는 것은 거부 신호가 아니다([SPIKE.md](SPIKE.md) §15).
 
 5. **패키지 앱은 `NotifyIconSettings`에 쓸 수 없다**
    - 쓰기가 가상 하이브로 가므로 앱이 스스로 승격을 복원할 수 없다(실측).
-   - 읽기는 된다. `onboard::promotion_state`/`guids_present`가 실제 키를 읽어 승격 상태와
-     GUID 등록 여부를 판단한다.
+   - 읽기는 된다. `onboard::promotion_state`가 실제 키를 읽어 승격 상태와 GUID 등록 여부를
+     판단한다(`onboard::guids_registered`는 진단 로그용이다).
 
 ### 1.3 Installer는 문제 없다
 
@@ -356,7 +357,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 | --- | --- | --- |
 | unsigned MSIX는 일반 사용자 설치 불가 | MSIX 자산은 Store 제출/개발자 모드 전용 | README에 명시. 서명은 후속 |
 | Store identity | 예약 완료: `tinyrack.TinyTrayManager`, `CN=42FA8D93-…` | 이름·Publisher는 제출 후 바꾸지 않는다. 변경하려면 새 제품을 등록해야 한다 |
-| 셸이 고정 GUID를 거부 | 승격이 초기화됨(아이콘은 폴백으로 표시) | `NotifyIconSettings` 확인 후 GUID 없이 재등록, 온보딩 재안내 |
+| 셸이 고정 GUID 등록을 거부(`NIM_ADD`/툴팁 실패) | 승격이 경로에 묶임(아이콘은 보임) | GUID 없이 재등록, 온보딩 재안내 |
 | MSIX에서 Start 메뉴 실행 시 창이 없다 | 사용자가 앱이 실행됐는지 모를 수 있음 | 트레이/두 번째 실행/`--settings` 안내, 온보딩 |
 | MSIX와 installer 동시 설치 | 자동 시작 항목 중복, 하나만 실행됨(mutex) | 문서화. 필요 시 installer가 MSIX 설치 감지 후 안내 |
 | per-user ↔ per-machine 전환 시 경로 변경 | 승격 초기화 | 문서화 |
@@ -424,8 +425,10 @@ MSIX 업데이트마다 exe 경로가 바뀌어 트레이 승격이 초기화되
   한 번 정해지면 바꾸지 않는다. 바꾸면 사용자의 승격 설정이 다른 아이콘으로 옮겨간다.
 - `win32::set_guid_tooltip`이 `NIF_TIP | NIF_GUID`로 `NIM_MODIFY`를 직접 보낸다.
   `tray-icon` 0.26.1의 `set_tooltip`은 `NIF_GUID`를 빠뜨려 GUID 아이콘에서 항상 실패한다.
-- `Tray::build`는 아이콘을 만든 뒤 `NotifyIconSettings`에 GUID 항목이 생겼는지 확인한다.
-  셸이 거부하면 GUID 없이 다시 등록한다(아이콘은 보이고 승격만 초기화).
+- `Tray::build`의 수락 판정은 `NIM_ADD` 성공과 `set_guid_tooltip`의 성공뿐이다. **키가
+  없다고 폴백하지 않는다**: 셸은 이미 아는 정체성에는 키를 (다시) 쓰지 않으므로, 키 생성
+  여부를 거부 신호로 읽으면 두 번째 실행부터 항상 폴백하고 승격이 경로에 묶인다
+  ([SPIKE.md](SPIKE.md) §15). 키 개수는 진단 경고로만 남긴다.
 
 실측(Windows 11 build 26300, 74개 항목):
 
@@ -434,7 +437,15 @@ MSIX 업데이트마다 exe 경로가 바뀌어 트레이 승격이 초기화되
 | unpackaged, unsigned, 고정 GUID | 4개 키에 `IconGuid` 기록, `IsPromoted` 유지 |
 | unpackaged, 경로 A → B 이동 | 같은 키가 B 경로로 이동, `IsPromoted=1` 유지 |
 | MSIX 0.4.0.0 → 0.4.1.0(다른 폴더) | 같은 키가 새 경로로 이동, `IsPromoted=1` 유지 |
-| GUID를 이미 다른 경로가 선점 | `NotifyIconSettings` 항목이 없어 GUID 없이 재등록(폴백), 아이콘 표시 |
+| 이 세션이 이미 본 GUID로 다시 등록 | 키가 새로 생기지 않고 `NIM_ADD`/`NIM_MODIFY`는 성공 — 모순이 아니라 정상(§15) |
+
+v0.7.0에서 6개 지표로 확인한 결과(Explorer 재시작 → 6개 키에 `IconGuid`, `promote.py`로 4개
+고정 → exe를 다른 폴더로 복사해 실행해도 같은 키가 새 경로로 이동하며 `IsPromoted=1` 유지)는
+[SPIKE.md](SPIKE.md) §15에 있다.
 
 코드 서명은 필요하지 않았다. 서명이 있으면 `Publisher`가 기록될 뿐, 승격 유지 자체는
 GUID만으로 성립했다.
+
+> 주의: 실행 중인 앱을 `taskkill /F`로 죽이면 죽은 창의 정체성이 Explorer 세션에 남아,
+> 같은 GUID·경로로 다시 등록해도 키가 기록되지 않는다. 그때는 Explorer를 재시작해야 한다.
+> 정상 종료 경로(`Exit`, IPC 창의 `WM_CLOSE`)를 쓴다.

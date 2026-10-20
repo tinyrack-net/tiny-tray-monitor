@@ -1,9 +1,9 @@
 [package]
 name = "tray-monitor"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.85"
-description = "CPU, memory and network readouts in the Windows system tray"
+description = "CPU, memory, network and GPU readouts in the Windows system tray"
 license = "MIT"
 repository = "https://github.com/tinyrack-net/tray-monitor"
 publish = false
@@ -26,6 +26,7 @@ features = [
     "Win32_Foundation",
     "Win32_Globalization",
     "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dxgi",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",
     "Win32_Security",

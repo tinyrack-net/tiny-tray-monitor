@@ -92,6 +92,8 @@ pub struct Text {
     pub metric_memory: &'static str,
     pub metric_network_down: &'static str,
     pub metric_network_up: &'static str,
+    pub metric_gpu: &'static str,
+    pub metric_gpu_vram: &'static str,
     pub last_readout_error: &'static str,
 
     // 갱신 주기
@@ -129,6 +131,8 @@ pub struct Text {
     pub cpu_tooltip: &'static str,
     pub memory_tooltip: &'static str,
     pub network_tooltip: &'static str,
+    pub gpu_tooltip: &'static str,
+    pub vram_tooltip: &'static str,
 
     // 첫 실행 안내
     pub promotion_all: &'static str,
@@ -160,6 +164,8 @@ pub const EN: Text = Text {
     metric_memory: "Memory",
     metric_network_down: "Network down",
     metric_network_up: "Network up",
+    metric_gpu: "GPU",
+    metric_gpu_vram: "GPU VRAM",
     last_readout_error: "The last readout cannot be turned off.",
 
     group_update: "Update",
@@ -192,6 +198,8 @@ pub const EN: Text = Text {
     cpu_tooltip: "CPU {0} busy",
     memory_tooltip: "Memory {0} used  ({1} of {2})",
     network_tooltip: "Network down {0}  up {1}",
+    gpu_tooltip: "{0}  {1} busy",
+    vram_tooltip: "GPU VRAM {0} used  ({1} of {2})",
 
     promotion_all: "the readouts are visible in the taskbar",
     promotion_some: "{0} of {1} readouts are visible; the rest are hidden in the overflow area",
@@ -225,6 +233,8 @@ pub const KO: Text = Text {
     metric_memory: "메모리",
     metric_network_down: "네트워크 다운로드",
     metric_network_up: "네트워크 업로드",
+    metric_gpu: "GPU",
+    metric_gpu_vram: "GPU VRAM",
     last_readout_error: "마지막 남은 항목은 끌 수 없습니다.",
 
     group_update: "갱신",
@@ -257,6 +267,8 @@ pub const KO: Text = Text {
     cpu_tooltip: "CPU {0} 사용 중",
     memory_tooltip: "메모리 {0} 사용 중  ({2} 중 {1})",
     network_tooltip: "네트워크 다운로드 {0}  업로드 {1}",
+    gpu_tooltip: "{0}  {1} 사용 중",
+    vram_tooltip: "GPU VRAM {0} 사용 중  ({2} 중 {1})",
 
     promotion_all: "모든 항목이 작업 표시줄에 보입니다",
     promotion_some: "항목 {1}개 중 {0}개가 보입니다. 나머지는 숨겨진 아이콘 영역에 있습니다",
@@ -290,6 +302,8 @@ pub const JA: Text = Text {
     metric_memory: "メモリ",
     metric_network_down: "ネットワーク下り",
     metric_network_up: "ネットワーク上り",
+    metric_gpu: "GPU",
+    metric_gpu_vram: "GPU VRAM",
     last_readout_error: "最後の 1 つはオフにできません。",
 
     group_update: "更新",
@@ -322,6 +336,8 @@ pub const JA: Text = Text {
     cpu_tooltip: "CPU {0} 使用中",
     memory_tooltip: "メモリ {0} 使用中  ({2} / {1})",
     network_tooltip: "ネットワーク 下り {0}  上り {1}",
+    gpu_tooltip: "{0}  {1} 使用中",
+    vram_tooltip: "GPU VRAM {0} 使用中  ({2} / {1})",
 
     promotion_all: "すべての項目がタスクバーに表示されています",
     promotion_some: "{1} 個中 {0} 個の項目が表示されています。残りはオーバーフロー領域に隠れています",
@@ -418,6 +434,8 @@ pub fn metric_label(metric: Metric) -> &'static str {
         Metric::Memory => text.metric_memory,
         Metric::NetworkDown => text.metric_network_down,
         Metric::NetworkUp => text.metric_network_up,
+        Metric::Gpu => text.metric_gpu,
+        Metric::GpuVram => text.metric_gpu_vram,
     }
 }
 
@@ -442,6 +460,15 @@ pub fn memory_tooltip(percent: &str, used: &str, total: &str) -> String {
 
 pub fn network_tooltip(down: &str, up: &str) -> String {
     fill(t().network_tooltip, &[down, up])
+}
+
+/// GPU 어댑터 이름과 사용률.
+pub fn gpu_tooltip(adapter: &str, percent: &str) -> String {
+    fill(t().gpu_tooltip, &[adapter, percent])
+}
+
+pub fn vram_tooltip(percent: &str, used: &str, total: &str) -> String {
+    fill(t().vram_tooltip, &[percent, used, total])
 }
 
 /// 트레이 승격 상태 문구.
@@ -521,6 +548,8 @@ mod tests {
             ("metric_memory", text.metric_memory),
             ("metric_network_down", text.metric_network_down),
             ("metric_network_up", text.metric_network_up),
+            ("metric_gpu", text.metric_gpu),
+            ("metric_gpu_vram", text.metric_gpu_vram),
             ("last_readout_error", text.last_readout_error),
             ("group_update", text.group_update),
             ("hint_update", text.hint_update),
@@ -548,6 +577,8 @@ mod tests {
             ("cpu_tooltip", text.cpu_tooltip),
             ("memory_tooltip", text.memory_tooltip),
             ("network_tooltip", text.network_tooltip),
+            ("gpu_tooltip", text.gpu_tooltip),
+            ("vram_tooltip", text.vram_tooltip),
             ("promotion_all", text.promotion_all),
             ("promotion_some", text.promotion_some),
             ("promotion_hidden", text.promotion_hidden),
@@ -704,6 +735,8 @@ mod tests {
                 cpu_tooltip("12.3%"),
                 memory_tooltip("60%", "9.6 GB", "16 GB"),
                 network_tooltip("1.2 MB/s", "340 KB/s"),
+                gpu_tooltip("NVIDIA GeForce RTX 4060", "14%"),
+                vram_tooltip("87%", "6.9 GB", "7.8 GB"),
                 promotion_some(1, 3),
                 onboarding("TinyTrayManager", promotion_all()),
                 already_running("TinyTrayManager"),

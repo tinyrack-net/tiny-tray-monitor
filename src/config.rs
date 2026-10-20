@@ -34,6 +34,8 @@ pub struct Show {
     pub memory: bool,
     pub network_down: bool,
     pub network_up: bool,
+    pub gpu: bool,
+    pub gpu_vram: bool,
     /// v0.1.0의 단일 `network` 항목. 읽어서 아래 두 항목으로 옮기고 다시 쓰지는 않는다.
     #[serde(default, skip_serializing)]
     pub network: Option<bool>,
@@ -46,6 +48,8 @@ impl Default for Show {
             memory: true,
             network_down: true,
             network_up: true,
+            gpu: true,
+            gpu_vram: true,
             network: None,
         }
     }
@@ -58,6 +62,8 @@ impl Show {
             Metric::Memory => self.memory,
             Metric::NetworkDown => self.network_down,
             Metric::NetworkUp => self.network_up,
+            Metric::Gpu => self.gpu,
+            Metric::GpuVram => self.gpu_vram,
         }
     }
 
@@ -67,14 +73,23 @@ impl Show {
             Metric::Memory => self.memory = value,
             Metric::NetworkDown => self.network_down = value,
             Metric::NetworkUp => self.network_up = value,
+            Metric::Gpu => self.gpu = value,
+            Metric::GpuVram => self.gpu_vram = value,
         }
     }
 
     pub fn count(&self) -> usize {
-        [self.cpu, self.memory, self.network_down, self.network_up]
-            .into_iter()
-            .filter(|enabled| *enabled)
-            .count()
+        [
+            self.cpu,
+            self.memory,
+            self.network_down,
+            self.network_up,
+            self.gpu,
+            self.gpu_vram,
+        ]
+        .into_iter()
+        .filter(|enabled| *enabled)
+        .count()
     }
 }
 
@@ -237,7 +252,7 @@ mod tests {
         let mut config = Config::default();
         assert!(config.validate().is_empty());
         assert_eq!(config.poll_interval_ms, DEFAULT_POLL_INTERVAL_MS);
-        assert_eq!(config.show.count(), 4);
+        assert_eq!(config.show.count(), 6);
         assert!(config.exclude_virtual_adapters);
     }
 
@@ -266,6 +281,8 @@ mod tests {
                 memory: false,
                 network_down: false,
                 network_up: false,
+                gpu: false,
+                gpu_vram: false,
                 network: None,
             },
             ..Default::default()
@@ -287,6 +304,8 @@ mod tests {
                 memory: false,
                 network_down: true,
                 network_up: false,
+                gpu: false,
+                gpu_vram: false,
                 network: None,
             },
             color_mode: ColorMode::Theme,
@@ -343,7 +362,7 @@ network = false
         let text = "poll_interval_ms = 2000\nfuture_option = true\n";
         let config: Config = toml::from_str(text).expect("알 수 없는 키는 무시한다");
         assert_eq!(config.poll_interval_ms, 2000);
-        assert_eq!(config.show.count(), 4, "빠진 항목은 기본값");
+        assert_eq!(config.show.count(), 6, "빠진 항목은 기본값");
     }
 
     #[test]

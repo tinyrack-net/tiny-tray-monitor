@@ -83,17 +83,16 @@ fn guid_text(guid: u128) -> String {
     )
 }
 
-/// 주어진 고정 GUID가 모두 `NotifyIconSettings`에 등록되어 있는가.
+/// 주어진 고정 GUID 중 `NotifyIconSettings`에 기록이 있는 개수.
 ///
-/// Explorer가 아이콘을 등록할 때 이 키를 만든다. 키를 읽지 못하면 확인할 수
-/// 없으므로 `true`를 돌려주고, 호출자가 GUID를 포기하지 않게 한다.
-pub fn guids_present(guids: &[u128; 4]) -> bool {
-    let Ok(key) = CURRENT_USER.open(NOTIFY_KEY) else {
-        return true;
-    };
-    let Ok(names) = key.keys() else {
-        return true;
-    };
+/// 키를 읽지 못하면 `None`을 돌려준다.
+///
+/// **이 값으로 GUID 수락 여부를 판단하면 안 된다.** 셸은 이미 아는 정체성에는
+/// 키를 (다시) 쓰지 않으므로, 기록이 없다고 해서 GUID가 거부된 것이 아니다
+/// (실측: docs/SPIKE.md §15). 진단 로그용으로만 쓴다.
+pub fn guids_registered(guids: &[u128]) -> Option<usize> {
+    let key = CURRENT_USER.open(NOTIFY_KEY).ok()?;
+    let names = key.keys().ok()?;
     let wanted: Vec<String> = guids.iter().map(|guid| guid_text(*guid)).collect();
     let mut seen = vec![false; wanted.len()];
     for name in names {
@@ -109,7 +108,7 @@ pub fn guids_present(guids: &[u128; 4]) -> bool {
             }
         }
     }
-    seen.iter().all(|matched| *matched)
+    Some(seen.iter().filter(|matched| **matched).count())
 }
 
 /// 이 실행 파일로 등록된 아이콘들의 승격 상태.

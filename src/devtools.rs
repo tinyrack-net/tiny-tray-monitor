@@ -95,6 +95,8 @@ fn tag(metric: Metric) -> &'static str {
         Metric::Memory => "MEM",
         Metric::NetworkDown => "NETD",
         Metric::NetworkUp => "NETU",
+        Metric::Gpu => "GPU",
+        Metric::GpuVram => "VRM",
     }
 }
 
@@ -105,6 +107,8 @@ fn sample_value(metric: Metric) -> (&'static str, &'static str) {
         Metric::Memory => ("77", "%"),
         Metric::NetworkDown => ("24", "MB"),
         Metric::NetworkUp => ("1.2", "MB"),
+        Metric::Gpu => ("14", "%"),
+        Metric::GpuVram => ("75", "%"),
     }
 }
 
@@ -225,7 +229,7 @@ pub fn dump() {
     }
 
     println!();
-    println!("out/{{dark,light}}_px{{16,20,24,32}}_{{CPU,MEM,NETD,NETU}}@{ZOOM}x.bmp");
+    println!("out/{{dark,light}}_px{{16,20,24,32}}_{{CPU,MEM,NETD,NETU,GPU,VRM}}@{ZOOM}x.bmp");
     println!("out/{{dark,light}}_long_{{cpu100,dn1.2gb,dn999kb}}@{ZOOM}x.bmp");
 }
 
@@ -236,7 +240,7 @@ pub fn probe() {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let sample = sampler.sample();
         println!(
-            "cpu {:>6}  mem {:>6}  net down {:>12} up {:>12}   icons [{}/{}/{}/{}]",
+            "cpu {:>6}  mem {:>6}  net down {:>12} up {:>12}  gpu {:>6}  vram {:>6}   icons [{}/{}/{}/{}/{}/{}]",
             sample
                 .cpu_percent
                 .map(|v| format!("{v:.1}%"))
@@ -254,6 +258,14 @@ pub fn probe() {
                 .map(|n| metrics::format::rate_long(n.up))
                 .unwrap_or_else(|| "-".into()),
             sample
+                .gpu_percent
+                .map(|g| format!("{g:.1}%"))
+                .unwrap_or_else(|| "-".into()),
+            sample
+                .gpu_vram
+                .map(|v| format!("{:.1}%", v.percent))
+                .unwrap_or_else(|| "-".into()),
+            sample
                 .cpu_percent
                 .map(metrics::format::percent)
                 .unwrap_or_default(),
@@ -268,6 +280,14 @@ pub fn probe() {
             sample
                 .net
                 .map(|n| metrics::format::rate_reading(n.up).compact())
+                .unwrap_or_default(),
+            sample
+                .gpu_percent
+                .map(metrics::format::percent)
+                .unwrap_or_default(),
+            sample
+                .gpu_vram
+                .map(|v| metrics::format::percent(v.percent))
                 .unwrap_or_default(),
         );
     }
@@ -312,7 +332,7 @@ mod tests {
     /// `tools/icon_sheet.py`의 TAGS와 같아야 시트가 만들어진다.
     #[test]
     fn dump_tags_match_the_sheet_tool() {
-        let expected = ["CPU", "MEM", "NETD", "NETU"];
+        let expected = ["CPU", "MEM", "NETD", "NETU", "GPU", "VRM"];
         let actual: Vec<&str> = Metric::ALL.iter().map(|metric| tag(*metric)).collect();
         assert_eq!(actual, expected);
     }

@@ -322,6 +322,8 @@ mod tests {
                 memory: false,
                 network_down: true,
                 network_up: false,
+                gpu: false,
+                gpu_vram: false,
                 network: None,
             },
             color_mode: ColorMode::Theme,

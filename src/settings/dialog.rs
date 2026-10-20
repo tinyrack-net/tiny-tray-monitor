@@ -58,16 +58,20 @@ pub const IDC_LABEL_LANGUAGE: i32 = 1027;
 pub const IDC_LANGUAGE: i32 = 1028;
 pub const IDC_HINT_VIRTUAL: i32 = 1029;
 pub const IDC_HINT_LANGUAGE: i32 = 1030;
+pub const IDC_GPU: i32 = 1015;
+pub const IDC_GPU_VRAM: i32 = 1016;
 
 /// 닫기 버튼과 Esc가 보내는 id.
 pub const IDC_CLOSE: i32 = 2;
 
 /// 체크박스와 지표. 순서는 [Metric::ALL]과 같다.
-pub const SHOW_CONTROLS: [(i32, Metric); 4] = [
+pub const SHOW_CONTROLS: [(i32, Metric); 6] = [
     (IDC_CPU, Metric::Cpu),
     (IDC_MEMORY, Metric::Memory),
     (IDC_NETWORK_DOWN, Metric::NetworkDown),
     (IDC_NETWORK_UP, Metric::NetworkUp),
+    (IDC_GPU, Metric::Gpu),
+    (IDC_GPU_VRAM, Metric::GpuVram),
 ];
 
 thread_local! {
@@ -567,6 +571,8 @@ mod tests {
             ("IDC_LANGUAGE", IDC_LANGUAGE),
             ("IDC_HINT_VIRTUAL", IDC_HINT_VIRTUAL),
             ("IDC_HINT_LANGUAGE", IDC_HINT_LANGUAGE),
+            ("IDC_GPU", IDC_GPU),
+            ("IDC_GPU_VRAM", IDC_GPU_VRAM),
         ];
 
         for (name, value) in expected {
