@@ -19,6 +19,9 @@
   #error OutputDir is required
 #endif
 
+; 표시 이름은 제품 이름을 따른다. 설치 경로와 exe 이름은 업데이트 호환을 위해
+; `tray-monitor`로 유지한다(트레이 승격 설정이 실행 경로에 묶인다).
+#define AppDisplayName "TinyTrayManager"
 #define AppName "tray-monitor"
 #define AppExeName "tray-monitor.exe"
 #define AppPublisher "tinyrack"
@@ -27,15 +30,15 @@
 [Setup]
 ; AppId는 절대 바꾸지 않는다. 바꾸면 업그레이드가 아니라 새 프로그램으로 설치된다.
 AppId={{3E1D7B2A-5C4F-4A6B-9E2D-7F8A1C3B5D90}
-AppName={#AppName}
+AppName={#AppDisplayName}
 AppVersion={#AppVersion}
-AppVerName={#AppName} {#AppVersion}
+AppVerName={#AppDisplayName} {#AppVersion}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppUrl}
 AppSupportURL={#AppUrl}
 AppUpdatesURL={#AppUrl}/releases
 DefaultDirName={autopf}\{#AppName}
-DefaultGroupName={#AppName}
+DefaultGroupName={#AppDisplayName}
 DisableProgramGroupPage=yes
 LicenseFile={#SourceRoot}\LICENSE
 OutputDir={#OutputDir}
@@ -70,18 +73,18 @@ Source: "{#SourceRoot}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppDisplayName}"; Filename: "{app}\{#AppExeName}"
+Name: "{autodesktop}\{#AppDisplayName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppDisplayName}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [Code]
 const
   WM_CLOSE = $0010;
   WM_COMMAND = $0111;
   IPC_CLASS = 'tray-monitor-ipc';
-  SETTINGS_CAPTION = 'tray-monitor settings';
+  SETTINGS_CAPTION = 'TinyTrayManager settings';
 
 function FindWindowW(lpClassName, lpWindowName: string): HWND;
   external 'FindWindowW@user32.dll stdcall';
@@ -104,7 +107,9 @@ begin
 
   { 이전 버전은 첫 실행 안내/오류를 같은 제목의 메시지 상자로 띄운다.
     MB_YESNO 안내는 WM_CLOSE를 무시하므로 IDNO(7)를 먼저 보낸다. }
-  Hwnd := FindWindowW('#32770', '{#AppName}');
+  Hwnd := FindWindowW('#32770', '{#AppDisplayName}');
+  if Hwnd = 0 then
+    Hwnd := FindWindowW('#32770', '{#AppName}');
   if Hwnd <> 0 then
   begin
     PostMessageW(Hwnd, WM_COMMAND, 7, 0);
@@ -127,7 +132,7 @@ begin
     Sleep(100);
   end;
 
-  Result := 'tray-monitor is still running. Close it from the tray menu and run Setup again.';
+  Result := '{#AppDisplayName} is still running. Close it from the tray menu and run Setup again.';
 end;
 
 { 앱이 켜 둔 HKCU Run 값을 제거한다. 설치할 때는 만들지 않는다(자동 시작은 앱 설정). }

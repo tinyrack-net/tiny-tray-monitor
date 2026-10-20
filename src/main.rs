@@ -40,8 +40,12 @@ fn install_panic_hook() {
     }));
 }
 
+/// 사용자에게 보이는 제품 이름. Store 표시 이름과 맞춘다.
+/// exe 이름과 설치·설정 경로는 업데이트 호환을 위해 `tray-monitor`로 유지한다.
+pub const PRODUCT_NAME: &str = "TinyTrayManager";
+
 const USAGE: &str = "\
-tray-monitor - CPU / memory / network readouts in the Windows tray
+TinyTrayManager - CPU / memory / network readouts in the Windows tray
 
 usage:
   tray-monitor                run the tray app
@@ -100,7 +104,7 @@ fn main() {
             return;
         }
         logging::info("이미 실행 중이라 종료한다");
-        win32::inform("tray-monitor", "tray-monitor is already running.");
+        win32::inform(PRODUCT_NAME, &format!("{PRODUCT_NAME} is already running."));
         return;
     }
 
@@ -112,8 +116,8 @@ fn main() {
         Err(error) => {
             logging::error(format!("시작 실패: {error}"));
             win32::inform(
-                "tray-monitor",
-                &format!("tray-monitor could not start.\n\n{error}"),
+                PRODUCT_NAME,
+                &format!("{PRODUCT_NAME} could not start.\n\n{error}"),
             );
             return;
         }
@@ -128,8 +132,8 @@ fn main() {
         Err(error) => {
             logging::error(format!("타이머를 만들 수 없다: {error}"));
             win32::inform(
-                "tray-monitor",
-                &format!("tray-monitor could not start.\n\n{error}"),
+                PRODUCT_NAME,
+                &format!("{PRODUCT_NAME} could not start.\n\n{error}"),
             );
             return;
         }

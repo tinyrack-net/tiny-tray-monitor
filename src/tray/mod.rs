@@ -92,7 +92,11 @@ impl MenuHandles {
                 .checked(!config.exclude_virtual_adapters)
                 .build(),
             about: MenuItemBuilder::new()
-                .text(format!("tray-monitor v{}", env!("CARGO_PKG_VERSION")))
+                .text(format!(
+                    "{} v{}",
+                    crate::PRODUCT_NAME,
+                    env!("CARGO_PKG_VERSION")
+                ))
                 .enabled(false)
                 .build(),
             open_config: MenuItemBuilder::new()

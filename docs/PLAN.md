@@ -611,8 +611,8 @@ pub fn diff(current: &Config, autostart: bool, next: &SettingsDraft) -> Vec<Effe
   `/ALLUSERS`로 per-machine 전환. 업그레이드 전에 IPC 창에 `WM_CLOSE`를 보내 실행 중인 앱을
   정상 종료시킨다.
 - **MSIX:** full-trust(`runFullTrust`), `uap5:startupTask`, 자산은 `resources/msix/`.
-  서명은 아직 없다. Store identity는 `Tinyrack.TrayMonitor` / `CN=Tinyrack` 기본값을 환경
-  변수로 덮어쓴다.
+  서명은 아직 없다. Store identity는 예약된 `tinyrack.TinyTrayManager` /
+  `CN=42FA8D93-3683-4A00-A40C-5ED8A02E8B3A` 기본값을 환경 변수로 덮어쓴다.
 - **CI:** `package` 잡이 installer 무인 설치·제거와 `makeappx` 왕복을 검증하고, Quality Gate가
   이를 요구한다. 릴리스는 zip + setup.exe + msix + `SHA256SUMS`를 올린다.
 - **런타임:** 패키지에서는 설정/로그를 `LocalState`에 쓰고(`src/platform.rs`) 자동 시작을
