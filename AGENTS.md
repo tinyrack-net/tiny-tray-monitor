@@ -49,7 +49,7 @@ Run the validation loop after changes:
 | `src/win32.rs` | The remaining `unsafe` helpers, including the unofficial dark-mode calls |
 | `src/devtools.rs` | `--probe`, `--interfaces`, `--dump` |
 | `build.rs` | Compiles `resources/app.rc` so the exe carries `VERSIONINFO`, the manifest and the icon |
-| `resources/` | `app.rc`, `app.manifest`, `app.ico`, and the MSIX tiles under `msix/` |
+| `resources/` | `app.rc`, `app.manifest`, `app.ico`, the MSIX tiles under `msix/`, and the Store listing assets under `store/` |
 | `packaging/windows/` | Inno Setup script, MSIX manifest template and the PowerShell build scripts |
 | `docs/` | [PLAN.md](docs/PLAN.md), [SPIKE.md](docs/SPIKE.md), [PACKAGING.md](docs/PACKAGING.md) |
 | `tools/` | Python helpers for icon sheets, screenshots, tray keys and `make_assets.py` |
