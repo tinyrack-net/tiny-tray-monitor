@@ -3,7 +3,6 @@
 use std::time::{Duration, Instant};
 
 use tray_icon::TrayIconEvent;
-use tray_icon::menu::MenuEvent;
 
 use crate::config::Store;
 use crate::icon::Metric;
@@ -39,7 +38,7 @@ impl App {
     pub fn new(px: i32) -> Result<Self, String> {
         let mut store = Store::load();
         for note in store.config.validate() {
-            logging::warn(format!("설정 보정: {note}"));
+            logging::warn(format!("config corrected: {note}"));
         }
 
         let palette = theme::current();
@@ -47,24 +46,24 @@ impl App {
         // 트레이 메뉴도 작업 표시줄 테마를 따른다(메뉴는 창이 아니라 앱 단위로 칠해진다).
         crate::win32::dark::set_app_mode(!palette.light);
         logging::info(format!(
-            "설정 poll={}ms show={:?} color={:?} exclude_virtual={} autostart={autostart}",
+            "config poll={}ms show={:?} color={:?} exclude_virtual={} autostart={autostart}",
             store.config.poll_interval_ms,
             store.config.show,
             store.config.color_mode,
             store.config.exclude_virtual_adapters
         ));
 
-        let tray = Tray::new(px, &store.config, palette, autostart)?;
+        let tray = Tray::new(px, &store.config, palette)?;
         let sampler = Sampler::new(store.config.exclude_virtual_adapters);
         let promotion = onboard::promotion_state();
         let onboard_pending = onboard::should_onboard(&store.state, promotion);
         logging::info(format!(
-            "승격 상태 {promotion:?}, 첫 실행 안내 {onboard_pending}"
+            "promotion {promotion:?}, onboarding pending {onboard_pending}"
         ));
 
         // 기본값 파일을 남겨 사용자가 편집할 수 있게 한다.
         if let Err(error) = store.save_config() {
-            logging::warn(format!("설정을 저장하지 못했다: {error}"));
+            logging::warn(format!("could not save the config: {error}"));
         }
 
         Ok(Self {
@@ -107,7 +106,7 @@ impl App {
             let gap = now.duration_since(previous);
             if gap > self.poll_interval() * 4 {
                 logging::info(format!(
-                    "긴 공백 {:.1}초 뒤라 기준점을 다시 잡는다",
+                    "re-priming the counters after a {:.1}s gap",
                     gap.as_secs_f64()
                 ));
                 self.sampler.prime();
@@ -120,9 +119,9 @@ impl App {
             let palette = theme::current();
             if palette != self.palette {
                 logging::info(if palette.light {
-                    "밝은 작업 표시줄로 바뀌었다"
+                    "taskbar switched to light"
                 } else {
-                    "어두운 작업 표시줄로 바뀌었다"
+                    "taskbar switched to dark"
                 });
                 self.palette = palette;
                 self.tray.set_style(palette, self.store.config.color_mode);
@@ -141,11 +140,9 @@ impl App {
     }
 
     fn apply(&mut self, sample: metrics::Sample) {
-        let units = self.store.config.show_units;
-
         if let Some(cpu) = sample.cpu_percent {
-            let value = format::percent_unit(cpu, units);
-            self.last_cpu = Some(value.clone());
+            let value = format::percent_reading(cpu);
+            self.last_cpu = Some(value.compact());
             self.tray.update(
                 Metric::Cpu,
                 value,
@@ -154,8 +151,8 @@ impl App {
         }
 
         if let Some(memory) = sample.memory {
-            let value = format::percent_unit(memory.percent, units);
-            self.last_memory = Some(value.clone());
+            let value = format::percent_reading(memory.percent);
+            self.last_memory = Some(value.compact());
             self.tray.update(
                 Metric::Memory,
                 value,
@@ -170,15 +167,15 @@ impl App {
 
         if let Some(net) = sample.net {
             // 방향별로 아이콘을 나눠 쓴다. 툴팁은 두 방향을 함께 보여준다.
-            let down = format::rate_unit(net.down, units);
-            let up = format::rate_unit(net.up, units);
+            let down = format::rate_reading(net.down);
+            let up = format::rate_reading(net.up);
             let tooltip = format!(
                 "Network down {}  up {}",
                 format::rate_long(net.down),
                 format::rate_long(net.up)
             );
-            self.last_network_down = Some(down.clone());
-            self.last_network_up = Some(up.clone());
+            self.last_network_down = Some(down.compact());
+            self.last_network_up = Some(up.compact());
             self.tray.update(Metric::NetworkDown, down, tooltip.clone());
             self.tray.update(Metric::NetworkUp, up, tooltip);
         }
@@ -192,7 +189,7 @@ impl App {
         }
         let stats = self.tray.cache_stats();
         logging::info(format!(
-            "{}번째 갱신: cpu {} mem {} net ↓{} ↑{} | 글리프 캐시 {:.0}% (hit {} miss {} entries {}) 아이콘 교체 {}회",
+            "update #{}: cpu {} mem {} net down {} up {} | glyph cache {:.0}% (hit {} miss {} entries {}) icon swaps {}",
             self.ticks,
             self.last_cpu.as_deref().unwrap_or("-"),
             self.last_memory.as_deref().unwrap_or("-"),
@@ -217,16 +214,11 @@ impl App {
 
         match id {
             tray::MENU_SETTINGS => self.request_settings(),
-            tray::MENU_AUTOSTART => self.toggle_autostart(),
-            tray::MENU_VIRTUAL => self.toggle_virtual_adapters(),
-            tray::MENU_LABELS => self.toggle_labels(),
-            tray::MENU_UNITS => self.toggle_units(),
-            tray::MENU_OPEN_CONFIG => tray::open_config_file(),
             tray::MENU_EXIT => {
-                logging::info("메뉴에서 종료를 선택했다");
+                logging::info("exit chosen from the menu");
                 self.exiting = true;
             }
-            other => logging::warn(format!("알 수 없는 메뉴 이벤트 {other}")),
+            other => logging::warn(format!("unknown menu event {other}")),
         }
     }
 
@@ -235,11 +227,15 @@ impl App {
         SettingsDraft::from_config(&self.store.config, startup::is_enabled())
     }
 
-    /// 설정 창을 열어 달라고 요청만 한다.
+    /// 설정 창을 보여 달라는 요청. 트레이 메뉴와 두 번째 실행이 같은 정책을 따른다.
     ///
-    /// 여기서 바로 열면 안 된다: 메뉴 이벤트는 `App`을 빌린 채 처리되고, 대여 중에 모달
-    /// 루프에 들어가면 그동안 타이머 틱이 전부 버려져 트레이가 멈춘다.
+    /// - 열려 있으면 그 창을 앞으로 가져온다(새 창을 예약하지 않는다).
+    /// - 닫혀 있으면 열기를 예약만 한다. 여기서 바로 열면 안 된다: 메뉴 이벤트는 `App`을
+    ///   빌린 채 처리되고, 대여 중에 모달 루프에 들어가면 그동안 타이머 틱이 전부 버려진다.
     pub fn request_settings(&mut self) {
+        if crate::settings::dialog::focus() {
+            return;
+        }
         self.settings_requested = true;
     }
 
@@ -267,7 +263,7 @@ impl App {
 
         self.sync_menu_checks();
         if let Err(error) = self.store.save_config() {
-            logging::warn(format!("설정을 저장하지 못했다: {error}"));
+            logging::warn(format!("could not save the config: {error}"));
             problems.push(format!("Could not save the settings file: {error}"));
         }
         problems
@@ -278,6 +274,8 @@ impl App {
     /// 메뉴에는 오류를 보여 줄 창이 없으므로 알림 창을 쓴다. 설정 창은 자기 상태줄에 쓴다.
     fn apply_from_menu(&mut self, effects: &[Effect]) {
         let problems = self.apply_effects(effects);
+        // 설정 창이 열려 있으면 체크박스와 미리보기도 맞춘다.
+        crate::settings::dialog::refresh();
         if !problems.is_empty() {
             crate::win32::inform(crate::PRODUCT_NAME, &problems.join("\n\n"));
         }
@@ -285,9 +283,7 @@ impl App {
 
     /// 체크 표시를 실제 값에서 다시 맞춘다. 창과 메뉴가 같은 함수를 쓴다.
     pub fn sync_menu_checks(&self) {
-        self.tray
-            .menu_handles()
-            .sync(&self.store.config, startup::is_enabled());
+        self.tray.menu_handles().sync(&self.store.config);
     }
 
     fn apply_effect(&mut self, effect: &Effect) -> Option<String> {
@@ -297,44 +293,31 @@ impl App {
             Effect::Interval(ms) => {
                 // 대화상자 안에서도 즉시 반영되어야 한다.
                 timer::set_interval(*ms as u32);
-                logging::info(format!("폴링 주기 = {ms}ms"));
+                logging::info(format!("poll interval = {ms}ms"));
                 None
             }
             Effect::Visible(metric, visible) => {
                 self.tray.set_visible(*metric, *visible);
-                logging::info(format!("{} 표시 = {visible}", metric.id()));
+                logging::info(format!("show {} = {visible}", metric.id()));
                 None
             }
             Effect::ColorMode(mode) => {
                 self.tray.set_style(self.palette, *mode);
-                logging::info(format!("색 모드 = {mode:?}"));
+                logging::info(format!("color mode = {mode:?}"));
                 None
             }
             Effect::CountVirtual(count) => {
                 self.sampler.set_exclude_virtual_adapters(!count);
-                logging::info(format!(
-                    "가상 어댑터 집계 = {}",
-                    if *count { "포함" } else { "제외" }
-                ));
-                None
-            }
-            Effect::ShowLabels(labels) => {
-                self.tray.set_show_labels(*labels);
-                logging::info(format!("라벨 표시 = {labels}"));
-                None
-            }
-            Effect::ShowUnits(units) => {
-                self.tray.set_show_units(*units);
-                logging::info(format!("단위 표시 = {units}"));
+                logging::info(format!("count virtual adapters = {count}"));
                 None
             }
             Effect::Autostart(enabled) => match startup::set(*enabled) {
                 Ok(()) => {
-                    logging::info(format!("자동 실행 = {enabled}"));
+                    logging::info(format!("run at sign-in = {enabled}"));
                     None
                 }
                 Err(error) => {
-                    logging::error(format!("자동 실행을 바꾸지 못했다: {error}"));
+                    logging::error(format!("could not change run at sign-in: {error}"));
                     Some(format!("Could not update sign-in startup: {error}"))
                 }
             },
@@ -356,34 +339,6 @@ impl App {
         }
     }
 
-    fn toggle_autostart(&mut self) {
-        let applied = self.draft();
-        let mut next = applied.clone();
-        next.autostart = !applied.autostart;
-        self.apply_from_menu(&model::diff(&applied, &next));
-    }
-
-    fn toggle_virtual_adapters(&mut self) {
-        let applied = self.draft();
-        let mut next = applied.clone();
-        next.count_virtual = !applied.count_virtual;
-        self.apply_from_menu(&model::diff(&applied, &next));
-    }
-
-    fn toggle_labels(&mut self) {
-        let applied = self.draft();
-        let mut next = applied.clone();
-        next.show_labels = !applied.show_labels;
-        self.apply_from_menu(&model::diff(&applied, &next));
-    }
-
-    fn toggle_units(&mut self) {
-        let applied = self.draft();
-        let mut next = applied.clone();
-        next.show_units = !applied.show_units;
-        self.apply_from_menu(&model::diff(&applied, &next));
-    }
-
     fn run_onboarding(&mut self) {
         // 종료 요청이 먼저 왔으면 모달 안내를 띄우지 않는다. installer가 이 창을
         // 닫지 못하면 업그레이드가 5초 뒤 실패한다.
@@ -396,17 +351,14 @@ impl App {
         self.store.state.onboarding_shown = true;
         self.store.state.last_version = env!("CARGO_PKG_VERSION").to_string();
         if let Err(error) = self.store.save_state() {
-            logging::warn(format!("상태를 저장하지 못했다: {error}"));
+            logging::warn(format!("could not save the state: {error}"));
         }
     }
 
-    /// 트레이/메뉴 이벤트를 비운다. 클릭 메시지가 도착하면 즉시 처리된다.
-    pub fn drain_events(&mut self) {
-        while let Ok(event) = MenuEvent::receiver().try_recv() {
-            self.handle_menu(&event.id.0);
-        }
+    /// 트레이 아이콘 이벤트를 비운다. 메뉴 이벤트는 [crate::runtime::menu_event]가 받는다.
+    pub fn drain_tray_events(&mut self) {
         while let Ok(event) = TrayIconEvent::receiver().try_recv() {
-            logging::info(format!("트레이 이벤트 {event:?}"));
+            logging::info(format!("tray event {event:?}"));
         }
     }
 }

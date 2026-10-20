@@ -318,9 +318,9 @@ pub mod window {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowW, GetClassNameW,
-        GetWindowThreadProcessId, PostMessageW, RegisterClassW, WINDOW_EX_STYLE, WM_CLOSE,
-        WNDCLASSW, WS_POPUP,
+        AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows,
+        FindWindowW, GetClassNameW, GetWindowThreadProcessId, PostMessageW, RegisterClassW,
+        WINDOW_EX_STYLE, WM_CLOSE, WNDCLASSW, WS_POPUP,
     };
     use windows::core::{BOOL, PCWSTR};
 
@@ -359,7 +359,7 @@ pub mod window {
                 Some(instance),
                 None,
             )
-            .map_err(|e| format!("{class} 창을 만들 수 없다: {e}"))
+            .map_err(|e| format!("cannot create the {class} window: {e}"))
         }
     }
 
@@ -367,6 +367,20 @@ pub mod window {
     pub fn find(class: &str) -> Option<HWND> {
         let class = super::wide(class);
         unsafe { FindWindowW(PCWSTR(class.as_ptr()), PCWSTR::null()) }.ok()
+    }
+
+    /// 이 창을 가진 프로세스가 창을 앞으로 가져올 수 있게 허락한다.
+    ///
+    /// 포그라운드 잠금 때문에 백그라운드 프로세스의 `SetForegroundWindow`는 거부된다. 사용자가
+    /// 막 실행한 두 번째 프로세스가 포그라운드이므로, 메시지를 보내기 전에 권한을 넘긴다.
+    pub fn allow_foreground(hwnd: HWND) {
+        let mut process = 0u32;
+        unsafe {
+            GetWindowThreadProcessId(hwnd, Some(&mut process));
+            if process != 0 {
+                let _ = AllowSetForegroundWindow(process);
+            }
+        }
     }
 
     /// 창에 메시지를 넣는다. 상대가 처리할 때까지 기다리지 않는다.
@@ -432,10 +446,14 @@ pub mod dark {
         TRANSPARENT,
     };
     use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
-    use windows::Win32::UI::Controls::SetWindowTheme;
+    use windows::Win32::UI::Controls::{
+        BP_RADIOBUTTON, CloseThemeData, GetThemeColor, OpenThemeData, RBS_UNCHECKEDNORMAL,
+        SetWindowTheme, TMT_TEXTCOLOR,
+    };
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumChildWindows, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX,
-        WM_CTLCOLORSTATIC,
+        BS_AUTORADIOBUTTON, BS_RADIOBUTTON, BS_TYPEMASK, EnumChildWindows, GWL_STYLE,
+        GetClassNameW, GetWindowLongW, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT,
+        WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
     };
     use windows::core::{BOOL, PCSTR, PCWSTR, w};
 
@@ -456,6 +474,8 @@ pub mod dark {
         static BRUSH: RefCell<Option<HBRUSH>> = const { RefCell::new(None) };
         /// 자식을 훑는 동안 쓸 함수. 열거 콜백은 인자를 하나밖에 못 받는다.
         static ALLOW: Cell<Option<AllowDarkModeForWindow>> = const { Cell::new(None) };
+        /// 자식을 훑는 동안 입힐 테마가 다크인가. [ALLOW]와 같은 이유로 둔다.
+        static DARK: Cell<bool> = const { Cell::new(false) };
     }
 
     /// uxtheme의 비공식 ordinal을 함수 포인터로 바꾼다. 반환 타입은 부르는 쪽이 정한다.
@@ -500,8 +520,10 @@ pub mod dark {
 
         // 자식 컨트롤은 각자 테마를 갖는다. 하나씩 입혀 준다.
         ALLOW.with(|slot| slot.set(if dark { allow } else { None }));
+        DARK.with(|slot| slot.set(dark));
         let _ = unsafe { EnumChildWindows(Some(hwnd), Some(theme_child), LPARAM(0)) };
         ALLOW.with(|slot| slot.set(None));
+        DARK.with(|slot| slot.set(false));
 
         if !dark {
             forget();
@@ -553,12 +575,17 @@ pub mod dark {
     }
 
     extern "system" fn theme_child(child: HWND, _: LPARAM) -> BOOL {
+        let dark = DARK.with(Cell::get);
         ALLOW.with(|slot| {
             if let Some(allow) = slot.get() {
                 unsafe { allow(child, 1) };
             }
         });
-        paint_theme(child, true);
+        if dark && is_radio(child) {
+            paint_radio(child);
+        } else {
+            paint_theme(child, dark);
+        }
         true.into()
     }
 
@@ -569,6 +596,55 @@ pub mod dark {
             PCWSTR::null()
         };
         let _ = unsafe { SetWindowTheme(hwnd, application, PCWSTR::null()) };
+    }
+
+    /// 라디오 버튼인가. 라디오만 다크 테마가 따로 필요하다([paint_radio]).
+    fn is_radio(hwnd: HWND) -> bool {
+        let mut class = [0u16; 16];
+        let length = unsafe { GetClassNameW(hwnd, &mut class) };
+        let is_button = usize::try_from(length)
+            .ok()
+            .and_then(|length| class.get(..length))
+            .is_some_and(|name| String::from_utf16_lossy(name).eq_ignore_ascii_case("Button"));
+        let kind = unsafe { GetWindowLongW(hwnd, GWL_STYLE) } & BS_TYPEMASK;
+        is_button && (kind == BS_RADIOBUTTON || kind == BS_AUTORADIOBUTTON)
+    }
+
+    /// 라디오 버튼에 다크 테마를 입힌다.
+    ///
+    /// `DarkMode_Explorer::Button`은 체크박스 글자색(흰색)만 정의하고 라디오 글자색은
+    /// 정의하지 않아, 라디오 글자가 어두운 배경 위에 검정으로 그려진다(build 26300 실측).
+    /// 라디오 글자색이 있는 `DarkMode_DarkTheme`을 먼저 쓰고, 그것도 없는 빌드에서는
+    /// 비주얼 스타일을 꺼서 `WM_CTLCOLORSTATIC`의 글자색([TEXT])이 적용되게 한다.
+    fn paint_radio(hwnd: HWND) {
+        for application in [w!("DarkMode_DarkTheme"), w!("DarkMode_Explorer")] {
+            if radio_text_is_themed(application) {
+                let _ = unsafe { SetWindowTheme(hwnd, application, PCWSTR::null()) };
+                return;
+            }
+        }
+        // 빈 문자열은 이 컨트롤의 비주얼 스타일을 끈다.
+        let _ = unsafe { SetWindowTheme(hwnd, w!(""), w!("")) };
+    }
+
+    /// `<application>::Button` 테마가 라디오 글자색을 정의하는가.
+    fn radio_text_is_themed(application: PCWSTR) -> bool {
+        let name = format!("{}::Button", unsafe { application.display() });
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        let theme = unsafe { OpenThemeData(None, PCWSTR(wide.as_ptr())) };
+        if theme.is_invalid() {
+            return false;
+        }
+        let color = unsafe {
+            GetThemeColor(
+                theme,
+                BP_RADIOBUTTON.0,
+                RBS_UNCHECKEDNORMAL.0,
+                TMT_TEXTCOLOR,
+            )
+        };
+        let _ = unsafe { CloseThemeData(theme) };
+        color.is_ok()
     }
 
     /// 배경 브러시. 없으면 만든다.

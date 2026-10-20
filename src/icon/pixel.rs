@@ -16,17 +16,13 @@ pub const TRACKING: i32 = 1;
 /// 아이콘 master 크기(px). 모든 배율은 이 master에서 파생한다.
 pub const MASTER_PX: i32 = 16;
 
-/// 글리프 표 세 벌.
+/// 글리프 표 두 벌.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Face {
-    /// 라벨 줄(3x5).
+    /// 캡션 줄(3x5). 라벨, 단위, 방향 화살표.
     Label,
-    /// 라벨과 함께 쓰는 값 줄(3x9).
+    /// 캡션 아래 값 줄(4x10). 숫자와 `.`만 있다.
     Value,
-    /// 라벨을 숨겼을 때 쓰는 값 줄(4x10).
-    ValueLarge,
-    /// 라벨과 단위를 모두 숨겼을 때 쓰는 확대 값 줄(4x13).
-    ValueHuge,
 }
 
 impl Face {
@@ -34,26 +30,14 @@ impl Face {
         match self {
             Face::Label => glyphs::LABEL,
             Face::Value => glyphs::VALUE,
-            Face::ValueLarge => glyphs::VALUE_LARGE,
-            Face::ValueHuge => glyphs::VALUE_HUGE,
         }
     }
 
     /// 줄 높이(px).
-    pub fn height(self) -> i32 {
+    pub const fn height(self) -> i32 {
         match self {
             Face::Label => 5,
-            Face::Value => 9,
-            Face::ValueLarge => 10,
-            Face::ValueHuge => 13,
-        }
-    }
-
-    /// 글리프 사이 간격(px). 4글자를 16px에 맞추는 큰 값 글리프만 붙여 쓴다(0).
-    pub fn tracking(self) -> i32 {
-        match self {
-            Face::Label | Face::Value | Face::ValueHuge => TRACKING,
-            Face::ValueLarge => 0,
+            Face::Value => 10,
         }
     }
 
@@ -80,7 +64,7 @@ pub fn measure(text: &str, face: Face) -> i32 {
         return 0;
     }
     let glyph_width: i32 = glyphs.iter().map(|glyph| glyph.width).sum();
-    glyph_width + face.tracking() * (glyphs.len() as i32 - 1)
+    glyph_width + TRACKING * (glyphs.len() as i32 - 1)
 }
 
 /// 한 줄을 잘라낸 비트맵으로 그린다. 그릴 글리프가 없으면 `None`.
@@ -103,7 +87,7 @@ pub fn render_line(text: &str, face: Face, color: Color, alpha: u8) -> Option<Bi
                 }
             }
         }
-        pen += glyph.width + face.tracking();
+        pen += glyph.width + TRACKING;
     }
     Some(out)
 }
@@ -115,61 +99,53 @@ mod tests {
 
     const WHITE: Color = Color(255, 255, 255);
 
+    /// 아이콘이 실제로 쓰는 캡션 전부.
+    fn every_caption() -> Vec<String> {
+        Metric::ALL
+            .iter()
+            .flat_map(|metric| metric.units().iter().map(|unit| metric.caption(unit)))
+            .collect()
+    }
+
     #[test]
     fn widths_match_the_glyph_advances() {
-        // 2글자, 3글자, 4글자(폭 1인 `.` 포함)를 확인한다.
         assert_eq!(measure("CPU", Face::Label), 3 * 3 + 2);
-        assert_eq!(measure("DN", Face::Label), 3 * 2 + 1);
-        assert_eq!(measure("80%", Face::Value), 3 + 3 + 4 + 2);
-        assert_eq!(measure("24M", Face::Value), 3 * 3 + 2);
-        assert_eq!(measure("1.2M", Face::Value), 3 + 1 + 3 + 3 + 3);
+        assert_eq!(measure("MEM", Face::Label), 5 + 3 + 5 + 2);
+        assert_eq!(measure("↓MB", Face::Label), 3 + 5 + 3 + 2);
+        assert_eq!(measure("80", Face::Value), 4 + 4 + 1);
+        assert_eq!(measure("100", Face::Value), 4 * 3 + 2);
+        assert_eq!(measure("1.2", Face::Value), 4 + 2 + 4 + 2);
     }
 
-    /// 값 줄에서 가장 넓은 실제 문자열이 16px 안에 들어가야 한다.
+    /// 캡션과 값의 가장 넓은 실제 문자열이 16px 안에 들어가야 한다.
     #[test]
-    fn widest_values_fit_the_master() {
-        for value in ["100%", "999K", "1.2G", "1.0K", "512", "0%"] {
-            assert!(
-                measure(value, Face::Value) <= MASTER_PX,
-                "값 {value} = {}px",
-                measure(value, Face::Value)
-            );
-            assert!(
-                measure(value, Face::ValueLarge) <= MASTER_PX,
-                "큰 값 {value} = {}px",
-                measure(value, Face::ValueLarge)
-            );
+    fn widest_strings_fit_the_master() {
+        for caption in every_caption() {
+            let width = measure(&caption, Face::Label);
+            assert!(width <= MASTER_PX, "캡션 {caption} = {width}px");
         }
-        // 단위를 빼면 3글자라 확대 글리프에도 1px 간격으로 들어간다.
         for value in ["100", "999", "1.2", "512", "24", "0"] {
-            assert!(
-                measure(value, Face::ValueHuge) <= MASTER_PX,
-                "확대 값 {value} = {}px",
-                measure(value, Face::ValueHuge)
-            );
+            let width = measure(value, Face::Value);
+            assert!(width <= MASTER_PX, "값 {value} = {width}px");
         }
     }
 
     #[test]
-    fn value_large_face_is_taller_and_wider() {
-        assert!(Face::ValueLarge.height() > Face::Value.height());
+    fn caption_and_value_fill_the_master() {
+        assert!(Face::Value.height() > Face::Label.height());
         assert_eq!(
-            Face::ValueLarge.tracking(),
-            0,
-            "4글자를 16px에 맞추려면 붙여야 한다"
+            Face::Label.height() + TRACKING + Face::Value.height(),
+            MASTER_PX,
+            "캡션과 값이 16px을 꽉 채운다"
         );
-        assert_eq!(Face::ValueHuge.tracking(), 1, "3글자는 간격을 둔다");
-        assert!(Face::ValueHuge.height() > Face::ValueLarge.height());
-        let digit = Face::ValueLarge.glyph('0').expect("0");
-        assert!(digit.width >= Face::Value.glyph('0').expect("0").width);
     }
 
     #[test]
     fn render_line_has_the_expected_shape() {
-        let bitmap = render_line("80%", Face::Value, WHITE, 255).expect("render");
+        let bitmap = render_line("80", Face::Value, WHITE, 255).expect("render");
         assert_eq!(
             (bitmap.width, bitmap.height),
-            (measure("80%", Face::Value), 9)
+            (measure("80", Face::Value), 10)
         );
         assert!(bitmap.rgba.iter().any(|&v| v > 0), "잉크가 있어야 한다");
     }
@@ -179,9 +155,9 @@ mod tests {
     fn alpha_is_binary() {
         for (text, face, alpha) in [
             ("CPU", Face::Label, 190),
-            ("MEM", Face::Label, 190),
-            ("77%", Face::Value, 255),
-            ("1.2G", Face::Value, 255),
+            ("↓MB", Face::Label, 190),
+            ("77", Face::Value, 255),
+            ("1.2", Face::Value, 255),
         ] {
             let bitmap = render_line(text, face, WHITE, alpha).expect("render");
             for pixel in bitmap.rgba.chunks_exact(4) {
@@ -209,38 +185,25 @@ mod tests {
     /// 앱이 쓰는 모든 문자가 글리프 표에 있어야 한다(폴백으로 가려지면 안 된다).
     #[test]
     fn every_used_character_has_a_glyph() {
-        for metric in Metric::ALL {
-            for ch in metric.label().chars() {
+        for caption in every_caption() {
+            for ch in caption.chars() {
                 assert!(
                     Face::Label.table().iter().any(|(c, _)| *c == ch),
-                    "라벨 {ch:?} 글리프 누락"
+                    "캡션 {ch:?} 글리프 누락"
                 );
             }
         }
-        for value in ["100%", "0%", "1.2G", "999K", "512", "24M"] {
-            for ch in value.chars() {
-                for face in [Face::Value, Face::ValueLarge] {
-                    assert!(
-                        face.table().iter().any(|(c, _)| *c == ch),
-                        "{face:?} 값 {ch:?} 글리프 누락"
-                    );
-                }
-            }
-        }
-        // 단위를 뺀 값은 확대 글리프에도 모든 문자가 있어야 한다.
-        for value in ["100", "999", "1.2", "512", "0"] {
-            for ch in value.chars() {
-                assert!(
-                    Face::ValueHuge.table().iter().any(|(c, _)| *c == ch),
-                    "확대 값 {ch:?} 글리프 누락"
-                );
-            }
+        for ch in "0123456789.".chars() {
+            assert!(
+                Face::Value.table().iter().any(|(c, _)| *c == ch),
+                "값 {ch:?} 글리프 누락"
+            );
         }
     }
 
     #[test]
     fn tables_are_well_formed() {
-        for face in [Face::Label, Face::Value, Face::ValueLarge, Face::ValueHuge] {
+        for face in [Face::Label, Face::Value] {
             for (ch, glyph) in face.table() {
                 assert_eq!(
                     glyph.rows.len() as i32,

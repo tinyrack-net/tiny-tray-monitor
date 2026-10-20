@@ -277,6 +277,18 @@ Win32 대화상자로 만든 설정 창을 띄워 컨트롤을 조작하며 확�
    Windows는 다른 프로세스의 컨트롤 텍스트를 캐시된 값으로 돌려주고, 그 상태에서 보낸 쓰기는
    반영되지 않는다. 검증은 UIA(`set_value`)나 실제 입력으로 해야 한다. 이 함정 때문에 처음에는
    "입력 칸이 동작하지 않는다"고 잘못 판단했다.
+4. **설정 창이 열려 있으면 트레이 메뉴 클릭이 밀렸다.** 메뉴 이벤트를 `MenuEvent::receiver()`
+   채널로 받아 메인 루프에서 비웠는데, 설정 창의 모달 루프가 도는 동안 메인 루프는 멈춘다.
+   그래서 지표 체크를 눌러도 반영되지 않다가 창을 닫는 순간 한꺼번에 반영됐다(로그에서
+   `settings window closed`와 같은 초에 `show cpu`가 몰려 찍힘). `MenuEvent::set_event_handler`로
+   클릭을 그 자리에서 처리하고(`runtime::menu_event`), `App`을 빌릴 수 없을 때만 큐에 남겨
+   다음 메시지·타이머 틱에서 비운다. 열려 있는 설정 창에는 `WM_APP_REFRESH`를 보내 체크박스와
+   미리보기도 맞춘다.
+5. **`Settings…`를 두 번 누르면 창을 닫을 때 한 번 더 떴다.** 설정 창이 열린 동안 들어온 요청이
+   "열기 예약" 플래그만 세웠고, 창이 닫히면 메시지 루프가 그 플래그를 보고 다시 열었다.
+   요청은 이제 열린 창이 있으면 그 창을 앞으로 가져오고 끝낸다(`settings::dialog::focus`).
+   두 번째 실행은 IPC 메시지를 보내기 전에 `AllowSetForegroundWindow`로 실행 중인 인스턴스에
+   포그라운드 권한을 넘긴다. 백그라운드 프로세스의 `SetForegroundWindow`는 거부되기 때문이다.
 
 ### 11-5. 다크 모드 (uxtheme 비공식 API)
 
@@ -291,6 +303,13 @@ Win32 대화상자로 만든 설정 창을 띄워 컨트롤을 조작하며 확�
 `WM_SETTINGCHANGE`/`WM_THEMECHANGED`를 다시 보낸다. 그 메시지에서 다시 테마를 입히면 재진입이
 끝없이 쌓여 **스택 오버플로(`c00000fd`, ntdll)로 프로세스가 죽는다**(build 26300에서 실측).
 스레드 지역 플래그로 한 번만 처리하게 했다.
+
+**함정: `DarkMode_Explorer`는 라디오 글자색이 없다.** `OpenThemeData`로 확인하면
+`DarkMode_Explorer::Button`은 체크박스(`BP_CHECKBOX`)의 `TMT_TEXTCOLOR`만 흰색으로 정의하고
+라디오(`BP_RADIOBUTTON`)는 `E_NOTFOUND`다. 그래서 `Colours`의 라디오 두 개만 어두운 배경 위에
+검정 글자로 그려졌다(build 26300 실측). `DarkMode_DarkTheme::Button`은 둘 다 흰색이라
+라디오에는 이 테마를 입히고, 둘 다 없는 빌드에서는 비주얼 스타일을 꺼서
+`WM_CTLCOLORSTATIC` 글자색이 적용되게 한다(`win32::dark::paint_radio`).
 
 `--theme`로 지금 상태를 볼 수 있다.
 
@@ -340,6 +359,9 @@ app mode      : ForceDark
 비정수 배율에서는 ±1px을 감수한다(모든 배율에서 계조는 `[190, 255]`로 1비트 유지).
 
 ### 채택한 구성
+
+> 아래는 v0.4.0 당시 구성이다. 현재 구성(캡션 3x5 + 값 4x10, 토글 없음)은
+> [PIXEL-FONT.md](PIXEL-FONT.md) §9.
 
 | 항목 | 값 |
 | --- | --- |

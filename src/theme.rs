@@ -124,7 +124,7 @@ mod tests {
     fn colors_have_enough_contrast_against_the_taskbar() {
         let luminance =
             |c: Color| (0.2126 * c.0 as f32 + 0.7152 * c.1 as f32 + 0.0722 * c.2 as f32) / 255.0;
-        let label_alpha = crate::icon::stack_spec(true, true).label_alpha as f32 / 255.0;
+        let label_alpha = crate::icon::STACK.label_alpha as f32 / 255.0;
 
         for palette in [Palette::dark(), Palette::light()] {
             let background = palette.taskbar();

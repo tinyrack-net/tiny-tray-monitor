@@ -29,7 +29,9 @@ impl Listener {
         match win32::window::create(CLASS_NAME, procedure) {
             Ok(hwnd) => Some(Self { hwnd }),
             Err(error) => {
-                logging::warn(format!("{error} (두 번째 실행이 설정 창을 열 수 없다)"));
+                logging::warn(format!(
+                    "{error} (a second launch cannot open the settings window)"
+                ));
                 None
             }
         }
@@ -44,7 +46,7 @@ impl Drop for Listener {
 
 extern "system" fn procedure(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if message == WM_APP_OPEN_SETTINGS {
-        // 메시지 루프 안이라 `App`을 빌리고 있지 않다. 실제로 창을 여는 것은 루프가 한다.
+        // 열려 있으면 그 창을 앞으로 가져오고, 닫혀 있으면 메시지 루프가 연다.
         runtime::request_settings();
         return LRESULT(0);
     }
@@ -63,6 +65,8 @@ pub fn request_settings() -> bool {
     let Some(hwnd) = win32::window::find(CLASS_NAME) else {
         return false;
     };
+    // 실행 중인 인스턴스는 백그라운드라 스스로는 창을 앞으로 가져오지 못한다.
+    win32::window::allow_foreground(hwnd);
     win32::window::notify(hwnd, WM_APP_OPEN_SETTINGS)
 }
 

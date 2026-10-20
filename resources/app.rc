@@ -27,11 +27,7 @@
 #define IDC_AUTOSTART           1012
 #define IDC_STATUS              1013
 #define IDC_VERSION             1014
-#define IDC_OPEN_CONFIG         1015
-#define IDC_OPEN_LOG            1016
 #define IDC_RESET               1017
-#define IDC_LABELS              1018
-#define IDC_UNITS               1019
 
 /* RT_MANIFEST = 24, CREATEPROCESS_MANIFEST_RESOURCE_ID = 1 */
 1 24 "resources/app.manifest"
@@ -76,8 +72,8 @@ BEGIN
     LTEXT           "Readouts", -1, 10, 8, 60, 9
     CONTROL         "CPU", IDC_CPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 13, 20, 54, 10
     CONTROL         "Memory", IDC_MEMORY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 72, 20, 54, 10
-    CONTROL         "Network down (DN)", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 13, 33, 86, 10
-    CONTROL         "Network up (UP)", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 104, 33, 86, 10
+    CONTROL         "Network down", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 13, 33, 86, 10
+    CONTROL         "Network up", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 104, 33, 86, 10
     /* 미리보기는 창이 뜨면 코드가 비트맵을 넣는다(SS_BITMAP). */
     CONTROL         "", IDC_PREVIEW, "Static", SS_BITMAP | SS_CENTERIMAGE | WS_BORDER | WS_GROUP, 13, 47, 222, 34
     LTEXT           "Update every", -1, 10, 88, 62, 9
@@ -88,13 +84,9 @@ BEGIN
     CONTROL         "Per readout", IDC_COLOR_METRIC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 76, 105, 64, 10
     CONTROL         "Taskbar theme", IDC_COLOR_THEME, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 144, 105, 74, 10
     CONTROL         "Count virtual adapters", IDC_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 13, 119, 140, 10
-    CONTROL         "Show labels", IDC_LABELS, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 160, 119, 80, 10
     CONTROL         "Run at sign-in", IDC_AUTOSTART, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 13, 132, 140, 10
-    CONTROL         "Show units", IDC_UNITS, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 160, 132, 80, 10
     LTEXT           "", IDC_STATUS, 10, 147, 170, 9
     RTEXT           "", IDC_VERSION, 186, 147, 52, 9
-    PUSHBUTTON      "Open config file", IDC_OPEN_CONFIG, 10, 161, 72, 14, WS_TABSTOP | WS_GROUP
-    PUSHBUTTON      "Open log", IDC_OPEN_LOG, 86, 161, 52, 14, WS_TABSTOP
-    PUSHBUTTON      "Reset to defaults", IDC_RESET, 142, 161, 62, 14, WS_TABSTOP
+    PUSHBUTTON      "Reset to defaults", IDC_RESET, 10, 161, 62, 14, WS_TABSTOP | WS_GROUP
     DEFPUSHBUTTON   "Close", IDCANCEL, 208, 161, 30, 14
 END

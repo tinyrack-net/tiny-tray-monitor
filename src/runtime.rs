@@ -7,12 +7,15 @@
 //! 다시 들어올 수 있다. 그때는 이미 빌려진 상태이므로 조용히 건너뛴다.
 
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::time::Duration;
 
 use crate::app::App;
 
 thread_local! {
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
+    /// 아직 처리하지 못한 메뉴 항목 id. `App`을 빌릴 수 없을 때 여기서 기다린다.
+    static PENDING_MENU: RefCell<VecDeque<String>> = const { RefCell::new(VecDeque::new()) };
 }
 
 /// 앱을 설치한다. 설치 전에는 모든 접근이 조용히 무시된다.
@@ -28,14 +31,30 @@ pub fn with<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
     })
 }
 
-/// 타이머 콜백.
+/// 타이머 콜백. 모달 루프 안에서도 불리므로 밀린 메뉴 이벤트도 함께 비운다.
 pub fn tick() {
     with(|app| app.tick());
+    drain_events();
 }
 
-/// 트레이/메뉴 이벤트 처리.
+/// 메뉴 항목이 눌렸다. muda가 트레이 창의 `WM_COMMAND`에서 바로 부른다.
+///
+/// 채널로 받으면 메인 루프가 돌 때만 처리되는데, 설정 창 같은 모달 루프가 떠 있는 동안에는
+/// 메인 루프가 멈춰 클릭이 창을 닫을 때까지 밀린다(실측). 그래서 그 자리에서 처리하고,
+/// `App`이 이미 빌려져 있으면 큐에 남겨 다음 기회(메시지 루프·타이머)에 처리한다.
+pub fn menu_event(id: String) {
+    PENDING_MENU.with(|queue| queue.borrow_mut().push_back(id));
+    drain_events();
+}
+
+/// 밀린 메뉴 이벤트와 트레이 이벤트를 처리한다.
 pub fn drain_events() {
-    with(|app| app.drain_events());
+    with(|app| {
+        while let Some(id) = PENDING_MENU.with(|queue| queue.borrow_mut().pop_front()) {
+            app.handle_menu(&id);
+        }
+        app.drain_tray_events();
+    });
 }
 
 /// 설정 창 열기를 요청한다.
@@ -82,6 +101,19 @@ mod tests {
         assert_eq!(poll_interval(), Duration::from_secs(1));
         tick();
         drain_events();
+    }
+
+    /// `App`을 빌릴 수 없으면 메뉴 이벤트를 버리지 않고 남겨 둔다.
+    #[test]
+    fn menu_events_wait_until_the_app_can_be_borrowed() {
+        PENDING_MENU.with(|queue| queue.borrow_mut().clear());
+        menu_event("show-cpu".to_string());
+        assert_eq!(
+            PENDING_MENU.with(|queue| queue.borrow().len()),
+            1,
+            "앱이 없으면 다음 기회까지 기다린다"
+        );
+        PENDING_MENU.with(|queue| queue.borrow_mut().clear());
     }
 
     /// 재진입으로 잠깐 빌릴 수 없을 때 종료하면 안 된다.

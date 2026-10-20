@@ -36,7 +36,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 /// 원인을 로그에 남겨야 현장에서 진단할 수 있다.
 fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
-        logging::error(format!("패닉: {info}"));
+        logging::error(format!("panic: {info}"));
     }));
 }
 
@@ -92,29 +92,29 @@ fn main() {
     install_panic_hook();
     // 매니페스트의 DPI 선언이 실제로 링크되었는지 로그로 확인한다(실패하면 런타임 폴백이다).
     logging::info(if dpi_set_at_runtime {
-        "DPI: 런타임 호출로 PerMonitorV2를 설정했다(매니페스트 없음)"
+        "DPI: set PerMonitorV2 at runtime (no manifest)"
     } else {
-        "DPI: 매니페스트의 PerMonitorV2 선언을 사용한다"
+        "DPI: using the PerMonitorV2 declaration from the manifest"
     });
 
     if !win32::acquire_single_instance() {
         // 이미 떠 있는 인스턴스가 있으면 그쪽에 설정 창을 부탁하고 조용히 끝난다.
         if ipc::request_settings() {
-            logging::info("실행 중인 인스턴스에 설정 창을 요청했다");
+            logging::info("asked the running instance to open the settings window");
             return;
         }
-        logging::info("이미 실행 중이라 종료한다");
+        logging::info("already running, exiting");
         win32::inform(PRODUCT_NAME, &format!("{PRODUCT_NAME} is already running."));
         return;
     }
 
     let px = win32::tray_icon_size();
-    logging::info(format!("트레이 아이콘 크기 {px}px"));
+    logging::info(format!("tray icon size {px}px"));
 
     let app = match app::App::new(px) {
         Ok(app) => app,
         Err(error) => {
-            logging::error(format!("시작 실패: {error}"));
+            logging::error(format!("startup failed: {error}"));
             win32::inform(
                 PRODUCT_NAME,
                 &format!("{PRODUCT_NAME} could not start.\n\n{error}"),
@@ -124,13 +124,19 @@ fn main() {
     };
     runtime::install(app);
 
+    // 메뉴 클릭은 채널이 아니라 그 자리에서 처리한다. 설정 창의 모달 루프가 떠 있어도
+    // 바로 반영되어야 한다(`runtime::menu_event`).
+    tray_icon::menu::MenuEvent::set_event_handler(Some(|event: tray_icon::menu::MenuEvent| {
+        runtime::menu_event(event.id.0)
+    }));
+
     let interval = runtime::poll_interval();
     // 트레이 메뉴는 자체 메시지 루프를 돌리므로 숨은 창의 WndProc에서 타이머를 받아야
     // 메뉴가 열려 있어도 갱신이 계속된다.
     let timer = match timer::TimerWindow::new(interval.as_millis() as u32, runtime::tick) {
         Ok(timer) => timer,
         Err(error) => {
-            logging::error(format!("타이머를 만들 수 없다: {error}"));
+            logging::error(format!("could not create the timer: {error}"));
             win32::inform(
                 PRODUCT_NAME,
                 &format!("{PRODUCT_NAME} could not start.\n\n{error}"),
@@ -138,7 +144,10 @@ fn main() {
             return;
         }
     };
-    logging::info(format!("폴링 주기 {interval:?}, 타이머 id {}", timer.id()));
+    logging::info(format!(
+        "poll interval {interval:?}, timer id {}",
+        timer.id()
+    ));
 
     // 두 번째 실행이 설정 창을 열 수 있게 창 하나를 띄워 둔다.
     let _listener = ipc::Listener::start();
@@ -157,7 +166,7 @@ fn main() {
                 break;
             }
             if result.0 == -1 {
-                logging::error("GetMessageW 가 실패했다");
+                logging::error("GetMessageW failed");
                 break;
             }
 
@@ -180,5 +189,5 @@ fn main() {
     }
 
     drop(timer);
-    logging::info("종료");
+    logging::info("exit");
 }
