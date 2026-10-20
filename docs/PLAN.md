@@ -519,7 +519,7 @@ pub fn diff(current: &Config, autostart: bool, next: &SettingsDraft) -> Vec<Effe
 - 아이콘 순서 변경(셸이 관리한다)
 - 모델리스 창(항상 떠 있는 창)
 - 설정 파일 외부 편집 감지·실시간 리로드
-- 다국어 UI
+- ~~다국어 UI~~ → §15에서 다룬다(v0.7.0)
 
 설치 프로그램(MSIX)은 v0.4.0에서 범위에 들어왔고 [PACKAGING.md](PACKAGING.md)에서 다룬다.
 
@@ -662,3 +662,208 @@ GDI 8배 슈퍼샘플 + 다운샘플 렌더러는 16px에서 라벨(5px)을 AA �
   ([PIXEL-FONT.md](PIXEL-FONT.md) §9).
 - **DPI별 master는 채택하지 않는다.** 유지보수가 급증하고, 정수배로 안 떨어지는
   20/28/40은 어차피 비정수가 남는다. master는 하나다.
+
+---
+
+## 15. 다국어 UI와 설정 레이아웃 개편 (v0.7.0)
+
+설정 창은 v0.3.0에서 만든 뒤 값을 늘리기만 했다(`color_mode`, `exclude_virtual_adapters`,
+지표 4종). 컨트롤이 설명 없이 나열돼 각 항목이 무슨 역할인지 알기 어렵고, 문자열이 전부
+영어로 박혀 있다. 설정 창 레이아웃을 그룹 + 설명 구조로 다시 짜고, **영어/한국어/일본어**
+UI를 넣는다. 범위는 사용자에게 보이는 문자열 전체다(설정 창, 트레이 메뉴·툴팁, 첫 실행
+안내, 시작 실패·중복 실행 알림). 로그는 규칙대로 영문을 유지한다.
+
+### 15.1 확정된 결정
+
+| 항목 | 결정 | 근거 |
+| --- | --- | --- |
+| 언어 목록 | `Auto` / English / 한국어 / 日本語 | `Auto`는 `GetUserDefaultUILanguage`로 해석한다. 신규 설치가 OS 언어를 따르고, 사용자가 고정할 수도 있다 |
+| 저장 위치 | `Config.language`(serde default `Auto`) | 기존 `config.toml`과 호환된다. 해석된 값이 아니라 **선택을** 저장한다 |
+| 문자열 구조 | `struct Text`의 `&'static str` + 소수의 `fn` 포인터, `const EN / KO / JA` | 필드가 하나라도 빠지면 컴파일이 실패한다. 런타임 조회·해시맵이 없어 비용이 0에 가깝다 |
+| 리소스 | `.rc`는 텍스트가 빈 placeholder 템플릿 **하나만** 유지 | 레이아웃 단일 소스. 다국어 `.rc` LANGUAGE 블록은 런타임 전환이 안 되고 레이아웃이 3벌로 갈라진다 |
+| 전환 시점 | 창을 닫지 않고 **즉시 반영** | 트레이 메뉴 `set_text`, 콤보 재구성, 툴팁은 다음 틱, 미리보기 재렌더 |
+| 레이아웃 | 단일 페이지 + 그룹 섹션 + 그룹 설명 + 컨트롤 힌트 | 항목이 7개 수준이라 탭·스크롤이 필요 없다. 설명이 항상 보인다 |
+| 문자열 소유 | `src/i18n.rs` 하나에 모은다 | 로그용 영문 검사(`logging::tests::source_strings_are_english`)의 예외를 한 파일로 격리한다 |
+
+### 15.2 구조
+
+| 파일 | 상태 | 역할 |
+| --- | --- | --- |
+| `src/i18n.rs` | 신규 | **순수**: `Language`, `Text`, `EN`/`KO`/`JA`, `resolve(system_lang)`, `auto()`, `interval_label`, `metric_tooltip`, `promotion_summary` |
+| `src/config.rs` | 변경 | `pub language: Language`(serde default `Auto`), `validate`에서 미지원 값 정리 |
+| `src/settings/dialog.rs` | 변경 | 컨트롤 텍스트 주입(`apply_text`), 언어 콤보, 전환 시 재적용, 상태줄 문구를 `Text`로 |
+| `src/settings/model.rs` | 변경 | `Effect::Language(Language)`, `SettingsDraft.language`, 상태 문구를 `Text`로 |
+| `resources/app.rc` | 변경 | 그룹·설명 LTEXT 추가, 정적 라벨에 id 부여, 텍스트는 빈 값, 창 크기 확대 |
+| `src/tray/mod.rs` | 변경 | 메뉴·`about` 텍스트를 `Text`에서, `MenuHandles::set_text`로 갱신 |
+| `src/tray/onboard.rs` | 변경 | 안내·`Promotion::summary`를 `Text`로 |
+| `src/main.rs` | 변경 | 중복 실행·시작 실패 알림을 `Text`로, 시작 시 언어 해석 |
+| `src/icon/layout.rs` | 변경 | `tooltip_name`을 `i18n`으로 이관(아이콘 캡션 `CPU`/`MEM`/`↓MB`는 그대로) |
+| `src/logging.rs` | 변경 | 검사 목록에서 `i18n.rs`를 빼고, 그 자리를 i18n 전용 테스트로 채운다 |
+
+```rust
+pub enum Language { Auto, En, Ko, Ja }        // Config 저장값
+pub enum Lang { En, Ko, Ja }                   // 해석된 값, Text 조회 키
+
+pub struct Text {
+    pub window_title: &'static str,
+    pub group_readouts: &'static str,
+    pub readouts_hint: &'static str,
+    // …컨트롤·버튼·상태 문구
+    pub promotion_some: fn(usize, usize) -> String,
+}
+
+pub const EN: Text = Text { … };
+pub const KO: Text = Text { … };
+pub const JA: Text = Text { … };
+
+pub fn resolve(system_lang: u16) -> Lang;   // 순수, 단위 테스트
+pub fn text(lang: Lang) -> &'static Text;
+```
+
+### 15.3 문자열 인벤토리
+
+이관 대상은 다음과 같다. 문자열 키는 `Text`의 필드이고, 각 언어 표에 같은 필드가 모두
+있어야 컴파일된다.
+
+| 화면 | 현재 위치 | 키(예) |
+| --- | --- | --- |
+| 설정 창 제목·그룹·설명 | `resources/app.rc` | `window_title`, `group_readouts`, `readouts_hint` … |
+| 컨트롤 라벨·힌트 | `resources/app.rc` | `metric_label`, `update_hint`, `count_virtual_hint` … |
+| 주기 콤보 | `settings/model.rs` | `interval_label(ms)`, `custom_interval` |
+| 상태줄·오류 | `settings/dialog.rs`, `settings/model.rs` | `last_readout_off`, `interval_range`, `reset_done`, `save_failed` |
+| 트레이 메뉴 | `tray/mod.rs` | `menu_settings`, `menu_exit`, `menu_about` |
+| 툴팁 | `icon/layout.rs` | `metric_tooltip(metric)` |
+| 첫 실행 안내 | `tray/onboard.rs` | `onboarding(promotion)`, `promotion_summary` |
+| 시작 실패·중복 실행 | `main.rs` | `already_running`, `start_failed` |
+
+**번역하지 않는 것:** 지표 캡션(`CPU`/`MEM`/`↓MB`/`↑KB`), 제품명 `TinyTrayManager`,
+버전 문자열, 로그, `state.toml`/`config.toml` 키와 값, 진단 출력(`--probe`/`--dump`).
+`인터벌`처럼 아이콘이 아니라 텍스트 UI인 경우(주기 콤보)는 번역한다. 언어 이름은 자기
+언어로 표기한다(`English` / `한국어` / `日本語`).
+
+### 15.4 화면
+
+창 크기를 248×188 → **300×252 DLU**로 넓힌다(영어가 가장 길다). 그룹마다 설명 한 줄,
+애매한 항목에는 오른쪽 힌트를 붙인다.
+
+```
+┌ TinyTrayManager settings ──────────────────────────────┐
+│ ┌ Readouts ──────────────────────────────────────────┐ │
+│ │ Which values appear in the taskbar.                 │ │
+│ │  [x] CPU            [x] Memory                      │ │
+│ │  [x] Network down   [x] Network up                  │ │
+│ │  ┌────────────── icon preview ──────────────────┐   │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌ Update ────────────────────────────────────────────┐ │
+│ │ How often the values are sampled.                   │ │
+│ │  Every [ 1 second ▼ ]  [ 1000 ] ms   (250–10000)    │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌ Appearance ────────────────────────────────────────┐ │
+│ │ Colour of the icon text.                            │ │
+│ │  ( ) Per readout   ( ) Taskbar theme                │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ ┌ Startup & language ────────────────────────────────┐ │
+│ │  [x] Count virtual adapters   (VPN / Hyper-V)       │ │
+│ │  [x] Run at sign-in                                 │ │
+│ │  Language [ English ▼ ]                             │ │
+│ └─────────────────────────────────────────────────────┘ │
+│ <status line>                                v0.7.0     │
+│ [ Reset to defaults ]                          [ Close ] │
+└─────────────────────────────────────────────────────────┘
+```
+
+- 정적 라벨도 `SetDlgItemTextW`로 채우려면 id가 필요하다. `.rc`의 `-1`을 없애고
+  `IDC_*` 상수를 부여한다(`control_ids_match_the_resource_file` 테스트를 확장).
+- 그룹박스는 `BS_GROUPBOX`, 설명은 읽기 전용 `LTEXT`. 컨트롤 힌트는 회색 계열로 두되 다크
+  모드에서 대비를 확인한다(`WM_CTLCOLORSTATIC`).
+- 폰트는 `Segoe UI` 9pt를 유지하고, CJK는 Windows 폰트 링킹(맑은 고딕 / Yu Gothic)에 맡긴다.
+  L0에서 한글·일본어 글리프가 실제로 대체되는지 확인하고, 안 되면 대화상자 폰트를
+  `Malgun Gothic`/`Yu Gothic UI`로 바꾸는 폴백을 둔다.
+
+### 15.5 마일스톤 (예상 4일)
+
+| 단계 | 내용 | 완료 조건 |
+| --- | --- | --- |
+| **L0** 스파이크 (0.5일, 완료) | ① `WM_INITDIALOG`에서 전 컨트롤 텍스트 주입 + 런타임 전환이 다크 모드/PMv2에서 안전한지 ② CJK 폰트 링킹 ③ `muda` `MenuItem::set_text` 동작 | **완료.** 실측은 [SPIKE.md](SPIKE.md) §13. 셋 다 가능: 런타임 주입/실시간 전환이 동작하고, Segoe UI 폰트 링킹이 CJK를 대체하며, `set_text`가 있다. 창은 527x572px(100%) |
+| **L1** i18n 코어 (1일) | `src/i18n.rs`: `Language`/`Lang`/`Text`/`EN`·`KO`·`JA`, `resolve`, 주기 표기·툴팁·승격 문구 이관, `Config.language`, 영어 검사 목록 조정 | 단위 테스트: 세 언어 필드 비어 있지 않음, 영어 표에 한글 없음, 자리표시자 개수 일치, `Auto` 해석 경계(ko/ja/그 외) |
+| **L2** 문자열 이관 (0.5일) | 설정 창·모델·트레이 메뉴·툴팁·온보딩·`main.rs` 알림을 `Text`로 교체. `Effect::Language` 추가 | 영문 빌드가 기존과 같은 문구. `make validate` 통과 |
+| **L3** 레이아웃 (1.5일) | `.rc` 재작성(그룹·설명·id·300×252), `dialog.rs` `apply_text` + 언어 콤보 + `WM_APP_REFRESH` 경로 | 세 언어로 창을 열어 잘림·겹침이 없다. 컨트롤 id 대조 테스트 확장 |
+| **L4** 실시간 반영·검증 (0.5일) | 전환 시 창·미리보기·트레이 메뉴 즉시 갱신, 툴팁은 다음 틱, 언어별 수동 체크리스트 | 세 언어 × 라이트/다크 × 100/150/200% 확인. `make dump` 회귀 없음 |
+| **L5** 문서·릴리스 (0.5일) | README `Settings window` 표에 Language 행, AGENTS.md 구조표·함정(i18n 검사 예외), SPIKE.md 기록, PLAN.md §15 결과, 0.7.0 범프 | 태그 `v0.7.0` 릴리스 |
+
+### 15.6 구현 제약 (어기면 바로 버그)
+
+1. **`i18n.rs`만이 한글·일본어 리터럴을 가진다.** `logging::tests::source_strings_are_english`
+   목록에서 `i18n.rs`를 빼고, 대신 `i18n.rs`의 **영어 표에는 한글이 없어야 한다**는 테스트를
+   추가한다. 다른 파일에 번역 문자열을 흩으면 로그 검사의 의미가 사라진다.
+2. **언어를 바꿔도 트레이 아이콘을 재생성하지 않는다.** 메뉴 텍스트는 `set_text`,
+   아이콘은 그대로 둔다(승격 설정과 아이콘 id 보존, AGENTS.md 함정 1·17).
+3. **언어 전환은 `App` 대여 밖에서.** 콤보 `CBN_SELCHANGE`는 값만 커밋하고, 화면 갱신은
+   기존 `WM_APP_REFRESH`처럼 메시지로 미룬다(§12.6-1).
+4. **콤보를 다시 채울 때는 비우고 다시 넣는다.** 주기 콤보는 전환 시 선택 위치가 밀리므로
+   `CB_RESETCONTENT` 후 프리셋 + `Custom…`을 다시 넣고 현재 값을 다시 고른다.
+5. **`Config.language`는 선택값(`Auto` 포함)을 저장한다.** 해석된 `Lang`을 저장하면 OS 언어를
+   바꿔도 `Auto`가 고정된다. 마이그레이션은 serde default로 충분하다.
+6. **툴팁 로케일은 다음 틱에 반영된다.** 툴팁 문자열이 바뀌면 `dirty` 규칙(`slot.tooltip`
+   비교)이 이미 다시 그리므로 별도 경로를 만들지 않는다.
+7. **레이아웃은 영어 길이를 기준으로 잡는다.** 한국어·일본어는 더 짧거나 비슷하다. DLU를
+   하드코딩하므로 번역이 넘치면 `.rc`를 고친다(런타임 오토사이즈 없음).
+
+### 15.7 검증
+
+| 대상 | 방법 |
+| --- | --- |
+| `Text` 표 완전성 | 세 언어 표의 모든 필드가 비어 있지 않음, 영어 표에 비ASCII 없음, 포맷 인자 개수 일치 |
+| `resolve`/`auto` | 순수 함수 단위 테스트: `LANG_KOREAN`/`LANG_JAPANESE`/그 외 → `Ko`/`Ja`/`En` |
+| `Config.language` 왕복 | serde default `Auto`, `Effect::Language` → `Config` 반영 |
+| `.rc` 컨트롤 id | `include_str!` 대조 테스트 확장(새 정적 라벨 전부) |
+| 언어 전환 | 세 언어로 열어 창·미리보기·트레이 메뉴가 즉시 바뀌고 툴팁이 다음 틱에 바뀌는지 |
+| 표시 품질 | 언어별 × 라이트/다크 × 100/150/200% 스크린샷. 잘림·겹침 없음 |
+| 회귀 | `make validate`(fmt·clippy·test), `make dump` 아이콘 회귀 없음 |
+
+수동 체크리스트(릴리스 전):
+
+- [ ] English / 한국어 / 日本語 각각에서 창 텍스트가 잘리지 않는다
+- [ ] 언어를 바꾸면 트레이 메뉴와 툴팁이 즉시 새 언어로 바뀐다
+- [ ] 언어를 바꿔도 트레이 승격 설정과 아이콘 순서가 유지된다
+- [ ] `Auto`로 두고 Windows 표시 언어를 바꾸면 다음 실행부터 따라간다
+- [ ] 다크 모드에서 그룹·설명 텍스트가 읽힌다
+- [ ] 기존 `config.toml`(language 키 없음)이 `Auto`로 열린다
+
+### 15.8 리스크
+
+| 리스크 | 대응 |
+| --- | --- |
+| `Segoe UI` 폰트 링킹이 CJK를 대체하지 못한다 | L0에서 확인. 실패 시 대화상자 `FONT`를 `Malgun Gothic`/`Yu Gothic UI`로 바꾸거나 텍스트 주입 후 `WM_SETFONT` |
+| 번역이 DLU 레이아웃을 넘친다 | 영어 기준으로 잡고(가장 길다), L3에서 세 언어 스크린샷으로 확인. 넘치면 `.rc` 값 조정 |
+| 문자열이 여러 파일로 다시 샌다 | `i18n.rs` 단일 소유 + 영어 검사 목록 조정 + 리뷰 체크 |
+| 언어 전환이 다크 모드 재진입 가드와 충돌 | 전환도 `apply_theme`와 같은 가드 경로를 타게 한다(§12.6, AGENTS.md 함정 13) |
+| `.rc` 텍스트가 비어 초기 프레임이 깜빡인다 | `WM_INITDIALOG`에서 창을 보이기 전에 모두 채운다. 필요하면 `WS_VISIBLE` 없이 뜨게 하고 채운 뒤 표시 |
+
+### 15.9 진행 결과 (L0 ~ L5)
+
+| 단계 | 결과 |
+| --- | --- |
+| L0 스파이크 | [SPIKE.md](SPIKE.md) §13. 런타임 텍스트 주입·실시간 언어 전환·CJK 폰트 링킹 모두 실측 확인 |
+| L1 i18n 코어 | `src/i18n.rs`: `Language`/`Lang`/`Text`/`EN`·`KO`·`JA`, `from_lang_id`, `interval_label`, 툴팁·승격·알림 문구. `Config.language`. 자리표시자 집합 검사 |
+| L2 문자열 이관 | 설정 창·`model`·트레이 메뉴·툴팁·온보딩·`main.rs` 알림이 `Text`를 쓴다. `Effect::Language` 추가. `model::Note`·`LastReadout`로 문구를 값에서 분리 |
+| L3 레이아웃 | `.rc`를 300x288 DLU, 그룹 4개 + 설명 + 정적 라벨 id로 재작성. `dialog.rs`의 `apply_text`가 언어를 채우고 언어 콤보를 다시 만든다 |
+| L4 검증 | 영어/한국어/일본어로 라이트/다크 확인. UIA로 실시간 전환·재시작 반영·`config.toml` 저장 확인 |
+| L5 문서·릴리스 | README 언어 행, AGENTS.md 구조·함정(i18n 검사 예외), SPIKE.md §13, 0.7.0 범프 |
+
+계획과 달라진 점:
+
+1. **`hint_startup`은 컨트롤 힌트까지 한 줄에 담았다.** 가상 어댑터·자동 실행·언어 설명을
+   한 문장으로 묶어 그룹 설명 한 줄로 처리하고, 항목별 힌트는 가상 어댑터와 언어에만 둔다.
+2. **`SettingsDraft::validate`가 문자열이 아니라 `Note`를 돌려준다.** 같은 메모를 로그에는
+   영문, 상태줄에는 지금 언어로 보여 줘야 해서다.
+3. **`Metric::tooltip_name`을 없애고 `i18n::metric_label`로 옮겼다.** 아이콘 모듈이 문자열
+   표를 모르게 유지하고, 메뉴·체크박스·툴팁이 한 함수를 쓴다.
+4. **창 높이가 100%에서 572px다.** 1080p 200%에서 작업 영역을 넘을 수 있다([SPIKE.md](SPIKE.md) §13-3).
+
+### 15.10 범위 밖
+
+- 제3언어(중국어 등) 추가, 번역 파일 외부화(JSON/`.lang`), 사용자 번역 기여 절차
+- 날짜·숫자·단위의 로케일 포맷(`1,024`→`1.024`) — 아이콘 값은 로케일과 무관하게 고정
+- 아이콘 캡션·지표 약어의 번역(`CPU`/`MEM`/`↓MB`)
+- RTL 언어, 시스템 언어 변경의 즉시 감지(`WM_SETTINGCHANGE` 후 자동 전환)

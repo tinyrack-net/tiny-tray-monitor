@@ -1,6 +1,6 @@
 [package]
 name = "tray-monitor"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.85"
 description = "CPU, memory and network readouts in the Windows system tray"
@@ -24,6 +24,7 @@ version = "0.62"
 features = [
     "ApplicationModel",
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Graphics_Gdi",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",

@@ -11,7 +11,10 @@
 #include <windows.h>
 #include "version_defines.rc"
 
-/* 설정 창. 컨트롤 id는 src/settings/dialog.rs의 상수와 같아야 한다(테스트로 대조한다). */
+/* 설정 창. 컨트롤 id는 src/settings/dialog.rs의 상수와 같아야 한다(테스트로 대조한다).
+ *
+ * 글자는 비워 둔다. 런타임에 src/i18n.rs의 표에서 골라 WM_INITDIALOG에서 채운다.
+ * 그래야 창을 닫지 않고 언어를 바꿀 수 있고, 레이아웃은 이 파일 하나로 유지된다. */
 #define IDD_SETTINGS            101
 #define IDC_CPU                 1001
 #define IDC_MEMORY              1002
@@ -28,6 +31,19 @@
 #define IDC_STATUS              1013
 #define IDC_VERSION             1014
 #define IDC_RESET               1017
+#define IDC_GROUP_READOUTS      1018
+#define IDC_HINT_READOUTS       1019
+#define IDC_GROUP_UPDATE        1020
+#define IDC_HINT_UPDATE         1021
+#define IDC_GROUP_APPEARANCE    1022
+#define IDC_HINT_APPEARANCE     1023
+#define IDC_GROUP_STARTUP       1024
+#define IDC_HINT_STARTUP        1025
+#define IDC_LABEL_INTERVAL      1026
+#define IDC_LABEL_LANGUAGE      1027
+#define IDC_LANGUAGE            1028
+#define IDC_HINT_VIRTUAL        1029
+#define IDC_HINT_LANGUAGE       1030
 
 /* RT_MANIFEST = 24, CREATEPROCESS_MANIFEST_RESOURCE_ID = 1 */
 1 24 "resources/app.manifest"
@@ -64,29 +80,45 @@ BEGIN
     END
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 248, 188
+/* 설정 창. 그룹 + 설명 한 줄 + 컨트롤로 나눈다. 모든 글자는 비워 두고 코드가 채운다. */
+IDD_SETTINGS DIALOGEX 0, 0, 300, 288
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "TinyTrayManager settings"
+CAPTION ""
 FONT 9, "Segoe UI", 400, 0, 0x0
 BEGIN
-    LTEXT           "Readouts", -1, 10, 8, 60, 9
-    CONTROL         "CPU", IDC_CPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 13, 20, 54, 10
-    CONTROL         "Memory", IDC_MEMORY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 72, 20, 54, 10
-    CONTROL         "Network down", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 13, 33, 86, 10
-    CONTROL         "Network up", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 104, 33, 86, 10
+    /* 표시 항목 */
+    GROUPBOX        "", IDC_GROUP_READOUTS, 7, 6, 286, 90
+    LTEXT           "", IDC_HINT_READOUTS, 15, 17, 270, 9
+    CONTROL         "", IDC_CPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 17, 30, 62, 10
+    CONTROL         "", IDC_MEMORY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 86, 30, 62, 10
+    CONTROL         "", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 42, 95, 10
+    CONTROL         "", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 118, 42, 95, 10
     /* 미리보기는 창이 뜨면 코드가 비트맵을 넣는다(SS_BITMAP). */
-    CONTROL         "", IDC_PREVIEW, "Static", SS_BITMAP | SS_CENTERIMAGE | WS_BORDER | WS_GROUP, 13, 47, 222, 34
-    LTEXT           "Update every", -1, 10, 88, 62, 9
-    COMBOBOX        IDC_INTERVAL, 76, 86, 96, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
-    EDITTEXT        IDC_INTERVAL_EDIT, 176, 86, 40, 13, ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL
-    LTEXT           "ms", IDC_INTERVAL_UNIT, 219, 88, 18, 9
-    LTEXT           "Colours", -1, 10, 106, 62, 9
-    CONTROL         "Per readout", IDC_COLOR_METRIC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 76, 105, 64, 10
-    CONTROL         "Taskbar theme", IDC_COLOR_THEME, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 144, 105, 74, 10
-    CONTROL         "Count virtual adapters", IDC_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 13, 119, 140, 10
-    CONTROL         "Run at sign-in", IDC_AUTOSTART, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 13, 132, 140, 10
-    LTEXT           "", IDC_STATUS, 10, 147, 170, 9
-    RTEXT           "", IDC_VERSION, 186, 147, 52, 9
-    PUSHBUTTON      "Reset to defaults", IDC_RESET, 10, 161, 62, 14, WS_TABSTOP | WS_GROUP
-    DEFPUSHBUTTON   "Close", IDCANCEL, 208, 161, 30, 14
+    CONTROL         "", IDC_PREVIEW, "Static", SS_BITMAP | SS_CENTERIMAGE | WS_BORDER | WS_GROUP, 17, 55, 266, 36
+    /* 갱신 주기 */
+    GROUPBOX        "", IDC_GROUP_UPDATE, 7, 102, 286, 36
+    LTEXT           "", IDC_HINT_UPDATE, 15, 113, 270, 9
+    LTEXT           "", IDC_LABEL_INTERVAL, 17, 125, 48, 9
+    COMBOBOX        IDC_INTERVAL, 68, 123, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
+    EDITTEXT        IDC_INTERVAL_EDIT, 192, 123, 42, 13, ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL
+    LTEXT           "", IDC_INTERVAL_UNIT, 238, 125, 30, 9
+    /* 모양 */
+    GROUPBOX        "", IDC_GROUP_APPEARANCE, 7, 144, 286, 36
+    LTEXT           "", IDC_HINT_APPEARANCE, 15, 155, 270, 9
+    CONTROL         "", IDC_COLOR_METRIC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 17, 167, 100, 10
+    CONTROL         "", IDC_COLOR_THEME, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 124, 167, 110, 10
+    /* 시작 및 언어 */
+    GROUPBOX        "", IDC_GROUP_STARTUP, 7, 186, 286, 62
+    LTEXT           "", IDC_HINT_STARTUP, 15, 197, 270, 9
+    CONTROL         "", IDC_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 17, 209, 130, 10
+    LTEXT           "", IDC_HINT_VIRTUAL, 150, 210, 135, 9
+    CONTROL         "", IDC_AUTOSTART, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 222, 130, 10
+    LTEXT           "", IDC_LABEL_LANGUAGE, 17, 235, 48, 9
+    COMBOBOX        IDC_LANGUAGE, 68, 233, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_HINT_LANGUAGE, 192, 235, 95, 9
+    /* 상태줄·바닥 */
+    LTEXT           "", IDC_STATUS, 10, 254, 200, 9
+    RTEXT           "", IDC_VERSION, 232, 254, 60, 9
+    PUSHBUTTON      "", IDC_RESET, 10, 266, 74, 14, WS_TABSTOP | WS_GROUP
+    DEFPUSHBUTTON   "", IDCANCEL, 244, 266, 48, 14
 END

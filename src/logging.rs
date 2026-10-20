@@ -121,6 +121,10 @@ mod tests {
     ///
     /// 로그 문구가 `{error}`·`{note}`로 다른 문자열을 끌어오므로 로그 호출만이 아니라
     /// 소스의 문자열 리터럴 전부(주석과 테스트 제외)를 검사한다.
+    ///
+    /// 예외는 `src/i18n.rs` 하나뿐이다. 그 파일은 일부러 한국어·일본어 문구를 들고 있고,
+    /// 대신 `i18n::tests::the_english_table_has_no_cjk`가 영어 표를 지킨다. 번역 문구를
+    /// 다른 파일에 흩으면 이 검사가 막는다.
     #[test]
     fn source_strings_are_english() {
         const SOURCES: [(&str, &str); 22] = [

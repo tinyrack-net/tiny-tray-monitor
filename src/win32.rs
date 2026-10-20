@@ -35,6 +35,11 @@ pub fn tray_icon_size() -> i32 {
     unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16)
 }
 
+/// Windows 표시 언어의 LANGID. 지원하지 않는 언어는 호출자가 영어로 처리한다.
+pub fn user_language_id() -> u16 {
+    unsafe { windows::Win32::Globalization::GetUserDefaultUILanguage() }
+}
+
 /// GUID로 등록된 트레이 아이콘의 툴팁을 바꾼다.
 ///
 /// `tray-icon` 0.26.1의 `set_tooltip`은 `NIF_GUID` 없이 `NIM_MODIFY`를 보내 GUID
@@ -142,10 +147,10 @@ pub mod dialog {
         BST_CHECKED, ICC_STANDARD_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, DialogBoxParamW,
-        EndDialog, GetCursorPos, GetDlgItemTextW, GetWindowRect, IMAGE_BITMAP, PostMessageW,
-        STM_SETIMAGE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SendDlgItemMessageW,
-        SetDlgItemTextW, SetForegroundWindow, SetWindowPos,
+        BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_RESETCONTENT, CB_SETCURSEL,
+        DialogBoxParamW, EndDialog, GetCursorPos, GetDlgItemTextW, GetWindowRect, IMAGE_BITMAP,
+        PostMessageW, STM_SETIMAGE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SendDlgItemMessageW,
+        SetDlgItemTextW, SetForegroundWindow, SetWindowPos, SetWindowTextW,
     };
     use windows::core::PCWSTR;
 
@@ -205,6 +210,19 @@ pub mod dialog {
     pub fn set_text(hwnd: HWND, id: i32, text: &str) {
         let text = super::wide(text);
         let _ = unsafe { SetDlgItemTextW(hwnd, id, PCWSTR(text.as_ptr())) };
+    }
+
+    /// 대화상자의 제목을 바꾼다.
+    pub fn set_window_text(hwnd: HWND, text: &str) {
+        let text = super::wide(text);
+        let _ = unsafe { SetWindowTextW(hwnd, PCWSTR(text.as_ptr())) };
+    }
+
+    /// 콤보의 항목을 전부 지운다. 언어를 바꾸면 항목을 다시 넣어야 한다.
+    pub fn combo_reset(hwnd: HWND, id: i32) {
+        unsafe {
+            SendDlgItemMessageW(hwnd, id, CB_RESETCONTENT, WPARAM(0), LPARAM(0));
+        }
     }
 
     /// 컨트롤의 글자를 읽는다. 너무 길면 잘린다(입력 칸은 짧다).
