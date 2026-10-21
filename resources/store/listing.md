@@ -49,13 +49,8 @@ TinyTrayManager is open source (MIT). The Microsoft Store build uses the Windows
 
 Requires Windows 10 version 1809 or later.
 
-## What's new (0.9.1)
+## What's new (0.10.0)
 
-- The readouts no longer interrupt you on the first run to ask about pinning: where they live is
-your choice, and the app stops checking.
-- The settings window now shows where to pin them and has an **Open taskbar settings** button that
-takes you straight there.
-- Your pinning still survives an update, because each readout keeps its fixed identity.
-
-Note: 0.9.0 shipped these changes, but the listing still described 0.8.0 because the copy was never
-updated for it. This release carries the corrected text.
+- "Run at sign-in" is now on by default for a new install, so the readouts are back after a
+reboot. Uncheck the task in the installer to skip it, and turn it off in Settings at any time.
+- An update never turns it back on once you have turned it off.
