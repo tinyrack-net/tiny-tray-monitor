@@ -275,7 +275,9 @@ jobs:
         run: |
           $json = msstore submission get $env:STORE_PRODUCT_ID 2>$null | ConvertFrom-Json
           if ($json.Status -ne 'Published') {
-            throw "a submission is already pending (Status: $($json.Status))"
+            # 앞선 실행이 제출 생성 도중 실패하면 초안이 남는다. 그때는 Store 워크플로의
+            # action=delete 로 지운 뒤 다시 돌린다(자동 삭제는 하지 않는다).
+            throw "a submission is already pending (Status: $($json.Status)); delete it with the Store workflow and re-run"
           }
       - name: Upload the package as a draft
         shell: pwsh
@@ -301,14 +303,14 @@ jobs:
           if ($json.Status -ne 'PendingCommit') {
             throw "expected a pending draft, got $($json.Status)"
           }
+          # 방금 올린 패키지는 FileName 으로만 보인다(Version 은 커밋 뒤에 채워진다).
+          # 이전 패키지가 Version 을 달고 남아 있으므로 태그 버전으로 찾는다.
           $version = $env:TAG_VERSION.TrimStart('v')
-          $package = $json.ApplicationPackages |
-            Where-Object { $_.Version } | Select-Object -First 1
-          if (-not $package) { throw 'the draft carries no package' }
-          if (-not $package.Version.StartsWith("$version.")) {
-            throw "the draft carries $($package.Version), expected $version.x"
+          $names = @($json.ApplicationPackages | ForEach-Object { $_.FileName })
+          if (-not ($names | Where-Object { $_ -like "*$version*" })) {
+            throw "the draft carries no $version package (has: $($names -join ', '))"
           }
-          Write-Output "package: $($package.Version)"
+          $names | ForEach-Object { Write-Output "package: $_" }
           Write-Output "priceId: $($json.Pricing.PriceId)"
           Write-Output "advancedPricing: $($json.Pricing.IsAdvancedPricingModel)"
       - name: Explain the next step
