@@ -194,11 +194,12 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   the binary's `VERSIONINFO`, and publishes `tray-monitor-<version>-windows-x64.zip`,
   `...-setup.exe`, `...msix` and `SHA256SUMS` (LF).
 - The same tag hands the MSIX to the Store as a **draft** (`store-draft` in the pipeline) and stops
-  there. This product is priced per market, so the submission API cannot carry the base price back
-  and `--priceId` moves it off advanced pricing; the CLI refuses to publish either way. A human
-  checks `Pricing and availability` in Partner Center, then commits with the **Store** workflow
-  (`action=commit`) or `msstore submission publish`. See
-  [docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-7.
+  there. This product is priced per market, so the submission API cannot carry the base price back on
+  its own and the CLI refuses to publish without `--priceId`; `STORE_PRICE_TIER` states the base tier
+  explicitly. A human checks `Pricing and availability` in Partner Center, then commits with the
+  **Store** workflow (`action=commit`). Since v0.9.0 the published submission carries
+  `PriceId=Tier1022` and the Store keeps advanced pricing, so the next release may not need the tier
+  at all. See [docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-8.
 - The installer and MSIX defaults are documented in [docs/PACKAGING.md](docs/PACKAGING.md).
   Store identity and signing are not configured yet; the MSIX is unsigned.
 - Assume the archive is extracted in place: an update must not change the path of
