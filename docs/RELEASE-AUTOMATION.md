@@ -429,6 +429,25 @@ Partner Center `Create Microsoft Entra ID` → `signup.microsoft.com` 흐름으�
 v0.9.0에서 확인된 값: 초안 `PriceId=Tier1022`, `IsAdvancedPricingModel=false`(단일가 전환),
 기본가 USD 1.99 유지.
 
+게시까지의 전이와 결과:
+
+| 시점 | 상태·값 |
+| --- | --- |
+| 커밋 직후 | `CommitStarted` |
+| 인증 | `Certification` → `Release` → `Certification` (약 10여 분 진동 후) |
+| 게시 | **`Published`**, 패키지는 `tray-monitor-0.9.0-windows-x64.msix` **하나만** 남는다 |
+| 가격 | `PriceId=Tier1022`, **`IsAdvancedPricingModel=true`** |
+| 스토어 표시가 | **KRW 2,500 유지** (가격 변화 없음) |
+
+두 가지가 드러났다.
+
+1. **모델 전환은 되돌아간다.** 초안에서 `false`였던 `IsAdvancedPricingModel`이 커밋을 거치면서
+   다시 `true`가 됐다. 즉 제품은 고급(시장별) 가격 모델에 남고, 기본가만 구체적인 tier
+   (`Tier1022`)로 박힌다. 결과적으로 가격은 바뀌지 않았다.
+2. **이제 `PriceId`가 구체값이다.** 이전에는 `Base`여서 CLI가 멈췄지만, 다음 릴리스에서는
+   `--priceId` 없이도 보존될 것으로 본다(다음 릴리스에서 확인 예정). 그때는 `STORE_PRICE_TIER`를
+   지워도 된다.
+
 ## 9. 결정 필요 / 미검증
 
 해결됨:
@@ -453,8 +472,9 @@ v0.9.0에서 확인된 값: 초안 `PriceId=Tier1022`, `IsAdvancedPricingModel=f
 
 미검증:
 
-- v0.9.0 게시 후 원화 가격이 2,500으로 유지되는지(게시 뒤 스토어 페이지에서 확인)
-- 한 번 커밋한 뒤에는 `--priceId` 없이도 보존되는지(그때는 `STORE_PRICE_TIER`를 지워도 된다)
+- v0.9.0 게시 후 원화 가격이 2,500으로 유지되는지 → **유지됨**(§8-8)
+- 한 번 커밋한 뒤에는 `--priceId` 없이도 보존되는지(다음 릴리스에서 확인. 그때는
+  `STORE_PRICE_TIER`를 지워도 된다)
 - `submission update`로 목록 문구만 교체하는 것이 가능한지(`PriceId` 요구 때문에 어려울 가능성)
 - 제출 생성이 실패했을 때 자동으로 재시도할지(지금은 사람이 초안을 지우고 재실행한다)
 - 클라이언트 시크릿 만료(2028-10-20) 전 회전 절차
