@@ -58,11 +58,16 @@ pub const IDC_LABEL_LANGUAGE: i32 = 1027;
 pub const IDC_LANGUAGE: i32 = 1028;
 pub const IDC_HINT_VIRTUAL: i32 = 1029;
 pub const IDC_HINT_LANGUAGE: i32 = 1030;
+pub const IDC_HINT_TASKBAR: i32 = 1031;
+pub const IDC_OPEN_TASKBAR: i32 = 1032;
 pub const IDC_GPU: i32 = 1015;
 pub const IDC_GPU_VRAM: i32 = 1016;
 
 /// 닫기 버튼과 Esc가 보내는 id.
 pub const IDC_CLOSE: i32 = 2;
+
+/// "작업 표시줄 설정 열기" 버튼이 여는 Windows 설정 페이지.
+const TASKBAR_SETTINGS_URI: &str = "ms-settings:taskbar";
 
 /// 체크박스와 지표. 순서는 [Metric::ALL]과 같다.
 pub const SHOW_CONTROLS: [(i32, Metric); 6] = [
@@ -239,6 +244,7 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
     match id {
         IDC_CLOSE => finish(hwnd),
         IDC_RESET => reset(hwnd),
+        IDC_OPEN_TASKBAR => open_taskbar_settings(),
         IDC_INTERVAL if notification == CBN_SELCHANGE => interval_selected(hwnd),
         IDC_INTERVAL_EDIT if notification == EN_KILLFOCUS => interval_typed(hwnd),
         IDC_LANGUAGE if notification == CBN_SELCHANGE => language_selected(hwnd),
@@ -310,6 +316,7 @@ fn apply_text(hwnd: HWND, draft: &SettingsDraft) {
     win32::dialog::set_window_text(hwnd, text.window_title);
     win32::dialog::set_text(hwnd, IDC_GROUP_READOUTS, text.group_readouts);
     win32::dialog::set_text(hwnd, IDC_HINT_READOUTS, text.hint_readouts);
+    win32::dialog::set_text(hwnd, IDC_HINT_TASKBAR, text.hint_taskbar);
     for (id, metric) in SHOW_CONTROLS {
         win32::dialog::set_text(hwnd, id, i18n::metric_label(metric));
     }
@@ -329,6 +336,7 @@ fn apply_text(hwnd: HWND, draft: &SettingsDraft) {
     win32::dialog::set_text(hwnd, IDC_LABEL_LANGUAGE, text.label_language);
     win32::dialog::set_text(hwnd, IDC_HINT_LANGUAGE, text.hint_language);
     win32::dialog::set_text(hwnd, IDC_RESET, text.reset);
+    win32::dialog::set_text(hwnd, IDC_OPEN_TASKBAR, text.open_taskbar_settings);
     win32::dialog::set_text(hwnd, IDC_CLOSE, text.close);
 
     if RENDERED.with(Cell::get) != Some(i18n::language()) {
@@ -408,6 +416,16 @@ fn sync_preview(hwnd: HWND, draft: &SettingsDraft) {
 
 fn set_status(hwnd: HWND, message: &str) {
     win32::dialog::set_text(hwnd, IDC_STATUS, message);
+}
+
+/// Windows 작업 표시줄 설정을 연다.
+///
+/// 아이콘을 트레이에 고정할지는 사용자가 정한다. 앱은 그 상태를 읽지 않고, 설정 페이지를
+/// 열어 줄 뿐이다.
+fn open_taskbar_settings() {
+    if !win32::open_url(TASKBAR_SETTINGS_URI) {
+        logging::warn("could not open the taskbar settings");
+    }
 }
 
 fn metric_for(id: i32) -> Option<Metric> {
@@ -571,6 +589,8 @@ mod tests {
             ("IDC_LANGUAGE", IDC_LANGUAGE),
             ("IDC_HINT_VIRTUAL", IDC_HINT_VIRTUAL),
             ("IDC_HINT_LANGUAGE", IDC_HINT_LANGUAGE),
+            ("IDC_HINT_TASKBAR", IDC_HINT_TASKBAR),
+            ("IDC_OPEN_TASKBAR", IDC_OPEN_TASKBAR),
             ("IDC_GPU", IDC_GPU),
             ("IDC_GPU_VRAM", IDC_GPU_VRAM),
         ];

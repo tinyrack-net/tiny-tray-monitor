@@ -1,7 +1,8 @@
-//! 설정과 상태 파일.
+//! 설정 파일.
 //!
 //! - `config.toml`: 사용자가 바꾸는 값. 없으면 기본값으로 만들고, 깨져 있으면 백업 후 기본값.
-//! - `state.toml`: 앱이 관리하는 값. 사용자가 편집할 일이 없다.
+//!
+//! 이전 버전이 쓰던 `state.toml`은 더 이상 읽지 않는다.
 
 use std::path::PathBuf;
 
@@ -156,26 +157,15 @@ impl Config {
     }
 }
 
-/// 앱이 관리하는 상태.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct State {
-    /// 첫 실행 안내를 이미 보여줬는지.
-    pub onboarding_shown: bool,
-    /// 마지막으로 실행한 버전. 업데이트 후 안내를 다시 띄울지 판단한다.
-    pub last_version: String,
-}
-
 /// `%APPDATA%\tray-monitor` (패키지에서는 `LocalState`)
 pub fn config_dir() -> PathBuf {
     crate::platform::config_dir()
 }
 
-/// 설정과 상태를 함께 들고 있는다.
+/// 설정을 파일과 함께 들고 있는다.
 #[derive(Debug)]
 pub struct Store {
     pub config: Config,
-    pub state: State,
     pub directory: PathBuf,
 }
 
@@ -189,20 +179,11 @@ impl Store {
     /// 테스트에서 임시 디렉터리를 쓰기 위해 분리했다.
     pub fn load_from(directory: PathBuf) -> Self {
         let config = load_toml::<Config>(&directory.join("config.toml"));
-        let state = load_toml::<State>(&directory.join("state.toml"));
-        Self {
-            config,
-            state,
-            directory,
-        }
+        Self { config, directory }
     }
 
     pub fn save_config(&self) -> Result<(), String> {
         save_toml(&self.directory, "config.toml", &self.config)
-    }
-
-    pub fn save_state(&self) -> Result<(), String> {
-        save_toml(&self.directory, "state.toml", &self.state)
     }
 }
 
@@ -385,13 +366,10 @@ network = false
         let dir = temp_dir("roundtrip");
         let mut store = Store::load_from(dir.clone());
         store.config.poll_interval_ms = 750;
-        store.state.onboarding_shown = true;
         store.save_config().expect("save config");
-        store.save_state().expect("save state");
 
         let reloaded = Store::load_from(dir.clone());
         assert_eq!(reloaded.config.poll_interval_ms, 750);
-        assert!(reloaded.state.onboarding_shown);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

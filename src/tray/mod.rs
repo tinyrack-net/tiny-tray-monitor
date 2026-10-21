@@ -25,8 +25,6 @@ use crate::metrics::format::Reading;
 use crate::theme::Palette;
 use crate::win32;
 
-pub mod onboard;
-
 /// 메뉴 항목 id. 이벤트 처리에서 문자열로 비교한다.
 pub const MENU_SHOW: [&str; 6] = [
     "show-cpu",
@@ -243,21 +241,6 @@ impl Tray {
                 tooltip: i18n::metric_label(metric).to_string(),
                 dirty: false,
             });
-        }
-
-        // 진단용이다. 여기서 키가 적게 나와도 폴백하지 않는다: 셸은 이미 아는
-        // 정체성에는 키를 다시 쓰지 않는다. 이 상태에서는 셸이 승격 설정을 기록할
-        // 자리가 없으므로, Explorer를 다시 시작할 때까지는 고정이 기억되지 않는다.
-        if let Some(guids) = guids {
-            if let Some(found) = onboard::guids_registered(guids) {
-                if found < guids.len() {
-                    logging::warn(format!(
-                        "the shell persisted {found} of {} fixed GUIDs; \
-                         the tray promotion may not be remembered until Explorer restarts",
-                        guids.len()
-                    ));
-                }
-            }
         }
 
         // 설정에서 꺼진 지표는 등록은 유지한 채 숨긴다.
