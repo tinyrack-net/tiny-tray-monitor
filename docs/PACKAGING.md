@@ -384,7 +384,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 - Partner Center identity 예약 완료: `tinyrack.TinyTrayManager` / `CN=42FA8D93-…` (Store ID `9MT22CHX25FD`).
 - 코드 서명 인증서(Azure Artifact Signing 권장) 도입 → installer/MSIX 서명.
-- MSIX `.msixbundle`(x64 + arm64), Store 제출 파이프라인.
+- MSIX `.msixbundle`(x64 + arm64), Store 제출 파이프라인([RELEASE-AUTOMATION.md](RELEASE-AUTOMATION.md)).
 - winget/scoop 매니페스트 자동 갱신.
 
 ---
