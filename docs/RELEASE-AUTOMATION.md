@@ -406,6 +406,29 @@ Partner Center `Create Microsoft Entra ID` → `signup.microsoft.com` 흐름으�
 한 번 커밋하고 나면 `IsAdvancedPricingModel=false`가 되므로 이후에는 `--priceId` 없이도 보존될
 것으로 본다(미검증 — 그때는 `STORE_PRICE_TIER` 변수를 지워도 된다).
 
+### 8-8. v0.9.0 릴리스에서 드러난 것 (2026-10-21)
+
+자동화를 실제로 돌려 보고 두 가지를 알게 됐다.
+
+| 관측 | 내용 |
+| --- | --- |
+| CI에서 자격증명 동작 | `reconfigure`와 가드가 러너에서 그대로 통과했다. 액션이 .NET을 따로 설치하지 않았는데도 CLI가 떴다(이미지에 있다) |
+| 제출 생성이 한 번 실패 | `Error while creating submission. Please try again.` (약 80초 대기 후). 서버에는 초안이 만들어졌는데 응답을 받지 못한 경우다. 재실행하려면 그 초안을 먼저 지워야 한다(가드는 초안이 있으면 일부러 멈춘다) |
+| **검증 로직이 틀렸다** | 방금 올린 패키지는 `ApplicationPackages`에 **`FileName`만** 있고 `Version`은 커밋 뒤에 채워진다. 이전 패키지가 `Version`을 달고 남아 있어서 `Where-Object { $_.Version }`은 **0.8.0을 집었다.** 이름으로 찾도록 고쳤다 |
+| 가드 메시지 | 초안이 남아 있을 때 무엇을 하면 되는지(Store 워크플로 `action=delete` 후 재실행)를 메시지에 넣었다 |
+
+실제 릴리스 절차(성공한 순서):
+
+1. 버전 범프 PR을 머지한다(`main`은 직접 푸시 금지).
+2. `git tag -m "v0.9.0" v0.9.0 && git push origin v0.9.0` — 이 저장소는 `tag.gpgSign=true`라
+   **`-m` 없이 태그를 만들면 에디터가 열린다.** 메시지를 주면 SSH 서명 태그가 만들어진다.
+3. 파이프라인이 릴리스 4종 + Store 초안을 만든다. `store-draft`는 거기서 멈춘다.
+4. Partner Center에서 초안의 `Pricing and availability`를 확인한다.
+5. `Store` 워크플로 `action=commit` → `Submission Committed with status CommitStarted`.
+
+v0.9.0에서 확인된 값: 초안 `PriceId=Tier1022`, `IsAdvancedPricingModel=false`(단일가 전환),
+기본가 USD 1.99 유지.
+
 ## 9. 결정 필요 / 미검증
 
 해결됨:
@@ -417,22 +440,23 @@ Partner Center `Create Microsoft Entra ID` → `signup.microsoft.com` 흐름으�
 - `--priceId Tier1022`의 의미 — 기본가 **USD 1.99**로 확인(§8-7)
 - `submission delete` — pending 제출만 지운다(help 문구 + 실제 삭제 성공)
 - 자동화 범위 — **초안 생성까지**(§8-7). 커밋은 사람
+- **가격 모델 전환** — v0.9.0에서 단일가로 전환하기로 결정하고 커밋했다(§8-8)
+- 태그 트리거 전체 경로 — v0.9.0에서 릴리스 + 초안 + 커밋까지 완주(§8-8)
 
 결정 필요:
 
-1. **가격 모델 전환을 받아들일지** — `--priceId`로 커밋하면 `IsAdvancedPricingModel`이
-   `true → false`로 바뀐다. 기본가와 시장 파생 가격은 같을 것으로 보이지만 커밋 뒤 확인이 필요하다(§8-7)
-2. **승인 게이트** — Environment `store` 에 required reviewers 를 걸지(안 걸면 `store.yml`을 실행한
+1. **승인 게이트** — Environment `store` 에 required reviewers 를 걸지(안 걸면 `store.yml`을 실행한
    사람이 골 커밋자가 된다)
-3. **인증 방식** — 지금은 클라이언트 시크릿(만료 2028-10-20). 인증서로 바꿀지
-4. **버전 범프 자동화** — release-please 류 도입 여부
-5. **알림 수단** — 실패·게시 알림을 어디로 보낼지
+2. **인증 방식** — 지금은 클라이언트 시크릿(만료 2028-10-20). 인증서로 바꿀지
+3. **버전 범프 자동화** — release-please 류 도입 여부
+4. **알림 수단** — 실패·게시 알림을 어디로 보낼지
 
 미검증:
 
-- 커밋 후 원화 가격이 2,500으로 유지되는지(커밋 뒤 스토어 페이지에서 확인)
+- v0.9.0 게시 후 원화 가격이 2,500으로 유지되는지(게시 뒤 스토어 페이지에서 확인)
 - 한 번 커밋한 뒤에는 `--priceId` 없이도 보존되는지(그때는 `STORE_PRICE_TIER`를 지워도 된다)
 - `submission update`로 목록 문구만 교체하는 것이 가능한지(`PriceId` 요구 때문에 어려울 가능성)
+- 제출 생성이 실패했을 때 자동으로 재시도할지(지금은 사람이 초안을 지우고 재실행한다)
 - 클라이언트 시크릿 만료(2028-10-20) 전 회전 절차
 
 ## 10. 참고 자료
