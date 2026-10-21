@@ -10,7 +10,7 @@
 //! - [cache]: 표시 문자열 캐시
 //! - [gdi]: 미리보기용 DIB 변환만 남긴다
 //!
-//! 글리프는 16px master 하나뿐이다. 아이콘 px는 [render::scale_nearest]로 파생한다.
+//! 글리프는 16px master 하나뿐이다. 아이콘 px는 [render::scale_fit]으로 파생한다.
 
 pub mod cache;
 pub mod gdi;
@@ -26,7 +26,7 @@ pub use render::{Bitmap, Color};
 
 /// 캡션과 값을 위아래로 쌓은 트레이 아이콘.
 ///
-/// 16px master로 그린 뒤 요청한 px로 늘린다. `caption`은 [Metric::caption]이
+/// 16px master로 그린 뒤 요청한 px에 맞춘다([render::fit]: 정수배 + 여백, 또는 NN). `caption`은 [Metric::caption]이
 /// 만든 문자열(라벨·단위)이고 `value`는 숫자만이다. 둘 중 빈 줄은 건너뛴다.
 pub fn stacked(
     cache: &mut GlyphCache,
@@ -64,7 +64,7 @@ pub fn stacked(
         }
     }
 
-    render::scale_nearest(&out, px.max(1))
+    render::scale_fit(&out, px.max(1))
 }
 
 #[cfg(test)]
@@ -138,7 +138,7 @@ mod tests {
     /// 배율이 달라도 1비트여야 한다(회색이 섞이면 안 된다).
     #[test]
     fn every_size_stays_binary() {
-        for px in [16, 20, 24, 28, 32, 48] {
+        for px in [16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56] {
             let mut cache = GlyphCache::new(32);
             let bmp = white(&mut cache, &Metric::NetworkDown.caption("MB"), "100", px);
             assert_eq!((bmp.width, bmp.height), (px, px));
@@ -150,6 +150,61 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// 가로·세로로 잇닿은 잉크 run의 길이 목록.
+    fn runs(bmp: &Bitmap) -> Vec<i32> {
+        let mut out = Vec::new();
+        for horizontal in [true, false] {
+            for line in 0..bmp.height {
+                let mut run = 0;
+                for step in 0..=bmp.width {
+                    let (x, y) = if horizontal {
+                        (step, line)
+                    } else {
+                        (line, step)
+                    };
+                    if step < bmp.width && bmp.alpha_at(x, y) > 0 {
+                        run += 1;
+                    } else if run > 0 {
+                        out.push(run);
+                        run = 0;
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// 2배 이상 들어가는 크기(225%=36px 등)는 정수배로 그려 획이 고르다.
+    /// 모든 run이 배율의 배수여야 한다(2.25배 NN이면 2와 3이 섞인다).
+    #[test]
+    fn large_sizes_keep_uniform_strokes() {
+        for px in [32, 36, 40, 44, 48, 52, 56, 64] {
+            let scale = px / pixel::MASTER_PX;
+            for metric in Metric::ALL {
+                for unit in metric.units() {
+                    let mut cache = GlyphCache::new(32);
+                    let bmp = white(&mut cache, &metric.caption(unit), "1.8", px);
+                    assert_eq!((bmp.width, bmp.height), (px, px));
+                    for run in runs(&bmp) {
+                        assert_eq!(run % scale, 0, "px={px} {metric:?}: run {run}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// 여백을 둔 크기에서도 블록은 가운데에 있다.
+    #[test]
+    fn padded_icons_are_centred() {
+        let mut cache = GlyphCache::new(32);
+        let bmp = white(&mut cache, "MEM", "100", 36);
+        let ink_rows: Vec<i32> = (0..36)
+            .filter(|&y| (0..36).any(|x| bmp.alpha_at(x, y) > 0))
+            .collect();
+        assert_eq!(ink_rows.first(), Some(&2), "위 여백 2px");
+        assert_eq!(ink_rows.last(), Some(&33), "아래 여백 2px");
     }
 
     #[test]

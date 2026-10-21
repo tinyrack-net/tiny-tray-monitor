@@ -31,8 +31,8 @@ interfaces:
 # 아이콘 레이아웃을 바꿨다면 시트를 눈으로 확인한다.
 dump:
 	cargo run --release -- --dump
-	python tools/icon_sheet.py out/sheet-dark.bmp 16 dark_px16 dark_px20 dark_px24 dark_px32
-	python tools/icon_sheet.py out/sheet-light.bmp 16 light_px16 light_px20 light_px24 light_px32
+	python tools/icon_sheet.py out/sheet-dark.bmp 16 dark_px16 dark_px20 dark_px24 dark_px28 dark_px32 dark_px36 dark_px40 dark_px48
+	python tools/icon_sheet.py out/sheet-light.bmp 16 light_px16 light_px20 light_px24 light_px28 light_px32 light_px36 light_px40 light_px48
 
 # 글리프 표를 다시 만든다. 결과는 커밋한다.
 glyphs:

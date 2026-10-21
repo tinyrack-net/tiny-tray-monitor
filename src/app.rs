@@ -130,6 +130,14 @@ impl App {
             }
         }
 
+        // 배율은 실행 중에도 바뀐다. 시작할 때 잰 크기를 계속 쓰면 셸이 옛 크기의 아이콘을
+        // 늘려 흐릿해진다(docs/SPIKE.md §16). 확인은 창 하나를 찾는 정도라 매 틱 한다.
+        // 타이머 창은 message-only라 WM_DPICHANGED/WM_SETTINGCHANGE를 받지 못한다.
+        let px = crate::win32::tray_icon_size();
+        if let Some(previous) = self.tray.set_px(px) {
+            logging::info(format!("tray icon size {previous}px -> {px}px"));
+        }
+
         let sample = self.sampler.sample();
         self.apply(sample);
         self.report_stats();

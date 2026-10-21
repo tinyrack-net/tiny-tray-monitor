@@ -167,6 +167,15 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     identity stays in the Explorer session and no key is written for it again until Explorer
     restarts (a normal `Exit` or the installer's `WM_CLOSE` does not do this).
     `docs/SPIKE.md` §15. Nothing in `src` reads this key: pinning is the user's decision.
+25. **The icon size changes while the app runs.** Under PerMonitorV2,
+    `GetSystemMetrics(SM_CXSMICON)` keeps the size of the DPI the process started with, so after
+    the user changes the display scale the shell stretched our old 16px icons to 36px and they
+    went blurry. `win32::tray_icon_size` uses `GetSystemMetricsForDpi` with the DPI of
+    `Shell_TrayWnd`, `App::tick` re-reads it every tick (the timer window is message-only and
+    gets no `WM_DPICHANGED`), and `Tray::set_px` redraws every slot with `set_icon` at once,
+    never recreating an icon (rule 1). From 2x up the 16px master is drawn at an integer
+    multiple and centred (`render::fit`, 36px = 2x + 2px margin), so strokes stay uniform.
+    `tray-monitor --dpi --watch` shows the values live. `docs/SPIKE.md` §16.
 
 ## Merging
 

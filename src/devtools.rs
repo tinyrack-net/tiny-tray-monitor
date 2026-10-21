@@ -43,6 +43,35 @@ pub fn theme() {
     );
 }
 
+/// 아이콘 크기를 정하는 DPI 값들을 출력한다. `--watch`면 1초마다 바뀐 줄만 다시 찍는다.
+///
+/// 실행 중에 배율을 바꿔 가며 어느 값이 따라가는지 보는 용도다(`docs/SPIKE.md` §16).
+pub fn dpi(watch: bool) {
+    let mut last = String::new();
+    loop {
+        let report = crate::win32::dpi_report();
+        let line = format!(
+            "system dpi {:>3}  taskbar dpi {:>4}  GetSystemMetrics(SM_CXSMICON) {:>2}px  -> icon {:>2}px ({})",
+            report.system_dpi,
+            report
+                .taskbar_dpi
+                .map(|dpi| dpi.to_string())
+                .unwrap_or_else(|| "-".into()),
+            report.legacy_px,
+            report.px,
+            icon::render::fit_label(report.px),
+        );
+        if line != last {
+            println!("{line}");
+            last = line;
+        }
+        if !watch {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
 /// RGBA 비트맵을 BMP로 저장한다. `zoom`은 정수 배율, 배경색 위에 합성한다.
 pub fn write_bmp(path: &str, bitmap: &Bitmap, zoom: i32, background: Color) -> std::io::Result<()> {
     let zoom = zoom.max(1);
@@ -120,15 +149,6 @@ const LONG_VALUES: [(&str, Metric, &str, &str); 3] = [
 ];
 
 /// 배율이 master(16px)의 정수배인지 표시한다.
-fn scale_label(px: i32) -> String {
-    let master = icon::pixel::MASTER_PX;
-    if px % master == 0 {
-        format!("{}x", px / master)
-    } else {
-        format!("NN {:.2}x", px as f32 / master as f32)
-    }
-}
-
 /// 알파 계조(0 제외). 1비트면 값이 하나뿐이어야 한다.
 fn alpha_levels(bitmap: &Bitmap) -> Vec<u8> {
     let mut levels: Vec<u8> = bitmap
@@ -141,6 +161,9 @@ fn alpha_levels(bitmap: &Bitmap) -> Vec<u8> {
     levels.dedup();
     levels
 }
+
+/// 덤프하는 아이콘 크기. 100~300% 배율 중 시트로 판정할 것들이다(`Makefile`의 `dump`와 맞춘다).
+const DUMP_SIZES: [i32; 8] = [16, 20, 24, 28, 32, 36, 40, 48];
 
 /// 아이콘 렌더 결과를 배경별·px별로 덤프하고 1비트 여부를 출력한다.
 pub fn dump() {
@@ -174,7 +197,7 @@ pub fn dump() {
             }
         };
 
-        for px in [16, 20, 24, 32] {
+        for px in DUMP_SIZES {
             for metric in Metric::ALL {
                 let (number, unit) = sample_value(metric);
                 save(
@@ -205,7 +228,7 @@ pub fn dump() {
     println!("{:<6} {:>10} {:>6}  alpha levels", "px", "scale", "block");
     let mut cache = GlyphCache::new(GlyphCache::DEFAULT_CAPACITY);
     let white = Color(255, 255, 255);
-    for px in [16, 20, 24, 28, 32, 48] {
+    for px in [16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56] {
         let bitmap = icon::stacked(
             &mut cache,
             &Metric::NetworkDown.caption("MB"),
@@ -217,7 +240,7 @@ pub fn dump() {
         println!(
             "{:<6} {:>10} {:>6}  {:?}{}",
             px,
-            scale_label(px),
+            icon::render::fit_label(px),
             block,
             alpha_levels(&bitmap),
             if block <= icon::pixel::MASTER_PX {
@@ -229,7 +252,10 @@ pub fn dump() {
     }
 
     println!();
-    println!("out/{{dark,light}}_px{{16,20,24,32}}_{{CPU,MEM,NETD,NETU,GPU,VRM}}@{ZOOM}x.bmp");
+    println!(
+        "out/{{dark,light}}_px{{{}}}_{{CPU,MEM,NETD,NETU,GPU,VRM}}@{ZOOM}x.bmp",
+        DUMP_SIZES.map(|px| px.to_string()).join(",")
+    );
     println!("out/{{dark,light}}_long_{{cpu100,dn1.2gb,dn999kb}}@{ZOOM}x.bmp");
 }
 
@@ -360,11 +386,13 @@ mod tests {
     }
 
     #[test]
-    fn scale_labels_distinguish_integer_multiples() {
-        assert_eq!(scale_label(16), "1x");
-        assert_eq!(scale_label(32), "2x");
-        assert!(scale_label(20).starts_with("NN"));
-        assert!(scale_label(24).starts_with("NN"));
+    fn fit_labels_distinguish_integer_multiples() {
+        use crate::icon::render::fit_label;
+        assert_eq!(fit_label(16), "1x");
+        assert_eq!(fit_label(32), "2x");
+        assert_eq!(fit_label(36), "2x+2");
+        assert!(fit_label(20).starts_with("NN"));
+        assert!(fit_label(24).starts_with("NN"));
     }
 
     #[test]
