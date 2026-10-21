@@ -228,3 +228,104 @@ jobs:
             Select-Object -ExpandProperty FullName)
           $assets += (Resolve-Path dist/SHA256SUMS).Path
           gh release create $env:GITHUB_REF_NAME @assets --generate-notes
+
+  store-draft:
+    name: Store draft
+    # 태그 릴리스에서 MSIX를 Store 제출 "초안"으로 올리고 거기서 멈춘다.
+    # 이 제품은 가격을 시장별로 관리해서 제출 API가 기본 가격을 되돌려주지 못한다.
+    # --priceId 로 기본가를 명시하면 가격 모델이 고급에서 단일 기본가로 바뀌고,
+    # 주지 않으면 CLI가 스스로 멈춘다(둘 다 실측). 그래서 CI는 초안까지이고
+    # 커밋은 사람이 Partner Center에서 가격을 확인한 뒤 한다.
+    # 근거: docs/RELEASE-AUTOMATION.md §8-6
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - release
+    runs-on: windows-2025
+    timeout-minutes: 30
+    environment: store
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: tray-monitor-packages
+          path: dist
+      - uses: microsoft/microsoft-store-apppublisher@v1.1
+      - name: Reconfigure the Store CLI
+        shell: pwsh
+        env:
+          STORE_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          STORE_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          STORE_CLIENT_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+          STORE_SELLER_ID: ${{ secrets.SELLER_ID }}
+        run: |
+          # 자격증명은 커맨드라인에 남지 않도록 환경변수로 받는다.
+          msstore reconfigure `
+            --tenantId $env:STORE_TENANT_ID `
+            --sellerId $env:STORE_SELLER_ID `
+            --clientId $env:STORE_CLIENT_ID `
+            --clientSecret $env:STORE_CLIENT_SECRET
+          if ($LASTEXITCODE -ne 0) { throw "msstore reconfigure failed with $LASTEXITCODE" }
+      - name: Refuse to run with a pending submission
+        shell: pwsh
+        # 제출은 동시에 하나만 유효하다. 진행 중인 초안이 있으면 덮지 않고 멈춘다.
+        env:
+          STORE_PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+        run: |
+          $json = msstore submission get $env:STORE_PRODUCT_ID 2>$null | ConvertFrom-Json
+          if ($json.Status -ne 'Published') {
+            throw "a submission is already pending (Status: $($json.Status))"
+          }
+      - name: Upload the package as a draft
+        shell: pwsh
+        env:
+          STORE_PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+          STORE_PRICE_TIER: ${{ vars.STORE_PRICE_TIER }}
+        run: |
+          $msix = (Get-ChildItem dist -Filter '*.msix' | Select-Object -First 1).FullName
+          $arguments = @($msix, '-id', $env:STORE_PRODUCT_ID, '--noCommit')
+          if ($env:STORE_PRICE_TIER) {
+            # 시장별 가격이 보존된다는 보장이 없으므로 기본가를 명시하고 커밋하지 않는다.
+            $arguments += @('--priceId', $env:STORE_PRICE_TIER)
+          }
+          msstore publish @arguments
+          if ($LASTEXITCODE -ne 0) { throw "msstore publish failed with $LASTEXITCODE" }
+      - name: Verify the draft
+        shell: pwsh
+        env:
+          STORE_PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+          TAG_VERSION: ${{ github.ref_name }}
+        run: |
+          $json = msstore submission get $env:STORE_PRODUCT_ID 2>$null | ConvertFrom-Json
+          if ($json.Status -ne 'PendingCommit') {
+            throw "expected a pending draft, got $($json.Status)"
+          }
+          $version = $env:TAG_VERSION.TrimStart('v')
+          $package = $json.ApplicationPackages |
+            Where-Object { $_.Version } | Select-Object -First 1
+          if (-not $package) { throw 'the draft carries no package' }
+          if (-not $package.Version.StartsWith("$version.")) {
+            throw "the draft carries $($package.Version), expected $version.x"
+          }
+          Write-Output "package: $($package.Version)"
+          Write-Output "priceId: $($json.Pricing.PriceId)"
+          Write-Output "advancedPricing: $($json.Pricing.IsAdvancedPricingModel)"
+      - name: Explain the next step
+        shell: pwsh
+        # 제출 API는 시장별 가격을 읽지도 쓰지도 못한다(SalesUnsupportedWarning).
+        # 그래서 가격 확인은 CI가 대신할 수 없고 사람이 해야 한다.
+        run: |
+          @'
+          ## The Store submission is a draft
+
+          Nothing is live yet. Before committing:
+
+          1. Open Partner Center -> TinyTrayManager -> the pending submission.
+          2. Check **Pricing and availability**. The submission API cannot read or
+             write per-market prices, so CI cannot verify them for you.
+          3. Check that the package version and the listing are the ones you expect.
+
+          Then run the **Store** workflow with `action=commit`,
+          or submit the draft from Partner Center.
+          '@ | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY

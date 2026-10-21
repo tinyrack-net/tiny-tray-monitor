@@ -155,70 +155,30 @@ push tag v*.*.*
 - `store-publish`는 `package` 아티팩트(`dist/*.msix`)를 그대로 쓴다. 다시 빌드하지 않는다.
 - 트리거를 하나로 두면 "릴리스된 패키지 = 제출된 패키지"가 구조적으로 보장된다.
 
-### 4-2. 워크플로 초안
+### 4-2. 구현된 워크플로
 
-```yaml
-  store-publish:
-    name: Store publish
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs:
-      - release
-    runs-on: windows-2025
-    timeout-minutes: 30
-    environment: store            # required reviewers 로 사람 승인 게이트
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
-        with:
-          name: tray-monitor-packages
-          path: dist
+| 파일 | 트리거 | 하는 일 |
+| --- | --- | --- |
+| `.github/workflows/pipeline.yml` 의 `store-draft` | 태그(`v*`) — `release` 뒤 | 자격증명 설정 → 진행 중 제출 가드 → `msstore publish --noCommit` → 초안 검증. **커밋하지 않는다** |
+| `.github/workflows/store.yml` | `workflow_dispatch` (`action=commit\|delete`) | 사람이 확인한 뒤 초안을 커밋하거나 폐기한다 |
 
-      - uses: microsoft/microsoft-store-apppublisher@v1.1
+`store-draft`의 단계:
 
-      - name: Reconfigure the Store CLI
-        shell: pwsh
-        run: |
-          msstore reconfigure `
-            --tenantId ${{ secrets.AZURE_AD_TENANT_ID }} `
-            --sellerId ${{ secrets.SELLER_ID }} `
-            --clientId ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }} `
-            --clientSecret ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+1. `microsoft/microsoft-store-apppublisher@v1.1`로 CLI 준비
+2. `msstore reconfigure` — 자격증명은 환경변수로 넘겨 커맨드라인에 남기지 않는다
+3. 가드: `msstore submission get` 결과가 `Published`가 아니면 중단(초안 중복 방지)
+4. `msstore publish <msix> -id <productId> --noCommit [--priceId $STORE_PRICE_TIER]`
+5. 검증: 상태가 `PendingCommit`인지, 패키지 버전이 태그와 같은지. `PriceId`와
+   `IsAdvancedPricingModel`을 로그에 남긴다
+6. 요약에 "무엇을 확인해야 하는지"를 적는다(가격은 CI가 검증할 수 없다)
 
-      - name: Guard against a pending submission
-        shell: pwsh
-        # 진행 중인 제출이 있으면 여기서 멈춘다. 새 제출을 겹쳐 만들지 않는다.
-        run: |
-          $json = msstore submission get ${{ vars.STORE_PRODUCT_ID }} | ConvertFrom-Json
-          # status 가 PendingCommit/Certification/... 이면 throw (필드명은 미검증)
+`STORE_PRODUCT_ID`·`STORE_PRICE_TIER`는 Environment 변수다(시크릿이 아니다). `store` environment에는
+required reviewers를 걸어 두면 그 승인이 골 커밋 승인이 된다.
 
-      - name: Upload the package as a draft
-        shell: pwsh
-        run: |
-          $msix = (Get-ChildItem dist -Filter '*.msix' | Select-Object -First 1).FullName
-          msstore publish $msix -id ${{ vars.STORE_PRODUCT_ID }} --noCommit
+러너 이미지(`windows-2025`)에 `Microsoft.WindowsDesktop.App 9.0.20`이 있어서 CLI는 추가 설치 없이
+뜬다(실측 — 로컬에서는 수동 설치가 필요했다).
 
-      - name: Verify the pricing and the package version
-        shell: pwsh
-        # 가격이 초기화됐거나 패키지 버전이 태그와 다르면 여기서 끊는다.
-        # 실패하면 초안을 폐기하고 사람이 판단한다.
-        run: |
-          msstore submission get ${{ vars.STORE_PRODUCT_ID }} |
-            Out-File -Encoding utf8 submission.json
-          # Pricing.PriceId == Tier1022, MarketSpecificPricings 가 KRW 2500 유지,
-          # package version == 태그 버전 을 확인 (검증 스크립트는 별도 작성)
-
-      - name: Commit the submission
-        shell: pwsh
-        run: msstore submission publish ${{ vars.STORE_PRODUCT_ID }}
-
-      - name: Poll the certification
-        shell: pwsh
-        run: msstore submission poll ${{ vars.STORE_PRODUCT_ID }}
-```
-
-`vars.STORE_PRODUCT_ID`는 Environment 변수로 둔다(시크릿이 아니다).
+`msstore submission poll`은 인증 대기까지 붙잡고 있을 수 있어 워크플로에 넣지 않는다.
 
 ### 4-3. 시크릿과 환경
 
@@ -263,7 +223,7 @@ push tag v*.*.*
 | --- | --- | --- |
 | **P1** | 릴리스 오케스트레이션: 버전 범프 PR 자동화(선택), 태그 푸시 | `release` job이 기존과 동일하게 동작 |
 | **P2** | **자격증명 스파이크(읽기 전용)** — Entra 앱 등록, Manager 역할, `msstore submission get` | **완료(§8-6)**: 테넌트·앱·Manager 역할·자격증명 동작 확인, `Pricing` 실측 |
-| **P3** | `store-publish` 잡 추가(`--noCommit` + 검증 + 승인 + 커밋) | 태그 하나로 Store 제출까지 완료 |
+| **P3** | `store-draft`(태그) + `store.yml`(수동 커밋) | **완료(§8-7)**: 워크플로 구현. 커밋은 사람 게이트 |
 | **P4** | 목록 문구 자동 반영(`listing.md` → `submission updateMetadata`) | 문구 변경이 제출에 반영되고 가격은 불변 |
 | **P5** | 게시 검증·알림·(선택) winget 매니페스트 | 게시 전이 감지와 실패 알림 |
 
@@ -417,31 +377,62 @@ Partner Center `Create Microsoft Entra ID` → `signup.microsoft.com` 흐름으�
 덧붙여: 같은 덤프에서 **0.8.0 업데이트가 `Status: Published`, 패키지 `0.8.0.0`** 인 것도 확인했다.
 스토어 페이지 가격은 그대로 **KRW 2,500** 이다.
 
+### 8-7. P3 실측 — Store 제출 자동화의 경계 (2026-10-21)
+
+`msstore publish ... --noCommit`을 두 방식으로 돌려 봤다. 둘 다 실제 제품에 시도했고, 초안은
+실행 뒤 폐기해 제품 상태는 그대로다(마지막 제출은 여전히 `Published`, `PriceId="Base"`).
+
+| 실행 | 결과 |
+| --- | --- |
+| `--noCommit --priceId Tier1022` | **성공** — `Setting the base price to Tier1022` → 패키지 업로드 → `Skipping submission commit`. 초안은 `Status=PendingCommit`, `PriceId="Tier1022"`, 기본가는 **USD 1.99**(현재와 동일). 단 **`IsAdvancedPricingModel`이 `true` → `false`** 로 바뀐다 |
+| `--noCommit` (옵션 없이) | **실패(exit 127)** — `Could not preserve this product's price. The Store returned a base price of 'Base', which the submission API rejects on update. … Publishing has been stopped so the price is left as it is.` **잔여 초안 없음**(다음 조회에서 다시 `Published`) |
+
+읽어낸 것:
+
+- 안전한 경로(옵션 없음)는 완주하지 못하므로 **API만으로는 자동화할 수 없다.**
+- 자동화하는 유일한 경로(`--priceId`)는 제품의 **가격 모델을 바꾼다.** 기본가는 같지만 고급(시장별)에서
+  단일 기본가로 내려간다.
+- `MarketSpecificPricings`에 KR이 없다는 것은 원화 가격이 **기본가에서 파생**된다는 뜻이다. 기본가가
+  Tier1022(USD 1.99)로 그대로이므로 커밋해도 2,500으로 유지될 가능성이 높다. 다만 API로는 검증할 수
+  없어 **커밋 전 사람 확인이 필요**하다.
+- 두 실행 모두 **초안 단계에서는 아무것도 라이브로 가지 않는다.** 초안은 `submission delete`로 폐기된다.
+
+그래서 워크플로는 이렇게 동작한다.
+
+1. 태그 → `store-draft`: 초안 생성(`--priceId $STORE_PRICE_TIER`) → 초안 검증 → **멈춤**
+2. 사람: Partner Center에서 `Pricing and availability` 확인
+3. `Store` 워크플로 `action=commit` → 커밋 (Environment `store` 승인)
+
+한 번 커밋하고 나면 `IsAdvancedPricingModel=false`가 되므로 이후에는 `--priceId` 없이도 보존될
+것으로 본다(미검증 — 그때는 `STORE_PRICE_TIER` 변수를 지워도 된다).
+
 ## 9. 결정 필요 / 미검증
 
 해결됨:
 
 - 테넌트 확보 — **B안으로 완료**(§8-6). Entra 앱 + Manager(Windows) 역할 + 자격증명 동작 확인
-- 로컬 도구 — 갖춰짐(§8-1)
+- 로컬 도구 — 갖춰짐(§8-1). 러너에는 WindowsDesktop 9.0이 이미 있다
 - 유료 제품에서 `msstore` 동작 — **동작한다**(§8-6)
 - 제품 `Pricing`의 형태 — **`PriceId="Base"`, `IsAdvancedPricingModel=true`**(§8-6)
+- `--priceId Tier1022`의 의미 — 기본가 **USD 1.99**로 확인(§8-7)
+- `submission delete` — pending 제출만 지운다(help 문구 + 실제 삭제 성공)
+- 자동화 범위 — **초안 생성까지**(§8-7). 커밋은 사람
 
 결정 필요:
 
-1. **범위** — 가격을 API로 검증할 수 없으므로 "초안 생성까지 자동 + 사람 커밋"이 사실상 상한이다.
-   그대로 갈지, 아니면 Store 제출을 계속 수동으로 둘지
-2. **승인 게이트** — Environment `store` 에 required reviewers 를 걸지
+1. **가격 모델 전환을 받아들일지** — `--priceId`로 커밋하면 `IsAdvancedPricingModel`이
+   `true → false`로 바뀐다. 기본가와 시장 파생 가격은 같을 것으로 보이지만 커밋 뒤 확인이 필요하다(§8-7)
+2. **승인 게이트** — Environment `store` 에 required reviewers 를 걸지(안 걸면 `store.yml`을 실행한
+   사람이 골 커밋자가 된다)
 3. **인증 방식** — 지금은 클라이언트 시크릿(만료 2028-10-20). 인증서로 바꿀지
 4. **버전 범프 자동화** — release-please 류 도입 여부
 5. **알림 수단** — 실패·게시 알림을 어디로 보낼지
 
 미검증:
 
-- `--priceId Tier1022`가 실제로 USD 1.99 기본가인지 (문서 예시 `Tier1052 = $4.99`에서 역산)
-- `msstore publish --noCommit`이 `PriceId="Base"` 제품에서 어떤 초안을 만드는지, 가격이 어떻게 바뀌는지
+- 커밋 후 원화 가격이 2,500으로 유지되는지(커밋 뒤 스토어 페이지에서 확인)
+- 한 번 커밋한 뒤에는 `--priceId` 없이도 보존되는지(그때는 `STORE_PRICE_TIER`를 지워도 된다)
 - `submission update`로 목록 문구만 교체하는 것이 가능한지(`PriceId` 요구 때문에 어려울 가능성)
-- `submission delete`의 정확한 동작
-- GitHub Actions 러너에서 .NET 9 설치를 `microsoft-store-apppublisher` 액션이 처리하는지
 - 클라이언트 시크릿 만료(2028-10-20) 전 회전 절차
 
 ## 10. 참고 자료

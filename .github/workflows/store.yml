@@ -1,0 +1,80 @@
+name: Store
+
+# 태그 릴리스가 만든 Store 제출 초안을 사람이 마무리하는 워크플로.
+# pipeline.yml 의 store-draft 는 초안만 만들고 커밋하지 않는다.
+# 이 제품은 가격을 시장별로 관리해서 제출 API로 기본 가격을 되돌려받지 못하고,
+# sales 리소스도 더 이상 지원되지 않는다(SalesUnsupportedWarning).
+# 즉 CI가 원화 가격을 검증할 방법이 없어서, 커밋 전에 사람이 확인해야 한다.
+# 근거: docs/RELEASE-AUTOMATION.md §8-6
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to do with the pending submission
+        type: choice
+        required: true
+        default: commit
+        options:
+          - commit
+          - delete
+
+permissions:
+  contents: read
+
+concurrency:
+  # 초안은 하나뿐이므로 동시에 두 번 돌지 않게 한다.
+  group: store-submission
+  cancel-in-progress: false
+
+jobs:
+  submission:
+    name: Submission
+    runs-on: windows-2025
+    timeout-minutes: 20
+    # required reviewers 를 걸어 두면 이 승인이 곧 커밋 승인이 된다.
+    environment: store
+    steps:
+      - uses: microsoft/microsoft-store-apppublisher@v1.1
+      - name: Reconfigure the Store CLI
+        shell: pwsh
+        env:
+          STORE_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          STORE_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          STORE_CLIENT_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+          STORE_SELLER_ID: ${{ secrets.SELLER_ID }}
+        run: |
+          msstore reconfigure `
+            --tenantId $env:STORE_TENANT_ID `
+            --sellerId $env:STORE_SELLER_ID `
+            --clientId $env:STORE_CLIENT_ID `
+            --clientSecret $env:STORE_CLIENT_SECRET
+          if ($LASTEXITCODE -ne 0) { throw "msstore reconfigure failed with $LASTEXITCODE" }
+      - name: Show the pending submission
+        shell: pwsh
+        env:
+          STORE_PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+        run: |
+          $json = msstore submission get $env:STORE_PRODUCT_ID 2>$null | ConvertFrom-Json
+          if ($json.Status -ne 'PendingCommit') {
+            throw "there is no pending submission (Status: $($json.Status))"
+          }
+          Write-Output "submission: $($json.Id)"
+          Write-Output "priceId: $($json.Pricing.PriceId)"
+          Write-Output "advancedPricing: $($json.Pricing.IsAdvancedPricingModel)"
+          $json.ApplicationPackages |
+            Where-Object { $_.Version } |
+            ForEach-Object { Write-Output "package: $($_.Version)" }
+      - name: Commit or delete the submission
+        shell: pwsh
+        env:
+          STORE_PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
+        run: |
+          if ('${{ inputs.action }}' -eq 'delete') {
+            msstore submission delete $env:STORE_PRODUCT_ID --no-confirm
+          } else {
+            msstore submission publish $env:STORE_PRODUCT_ID
+          }
+          if ($LASTEXITCODE -ne 0) {
+            throw "msstore ${{ inputs.action }} failed with $LASTEXITCODE"
+          }
