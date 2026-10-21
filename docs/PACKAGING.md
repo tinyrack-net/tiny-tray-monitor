@@ -75,7 +75,7 @@ manifest 최소 형태(검증됨):
         <uap5:Extension Category="windows.startupTask"
                         Executable="tray-monitor.exe"
                         EntryPoint="Windows.FullTrustApplication">
-          <uap5:StartupTask TaskId="TrayMonitorStartup" Enabled="false"
+          <uap5:StartupTask TaskId="TrayMonitorStartup" Enabled="true"
                             DisplayName="tray-monitor" />
         </uap5:Extension>
       </Extensions>
@@ -334,6 +334,8 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 3. MSIX `-Register` → 트레이, 설정 창, `Run at sign-in` 토긘이 StartupTask를 켜는지.
 4. MSIX에서 설정 변경 → `LocalState\config.toml`에 기록되는지.
 5. MSIX 버전 업데이트 → 같은 GUID 키가 새 경로로 옮겨지고 승격 유지, 온보딩 없음.
+6. 새 설치 직후 `HKCU\...\Run`에 `tray-monitor` 값이 있는지, 설정에서 끄면 사라지는지,
+   업그레이드해도 다시 생기지 않는지(§11).
 
 ---
 
@@ -434,3 +436,24 @@ GUID만으로 성립했다.
 > 주의: 실행 중인 앱을 `taskkill /F`로 죽이면 죽은 창의 정체성이 Explorer 세션에 남아,
 > 같은 GUID·경로로 다시 등록해도 키가 기록되지 않는다. 그때는 Explorer를 재시작해야 한다.
 > 정상 종료 경로(`Exit`, IPC 창의 `WM_CLOSE`)를 쓴다.
+
+---
+
+## 11. 새 설치의 자동 시작 기본값 (P8)
+
+새로 설치하면 `Run at sign-in`이 **켜진 상태**로 시작한다. 업그레이드는 사용자가 앱 설정에서
+바꾼 값을 건드리지 않는다.
+
+| 배포 | 켜는 지점 | 업그레이드에서 다시 켜지지 않는 이유 |
+| --- | --- | --- |
+| Inno installer | `[Tasks]`의 `autostart`(`checkedonce`) + `[Registry]`의 HKCU Run 값 | `checkedonce`는 이전 버전이 설치되어 있으면 작업을 기본 해제한다(설치 문서: "unchecked initially when Setup finds a previous version"). 선택되지 않은 `[Registry]` 항목은 처리되지 않으므로 기존 값이 그대로 남는다 |
+| MSIX | `AppxManifest.xml`의 `uap5:StartupTask Enabled="true"` | `Enabled`는 "**first starts** enabled or disabled"(문서) — 설치 시점의 초기 상태만 정한다. 사용자가 Task Manager나 Windows 설정에서 끄면 유지된다 |
+
+- 제거는 두 경로 모두 Run 값을 지운다(`[Registry] Flags: uninsdeletevalue` + `[Code]`의
+  `RegDeleteValue`). 앱 설정에서 직접 켠 값도 남지 않는다.
+- 설치 프로그램의 마지막 페이지 "Launch TinyTrayManager" 체크박스(기본 체크)는 그대로 둔다.
+  무인 설치에서는 실행하지 않는다(`skipifsilent`) — CI의 무인 설치/제거 스모크가 앱이 떠
+  있는 상태와 부딪히지 않게 한다.
+- 값 형식은 앱과 같아야 한다: `"C:\...\tray-monitor.exe"`(따옴표 포함). `startup.rs`의
+  `is_enabled_named`가 문자열을 그대로 비교한다.
+- 포터블 zip은 설치 단계가 없어 예전처럼 꺼진 상태로 시작한다.

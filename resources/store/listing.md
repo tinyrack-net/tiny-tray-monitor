@@ -38,7 +38,7 @@ Each readout is a single tray icon with a coloured value, so you can read the nu
 - Six independent readouts. Turn off the ones you do not need.
 - Per-readout colours, or follow the taskbar theme.
 - Update interval from one second up.
-- Optional "Run at sign-in" so the readouts are there after a reboot.
+- "Run at sign-in" is on by default, so the readouts are there after a reboot. Turn it off in Settings.
 - Option to ignore virtual adapters (VPNs, Hyper-V switches) so the numbers match the physical NIC.
 - A hint in the settings window that shows where to pin the readouts, with a button that opens the
 taskbar settings.
