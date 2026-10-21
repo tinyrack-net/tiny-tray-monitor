@@ -88,6 +88,8 @@ pub struct Text {
     // 표시 항목
     pub group_readouts: &'static str,
     pub hint_readouts: &'static str,
+    pub hint_taskbar: &'static str,
+    pub open_taskbar_settings: &'static str,
     pub metric_cpu: &'static str,
     pub metric_memory: &'static str,
     pub metric_network_down: &'static str,
@@ -134,13 +136,6 @@ pub struct Text {
     pub gpu_tooltip: &'static str,
     pub vram_tooltip: &'static str,
 
-    // 첫 실행 안내
-    pub promotion_all: &'static str,
-    pub promotion_some: &'static str,
-    pub promotion_hidden: &'static str,
-    pub promotion_unknown: &'static str,
-    pub onboarding_body: &'static str,
-
     // 시작 실패·중복 실행
     pub already_running: &'static str,
     pub start_failed: &'static str,
@@ -160,6 +155,8 @@ pub const EN: Text = Text {
 
     group_readouts: "Readouts",
     hint_readouts: "Choose which values appear in the taskbar.",
+    hint_taskbar: "Windows hides new tray icons; turn them on under \"Other system tray icons\".",
+    open_taskbar_settings: "Open taskbar settings",
     metric_cpu: "CPU",
     metric_memory: "Memory",
     metric_network_down: "Network down",
@@ -201,17 +198,6 @@ pub const EN: Text = Text {
     gpu_tooltip: "{0}  {1} busy",
     vram_tooltip: "GPU VRAM {0} used  ({1} of {2})",
 
-    promotion_all: "the readouts are visible in the taskbar",
-    promotion_some: "{0} of {1} readouts are visible; the rest are hidden in the overflow area",
-    promotion_hidden: "the readouts are hidden in the taskbar overflow area",
-    promotion_unknown: "the tray settings could not be read",
-    onboarding_body: "{0} is running.\n\n\
-        Windows hides new tray icons in the overflow area by default, so the\n\
-        CPU / Memory / Network readouts may not be visible in the taskbar yet.\n\n\
-        Current state: {1}.\n\n\
-        Open the taskbar settings and turn on {0} under\n\
-        \"Other system tray icons\"?",
-
     already_running: "{0} is already running.",
     start_failed: "{0} could not start.\n\n{1}",
 
@@ -229,6 +215,8 @@ pub const KO: Text = Text {
 
     group_readouts: "표시 항목",
     hint_readouts: "작업 표시줄에 표시할 값을 고릅니다.",
+    hint_taskbar: "Windows는 새 아이콘을 숨깁니다. \"기타 시스템 트레이 아이콘\"에서 켜세요.",
+    open_taskbar_settings: "작업 표시줄 설정 열기",
     metric_cpu: "CPU",
     metric_memory: "메모리",
     metric_network_down: "네트워크 다운로드",
@@ -270,17 +258,6 @@ pub const KO: Text = Text {
     gpu_tooltip: "{0}  {1} 사용 중",
     vram_tooltip: "GPU VRAM {0} 사용 중  ({2} 중 {1})",
 
-    promotion_all: "모든 항목이 작업 표시줄에 보입니다",
-    promotion_some: "항목 {1}개 중 {0}개가 보입니다. 나머지는 숨겨진 아이콘 영역에 있습니다",
-    promotion_hidden: "항목이 작업 표시줄의 숨겨진 아이콘 영역에 있습니다",
-    promotion_unknown: "트레이 설정을 읽지 못했습니다",
-    onboarding_body: "{0}이(가) 실행 중입니다.\n\n\
-        Windows는 새 트레이 아이콘을 기본으로 숨겨진 아이콘 영역에 넣습니다.\n\
-        그래서 CPU / 메모리 / 네트워크 항목이 아직 작업 표시줄에 보이지 않을 수 있습니다.\n\n\
-        현재 상태: {1}.\n\n\
-        작업 표시줄 설정을 열어 \"기타 시스템 트레이 아이콘\"에서 {0}을(를)\n\
-        켜시겠습니까?",
-
     already_running: "{0}이(가) 이미 실행 중입니다.",
     start_failed: "{0}을(를) 시작하지 못했습니다.\n\n{1}",
 
@@ -298,6 +275,8 @@ pub const JA: Text = Text {
 
     group_readouts: "表示項目",
     hint_readouts: "タスクバーに表示する値を選びます。",
+    hint_taskbar: "Windows は新しいアイコンを隠します。「その他のシステム トレイ アイコン」でオンにします。",
+    open_taskbar_settings: "タスクバーの設定を開く",
     metric_cpu: "CPU",
     metric_memory: "メモリ",
     metric_network_down: "ネットワーク下り",
@@ -338,17 +317,6 @@ pub const JA: Text = Text {
     network_tooltip: "ネットワーク 下り {0}  上り {1}",
     gpu_tooltip: "{0}  {1} 使用中",
     vram_tooltip: "GPU VRAM {0} 使用中  ({2} / {1})",
-
-    promotion_all: "すべての項目がタスクバーに表示されています",
-    promotion_some: "{1} 個中 {0} 個の項目が表示されています。残りはオーバーフロー領域に隠れています",
-    promotion_hidden: "項目はタスクバーのオーバーフロー領域に隠れています",
-    promotion_unknown: "トレイの設定を読み取れませんでした",
-    onboarding_body: "{0} が実行中です。\n\n\
-        Windows は新しいトレイアイコンを既定でオーバーフロー領域に隠します。\n\
-        そのため CPU / メモリ / ネットワークの項目がまだタスクバーに表示されないことがあります。\n\n\
-        現在の状態: {1}。\n\n\
-        タスクバーの設定を開き、「その他のシステム トレイ アイコン」で {0} を\n\
-        オンにしますか?",
 
     already_running: "{0} は既に実行中です。",
     start_failed: "{0} を起動できませんでした。\n\n{1}",
@@ -471,31 +439,6 @@ pub fn vram_tooltip(percent: &str, used: &str, total: &str) -> String {
     fill(t().vram_tooltip, &[percent, used, total])
 }
 
-/// 트레이 승격 상태 문구.
-pub fn promotion_all() -> &'static str {
-    t().promotion_all
-}
-
-pub fn promotion_hidden() -> &'static str {
-    t().promotion_hidden
-}
-
-pub fn promotion_unknown() -> &'static str {
-    t().promotion_unknown
-}
-
-pub fn promotion_some(promoted: usize, total: usize) -> String {
-    fill(
-        t().promotion_some,
-        &[&promoted.to_string(), &total.to_string()],
-    )
-}
-
-/// 첫 실행 안내 본문. `{0}`은 제품 이름, `{1}`은 승격 상태 요약.
-pub fn onboarding(product: &str, summary: &str) -> String {
-    fill(t().onboarding_body, &[product, summary])
-}
-
 /// 중복 실행 알림.
 pub fn already_running(product: &str) -> String {
     fill(t().already_running, &[product])
@@ -544,6 +487,8 @@ mod tests {
             ("reset_done", text.reset_done),
             ("group_readouts", text.group_readouts),
             ("hint_readouts", text.hint_readouts),
+            ("hint_taskbar", text.hint_taskbar),
+            ("open_taskbar_settings", text.open_taskbar_settings),
             ("metric_cpu", text.metric_cpu),
             ("metric_memory", text.metric_memory),
             ("metric_network_down", text.metric_network_down),
@@ -579,11 +524,6 @@ mod tests {
             ("network_tooltip", text.network_tooltip),
             ("gpu_tooltip", text.gpu_tooltip),
             ("vram_tooltip", text.vram_tooltip),
-            ("promotion_all", text.promotion_all),
-            ("promotion_some", text.promotion_some),
-            ("promotion_hidden", text.promotion_hidden),
-            ("promotion_unknown", text.promotion_unknown),
-            ("onboarding_body", text.onboarding_body),
             ("already_running", text.already_running),
             ("start_failed", text.start_failed),
             ("save_failed", text.save_failed),
@@ -737,8 +677,6 @@ mod tests {
                 network_tooltip("1.2 MB/s", "340 KB/s"),
                 gpu_tooltip("NVIDIA GeForce RTX 4060", "14%"),
                 vram_tooltip("87%", "6.9 GB", "7.8 GB"),
-                promotion_some(1, 3),
-                onboarding("TinyTrayManager", promotion_all()),
                 already_running("TinyTrayManager"),
                 start_failed("TinyTrayManager", "boom"),
                 save_failed("denied"),

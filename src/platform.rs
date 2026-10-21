@@ -76,22 +76,20 @@ pub fn migrate_legacy_data() {
         return;
     }
 
-    for name in ["config.toml", "state.toml"] {
-        let source = legacy.join(name);
-        let destination = target.join(name);
-        if destination.exists() || !source.exists() {
-            continue;
-        }
-        if std::fs::create_dir_all(&target).is_err() {
-            continue;
-        }
-        if std::fs::copy(&source, &destination).is_ok() {
-            crate::logging::info(format!(
-                "copied the existing config from {} to {}",
-                source.display(),
-                destination.display()
-            ));
-        }
+    let source = legacy.join("config.toml");
+    let destination = target.join("config.toml");
+    if destination.exists() || !source.exists() {
+        return;
+    }
+    if std::fs::create_dir_all(&target).is_err() {
+        return;
+    }
+    if std::fs::copy(&source, &destination).is_ok() {
+        crate::logging::info(format!(
+            "copied the existing config from {} to {}",
+            source.display(),
+            destination.display()
+        ));
     }
 }
 

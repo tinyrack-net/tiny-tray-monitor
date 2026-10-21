@@ -41,8 +41,8 @@ Download `tray-monitor-<version>-windows-x64.zip`, unpack it anywhere and run
 Releases also contain `tray-monitor-<version>-windows-x64.msix`. It is **unsigned**: Windows will
 not install the file directly. The Store signs the submitted package; for local testing, unpack it
 and run `Add-AppxPackage -Register AppxManifest.xml` in developer mode. A packaged build keeps its
-config, state and log in
-`%LOCALAPPDATA%\Packages	inyrack.TinyTrayManager_<hash>\LocalState`, uses the Windows startup-task API
+config and log in
+`%LOCALAPPDATA%\Packages\Tinyrack.TinyTrayManager_<hash>\LocalState`, uses the Windows startup-task API
 instead of the `Run` key, and keeps the tray promotion across package updates because each
 readout registers with a fixed GUID that Windows keys the setting on. Launching it
 from the Start menu only starts the tray; run it again or use the tray menu to open the settings.
@@ -50,14 +50,16 @@ See [docs/PACKAGING.md](docs/PACKAGING.md).
 
 ### The readouts start hidden
 
-Windows puts **new** tray icons in the overflow area (`^`) instead of the taskbar. On the
-first run tray-monitor says so and offers to open the setting. You can also do it yourself:
+Windows puts **new** tray icons in the overflow area (`^`) instead of the taskbar, so nothing
+shows up there on the first run. Pin them yourself:
 
 - Settings > Personalisation > Taskbar > **Other system tray icons** > turn on tray-monitor
 - or drag the icons out of the `^` overflow
 
-tray-monitor remembers your choice. Keep the executable where it is: the setting is tied to
-the executable path, so moving the file makes Windows treat it as a new icon.
+The settings window (right-click a readout > **Settings…**) says this too and has an
+**Open taskbar settings** button that opens the page for you. tray-monitor never reads the
+setting; pinning is up to you. Each readout registers with a fixed GUID, so a package update
+that moves the executable keeps your choice.
 
 ## Menu
 
@@ -195,8 +197,8 @@ words at this size. Measurements for every candidate are in
   busiest engine of that adapter, so it can differ from the per-engine graphs in Task Manager.
 - The MSIX package is unsigned (developer mode or Store signing needed). A package update
   changes the executable path, but the fixed per-readout GUIDs keep the tray promotion. If the
-  shell rejects a GUID, the app falls back to per-path registration and the onboarding prompt
-  returns after an update.
+  shell rejects a GUID, the app falls back to per-path registration, which Windows ties to the
+  executable path.
 
 ## Development
 

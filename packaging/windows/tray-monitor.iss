@@ -105,8 +105,8 @@ begin
   if Hwnd <> 0 then
     PostMessageW(Hwnd, WM_CLOSE, 0, 0);
 
-  { 이전 버전은 첫 실행 안내/오류를 같은 제목의 메시지 상자로 띄운다.
-    MB_YESNO 안내는 WM_CLOSE를 무시하므로 IDNO(7)를 먼저 보낸다. }
+  { 0.8.0 이하의 첫 실행 안내는 같은 제목의 MB_YESNO 상자로 떴고, MB_YESNO는
+    WM_CLOSE를 무시하므로 IDNO(7)를 먼저 보낸다. 지금은 오류 상자만 같은 제목을 쓴다. }
   Hwnd := FindWindowW('#32770', '{#AppDisplayName}');
   if Hwnd = 0 then
     Hwnd := FindWindowW('#32770', '{#AppName}');

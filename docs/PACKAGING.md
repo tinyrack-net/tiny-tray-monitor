@@ -102,25 +102,18 @@ manifest 최소 형태(검증됨):
      설정 창이 바꾼 값이 다른 파일에 저장될 수 있다.
    - 대응: 패키지 모드에서는 `LocalState`를 명시적으로 쓴다.
 
-3. **승격 감지 오탐**
-   - 패키지 앱의 `NotifyIconSettings\<hash>\ExecutablePath`는
-     `{6D809377-…}\WindowsApps\…` 형식이다(Command Palette/Codex 항목에서 확인).
-   - `onboard.rs`의 정확한 문자열 비교는 항상 불일치 → 매번 숨김으로 판단.
-   - 대응: known-folder GUID 접두사를 정규화해 비교.
-
-4. **업데이트마다 경로가 바뀐다**
+3. **업데이트마다 경로가 바뀐다**
    - 설치 위치가 `WindowsApps\<Name>_<Version>_x64__<hash>\`라 버전이 바뀌면 exe 경로도 바뀐다.
    - 대응: 지표별 고정 GUID(`tray::TRAY_GUIDS`)로 등록한다. Windows가 승격 설정을 GUID에
      묶으므로 경로가 바뀌어도 유지된다. 실측: 0.4.0.0 → 0.4.1.0(다른 폴더)로 등록을 바꿔도
      같은 4개 키가 새 경로로 옮겨지고 `IsPromoted=1`이 유지됐다(Windows 11 build 26300).
    - 셸이 GUID 등록을 실제로 거부할 때(`NIM_ADD` 또는 `NIF_GUID` 툴팁 갱신 실패)만 GUID
-     없이 다시 등록한다. 아이콘은 보이지만 승격은 경로에 묶이므로 `should_onboard`가 다시
-     안내한다. `NotifyIconSettings` 키가 없다는 것은 거부 신호가 아니다([SPIKE.md](SPIKE.md) §15).
+     없이 다시 등록한다. `NotifyIconSettings` 키가 없다는 것은 거부 신호가 아니다
+     ([SPIKE.md](SPIKE.md) §15).
 
-5. **패키지 앱은 `NotifyIconSettings`에 쓸 수 없다**
+4. **패키지 앱은 `NotifyIconSettings`에 쓸 수 없다**
    - 쓰기가 가상 하이브로 가므로 앱이 스스로 승격을 복원할 수 없다(실측).
-   - 읽기는 된다. `onboard::promotion_state`가 실제 키를 읽어 승격 상태와 GUID 등록 여부를
-     판단한다(`onboard::guids_registered`는 진단 로그용이다).
+   - 앱은 이 키를 읽지도 않는다. 무엇을 고정할지는 사용자가 정한다([SPIKE.md](SPIKE.md) §15).
 
 ### 1.3 Installer는 문제 없다
 
@@ -229,13 +222,6 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
   - `DisabledByPolicy` → 끔 + 정책 안내
 - 비패키지에서는 기존 HKCU Run 경로 유지.
 - 설정 창과 트레이 메뉴가 같은 `startup::is_enabled()/set()`을 쓰므로 변경 지점은 한 곳이다.
-
-`src/tray/onboard.rs`:
-
-- `same_executable(registry_path, exe_path) -> bool` 순수 함수 추가.
-  - `{GUID}\` 접두사를 제거하고, `WindowsApps\` 뒤 꼬리를 비교.
-  - 비패키지 경로는 기존처럼 대소문자 무시 비교.
-- 단위 테스트: 일반 경로, `{GUID}\WindowsApps\…`, 대소문자/구분자 차이.
 
 `src/ipc.rs`:
 
@@ -394,7 +380,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 | 단계 | 결과 |
 | --- | --- |
 | P1 | 자산 12개 생성·커밋, `app.rc` ICON, 정적 CRT, `[lints.rust]`. 테스트 **131개** 통과. exe 629,760 bytes(P2 기능 포함 최종 642,048), `VCRUNTIME140` 없음, 아이콘 32×32 확인 |
-| P2 | `platform`/StartupTask/승격 정규화/WM_CLOSE. 패키지 등록 후 `LocalState`에 config·state·log가 생성되고 기존 `%APPDATA%` 설정이 복사되는 것을 확인. 업그레이드 시 설정 창/첫 실행 안내를 닫고 종료하는 것도 확인 |
+| P2 | `platform`/StartupTask/WM_CLOSE. 패키지 등록 후 `LocalState`에 config·log가 생성되고 기존 `%APPDATA%` 설정이 복사되는 것을 확인. 업그레이드 시 설정 창을 닫고 종료하는 것도 확인 |
 | P3 | 무인 설치 → `--help` → 실행 중 업그레이드(WM_CLOSE로 종료) → 제거까지 확인. 제거 시 HKCU Run 값도 삭제됨 |
 | P4 | `makeappx pack/unpack` 왕복, 개발자 모드 등록, 트레이·설정 창·자동 시작 토글을 재시작 후까지 확인(`autostart=true/false`) |
 | P5 | 워크플로 YAML 파싱, 릴리스 스크립트를 로컬에서 모의 실행해 3종 자산 + `SHA256SUMS` 생성 확인. 실제 CI는 PR에서 확인 |
@@ -407,9 +393,8 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
    우회했지만, 설정 창의 `WM_INITDIALOG` 안에서는 UI 스레드가 결과를 기다리는 동안
    대화상자가 보이지 않고 멈췄다. 최종적으로 자동 시작 토글을 `WM_APP_AUTOSTART`
    메시지로 미루고, UI 스레드에서 input-synchronous 호출 밖에 실행하도록 했다.
-   종료 요청(`WM_CLOSE`)은 프로세스의 `#32770` 창을 모두 닫는다. 설정 창이나 첫 실행
-   안내가 모달 루프를 잡고 있으면 installer가 5초 뒤 포기하기 때문이다. 안내가 아직
-   뜨기 전에 종료 요청이 오는 경우도 있어 `run_onboarding`이 `exiting`을 확인한다.
+   종료 요청(`WM_CLOSE`)은 프로세스의 `#32770` 창을 모두 닫는다. 설정 창이 모달 루프를
+   잡고 있으면 installer가 5초 뒤 포기하기 때문이다.
 2. **`AppExecutionAlias`는 넣지 않았다.** Store 사용자에게 CLI를 노출할 필요가 아직 없다.
 3. **아이콘은 임시 마크다.** `tools/make_assets.py`가 ICO와 MSIX 타일을 모두 만들고,
    디자인 교체 시 이 스크립트만 고치면 된다.
@@ -428,7 +413,7 @@ MSIX 업데이트마다 exe 경로가 바뀌어 트레이 승격이 초기화되
 - `Tray::build`의 수락 판정은 `NIM_ADD` 성공과 `set_guid_tooltip`의 성공뿐이다. **키가
   없다고 폴백하지 않는다**: 셸은 이미 아는 정체성에는 키를 (다시) 쓰지 않으므로, 키 생성
   여부를 거부 신호로 읽으면 두 번째 실행부터 항상 폴백하고 승격이 경로에 묶인다
-  ([SPIKE.md](SPIKE.md) §15). 키 개수는 진단 경고로만 남긴다.
+  ([SPIKE.md](SPIKE.md) §15).
 
 실측(Windows 11 build 26300, 74개 항목):
 

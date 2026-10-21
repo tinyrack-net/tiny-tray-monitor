@@ -10,8 +10,8 @@ use windows::Win32::UI::Shell::{
     NIF_GUID, NIF_TIP, NIM_MODIFY, NOTIFYICONDATAW, Shell_NotifyIconW, ShellExecuteW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetSystemMetrics, IDYES, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO,
-    MESSAGEBOX_STYLE, MessageBoxW, SM_CXSMICON, SW_SHOWNORMAL,
+    GetSystemMetrics, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST, MESSAGEBOX_STYLE,
+    MessageBoxW, SM_CXSMICON, SW_SHOWNORMAL,
 };
 use windows::core::{GUID, PCWSTR};
 
@@ -111,18 +111,7 @@ pub fn open_url(url: &str) -> bool {
     result.0 as usize > 32
 }
 
-/// 확인/취소 대화상자. 예를 누르면 `true`.
-///
-/// 소유 창이 없어 다른 창 뒤에 깔리므로 항상 앞으로 가져온다.
-pub fn confirm(title: &str, text: &str) -> bool {
-    let title = wide(title);
-    let text = wide(text);
-    let style = MB_YESNO | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST;
-    let result = unsafe { MessageBoxW(None, PCWSTR(text.as_ptr()), PCWSTR(title.as_ptr()), style) };
-    result == IDYES
-}
-
-/// 정보 대화상자. 확인/취소와 같은 이유로 앞으로 가져온다.
+/// 정보 대화상자. 소유 창이 없어 다른 창 뒤에 깔리므로 항상 앞으로 가져온다.
 pub fn inform(title: &str, text: &str) {
     let title = wide(title);
     let text = wide(text);

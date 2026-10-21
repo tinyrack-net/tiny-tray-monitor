@@ -127,7 +127,7 @@ mod tests {
     /// 다른 파일에 흩으면 이 검사가 막는다.
     #[test]
     fn source_strings_are_english() {
-        const SOURCES: [(&str, &str); 22] = [
+        const SOURCES: [(&str, &str); 21] = [
             ("app.rs", include_str!("app.rs")),
             ("config.rs", include_str!("config.rs")),
             ("devtools.rs", include_str!("devtools.rs")),
@@ -149,7 +149,6 @@ mod tests {
             ("settings/dialog.rs", include_str!("settings/dialog.rs")),
             ("settings/model.rs", include_str!("settings/model.rs")),
             ("tray/mod.rs", include_str!("tray/mod.rs")),
-            ("tray/onboard.rs", include_str!("tray/onboard.rs")),
         ];
         for (name, source) in SOURCES {
             for literal in string_literals(source) {

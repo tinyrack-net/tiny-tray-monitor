@@ -13,7 +13,7 @@ use crate::settings::model::{self, Effect, SettingsDraft};
 use crate::startup;
 use crate::theme;
 use crate::timer;
-use crate::tray::{self, Tray, onboard};
+use crate::tray::{self, Tray};
 
 /// 테마는 자주 바뀌지 않으므로 이 주기로만 다시 읽는다.
 const THEME_POLL: Duration = Duration::from_secs(10);
@@ -25,7 +25,6 @@ pub struct App {
     palette: theme::Palette,
     last_tick: Option<Instant>,
     last_theme_check: Instant,
-    onboard_pending: bool,
     exiting: bool,
     settings_requested: bool,
     ticks: u64,
@@ -61,11 +60,6 @@ impl App {
 
         let tray = Tray::new(px, &store.config, palette)?;
         let sampler = Sampler::new(store.config.exclude_virtual_adapters);
-        let promotion = onboard::promotion_state();
-        let onboard_pending = onboard::should_onboard(&store.state, promotion);
-        logging::info(format!(
-            "promotion {promotion:?}, onboarding pending {onboard_pending}"
-        ));
 
         // 기본값 파일을 남겨 사용자가 편집할 수 있게 한다.
         if let Err(error) = store.save_config() {
@@ -79,7 +73,6 @@ impl App {
             palette,
             last_tick: None,
             last_theme_check: Instant::now(),
-            onboard_pending,
             exiting: false,
             settings_requested: false,
             ticks: 0,
@@ -140,11 +133,6 @@ impl App {
         let sample = self.sampler.sample();
         self.apply(sample);
         self.report_stats();
-
-        if self.onboard_pending {
-            self.onboard_pending = false;
-            self.run_onboarding();
-        }
     }
 
     fn apply(&mut self, sample: metrics::Sample) {
@@ -368,22 +356,6 @@ impl App {
                 ));
                 self.sync_menu_checks();
             }
-        }
-    }
-
-    fn run_onboarding(&mut self) {
-        // 종료 요청이 먼저 왔으면 모달 안내를 띄우지 않는다. installer가 이 창을
-        // 닫지 못하면 업그레이드가 5초 뒤 실패한다.
-        if !self.exiting {
-            let promotion = onboard::promotion_state();
-            if promotion != onboard::Promotion::All {
-                onboard::show_onboarding(promotion);
-            }
-        }
-        self.store.state.onboarding_shown = true;
-        self.store.state.last_version = env!("CARGO_PKG_VERSION").to_string();
-        if let Err(error) = self.store.save_state() {
-            logging::warn(format!("could not save the state: {error}"));
         }
     }
 

@@ -15,6 +15,11 @@ installs keep their tray promotion.
   There is no workspace and no library target: the modules under `src` are wired together by
   `main.rs` and exercised by `#[cfg(test)]` modules in place.
 - **Platform:** Windows only. Metrics come from Win32 APIs and icons are rendered with GDI.
+- **Tray registration is the user's decision.** The app never reads the tray promotion state
+  (`HKCU\Control Panel\NotifyIconSettings`) and never asks the user to pin its readouts. It
+  registers the icons with fixed per-metric GUIDs (rule 17) so the user's pinning survives an
+  update, then stops there. The settings window states how to pin and offers an
+  `Open taskbar settings` button (`src/settings/dialog.rs`).
 
 ## Mandatory Validation Loop
 
@@ -42,8 +47,8 @@ Run the validation loop after changes:
 | `src/timer.rs` | Hidden window that owns the refresh timer |
 | `src/metrics/` | CPU, memory and network sampling plus value formatting |
 | `src/icon/` | 1-bit glyph table, pixel renderer, layout policy and the glyph cache |
-| `src/tray/` | Tray slots, the context menu and the first-run onboarding |
-| `src/config.rs` | `config.toml` / `state.toml` |
+| `src/tray/` | Tray slots, the context menu and the per-metric registration GUIDs |
+| `src/config.rs` | `config.toml` |
 | `src/i18n.rs` | The English / Korean / Japanese string tables and the current language |
 | `src/platform.rs` | Package detection and the config/data locations (`LocalState` for MSIX) |
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
@@ -108,7 +113,7 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     `StartupTask::RequestEnableAsync` when `platform::packaged()` is true.
 15. **A package must not rely on `%APPDATA%`.** New folders are redirected to
     `LocalCache\Roaming`, while existing ones are not, so the location depends on install
-    history. `platform.rs` writes config/state/log to `LocalState` and copies an existing
+    history. `platform.rs` writes config and log to `LocalState` and copies an existing
     `%APPDATA%\tray-monitor` config on the first packaged run.
 16. **Do not call `StartupTask` from an input-synchronous handler.** Calling
     `RequestEnableAsync` inside `WM_COMMAND` fails with `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`.
@@ -120,13 +125,11 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     change. Acceptance is decided by `NIM_ADD` plus the `NIF_GUID` tooltip round-trip only:
     **a missing `NotifyIconSettings` entry is not a refusal** (the shell never rewrites a key for
     an identity it already knows), and treating it as one made every second launch fall back to
-    path registration. Compare paths after `\WindowsApps\` because packaged paths start with a
-    known-folder GUID. See `docs/SPIKE.md` §15.
+    path registration. See `docs/SPIKE.md` §15.
 18. **A quit request must close modal dialogs first.** The installer posts `WM_CLOSE` to the IPC
-    window, but the settings dialog or the onboarding `MB_YESNO` box keeps the main loop in a
-    nested loop. `win32::window::close_dialogs` posts `WM_CLOSE` to every `#32770` window in the
-    process, and `run_onboarding`/`settings::open` skip showing a new dialog when an exit is
-    already pending.
+    window, but the settings dialog keeps the main loop in a nested loop.
+    `win32::window::close_dialogs` posts `WM_CLOSE` to every `#32770` window in the process, and
+    `settings::open` skips showing a new dialog when an exit is already pending.
 19. **`tray-icon` 0.26.1 drops `NIF_GUID` from `set_tooltip`.** Every tooltip update fails with
     `E_FAIL` once an icon uses a GUID, while `set_icon` and `set_visible` still work.
     `win32::set_guid_tooltip` sends `NIM_MODIFY` with `NIF_TIP | NIF_GUID` directly, and `Tray`
@@ -163,7 +166,7 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     as a rejection (rule 17), and do not kill a running instance with `taskkill /F`: the dead
     identity stays in the Explorer session and no key is written for it again until Explorer
     restarts (a normal `Exit` or the installer's `WM_CLOSE` does not do this).
-    `docs/SPIKE.md` §15.
+    `docs/SPIKE.md` §15. Nothing in `src` reads this key: pinning is the user's decision.
 
 ## Merging
 

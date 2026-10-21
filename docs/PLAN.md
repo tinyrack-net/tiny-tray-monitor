@@ -88,8 +88,7 @@ tray-monitor/
 │   │   ├── render.rs         # Bitmap과 nearest-neighbor 배율
 │   │   └── cache.rs          # 표시 문자열 캐시
 │   ├── tray/
-│   │   ├── mod.rs            # 슬롯 관리, 우클릭 메뉴, 승격 감지
-│   │   └── onboard.rs        # 첫 실행 안내
+│   │   └── mod.rs            # 슬롯 관리, 우클릭 메뉴, 고정 GUID 등록
 │   ├── config.rs             # 설정 스키마, 로드/저장
 │   ├── startup.rs            # HKCU Run 키 등록/해제
 │   ├── theme.rs              # 작업 표시줄 테마 -> 글자색
@@ -278,7 +277,7 @@ M1~M3 사이에 실험으로 닫아야 한다. 설계를 바꿀 수 있는 것�
 1. **트레이 메뉴를 열면 아이콘이 멈췄다.** `SetTimer(None, ...)`은 `WM_TIMER`를 스레드 큐로
    보내는데, `TrackPopupMenu`의 모달 루프가 그 메시지를 버린다. 메시지 전용 창을 만들고
    `WndProc`에서 타이머를 받아 해결했다.
-2. **첫 실행 안내가 뜨면 프로세스가 조용히 죽었다.** 모달 대화상자가 중첩 메시지 루프를
+2. **모달 대화상자가 뜨면 프로세스가 조용히 죽었다.** 당시 첫 실행 안내가 모달 루프를
    돌리면서 타이머가 재진입했고, 콜백을 보관한 `RefCell`을 대여 중이라 패닉이 났다
    (릴리스는 `panic = "abort"`). 콜백을 꺼내서 실행하도록 고치고, 대여 실패를 종료로
    해석하던 `should_exit`도 함께 고쳤다.
@@ -692,13 +691,12 @@ UI를 넣는다. 범위는 사용자에게 보이는 문자열 전체다(설정 
 
 | 파일 | 상태 | 역할 |
 | --- | --- | --- |
-| `src/i18n.rs` | 신규 | **순수**: `Language`, `Text`, `EN`/`KO`/`JA`, `resolve(system_lang)`, `auto()`, `interval_label`, `metric_tooltip`, `promotion_summary` |
+| `src/i18n.rs` | 신규 | **순수**: `Language`, `Text`, `EN`/`KO`/`JA`, `resolve(system_lang)`, `auto()`, `interval_label`, `metric_tooltip` |
 | `src/config.rs` | 변경 | `pub language: Language`(serde default `Auto`), `validate`에서 미지원 값 정리 |
 | `src/settings/dialog.rs` | 변경 | 컨트롤 텍스트 주입(`apply_text`), 언어 콤보, 전환 시 재적용, 상태줄 문구를 `Text`로 |
 | `src/settings/model.rs` | 변경 | `Effect::Language(Language)`, `SettingsDraft.language`, 상태 문구를 `Text`로 |
 | `resources/app.rc` | 변경 | 그룹·설명 LTEXT 추가, 정적 라벨에 id 부여, 텍스트는 빈 값, 창 크기 확대 |
 | `src/tray/mod.rs` | 변경 | 메뉴·`about` 텍스트를 `Text`에서, `MenuHandles::set_text`로 갱신 |
-| `src/tray/onboard.rs` | 변경 | 안내·`Promotion::summary`를 `Text`로 |
 | `src/main.rs` | 변경 | 중복 실행·시작 실패 알림을 `Text`로, 시작 시 언어 해석 |
 | `src/icon/layout.rs` | 변경 | `tooltip_name`을 `i18n`으로 이관(아이콘 캡션 `CPU`/`MEM`/`↓MB`는 그대로) |
 | `src/logging.rs` | 변경 | 검사 목록에서 `i18n.rs`를 빼고, 그 자리를 i18n 전용 테스트로 채운다 |
@@ -712,7 +710,6 @@ pub struct Text {
     pub group_readouts: &'static str,
     pub readouts_hint: &'static str,
     // …컨트롤·버튼·상태 문구
-    pub promotion_some: fn(usize, usize) -> String,
 }
 
 pub const EN: Text = Text { … };
@@ -736,11 +733,10 @@ pub fn text(lang: Lang) -> &'static Text;
 | 상태줄·오류 | `settings/dialog.rs`, `settings/model.rs` | `last_readout_off`, `interval_range`, `reset_done`, `save_failed` |
 | 트레이 메뉴 | `tray/mod.rs` | `menu_settings`, `menu_exit`, `menu_about` |
 | 툴팁 | `icon/layout.rs` | `metric_tooltip(metric)` |
-| 첫 실행 안내 | `tray/onboard.rs` | `onboarding(promotion)`, `promotion_summary` |
 | 시작 실패·중복 실행 | `main.rs` | `already_running`, `start_failed` |
 
 **번역하지 않는 것:** 지표 캡션(`CPU`/`MEM`/`↓MB`/`↑KB`), 제품명 `TinyTrayManager`,
-버전 문자열, 로그, `state.toml`/`config.toml` 키와 값, 진단 출력(`--probe`/`--dump`).
+버전 문자열, 로그, `config.toml` 키와 값, 진단 출력(`--probe`/`--dump`).
 `인터벌`처럼 아이콘이 아니라 텍스트 UI인 경우(주기 콤보)는 번역한다. 언어 이름은 자기
 언어로 표기한다(`English` / `한국어` / `日本語`).
 
@@ -930,7 +926,7 @@ pub fn text(lang: Lang) -> &'static Text;
 | 항목 | 변경 |
 | --- | --- |
 | 수락 판정 | `NIM_ADD` + `set_guid_tooltip`(`NIF_TIP \| NIF_GUID`) 성공. 키 생성 여부는 폴백 사유가 아니다 |
-| 진단 | `onboard::guids_present`(all-or-nothing) → `guids_registered`(개수). 모자라면 경고만 남긴다 |
+| 진단 | 없음. 앱은 `NotifyIconSettings`를 읽지 않는다(고정 여부는 사용자 결정) |
 | 영구 문서 | [SPIKE.md](SPIKE.md) §15, [PACKAGING.md](PACKAGING.md) §10, AGENTS.md 규칙 17·24, `tools/traykeys.py` |
 
 ### 검증
@@ -938,7 +934,7 @@ pub fn text(lang: Lang) -> &'static Text;
 | 단계 | 결과 |
 | --- | --- |
 | Explorer 재시작 → 실행 | 폴백 경고 없음, 6개 키에 `IconGuid` 기록 |
-| `tools/promote.py`로 4개 고정 | `promotion Some { promoted: 4, total: 6 }`, 작업 표시줄에 4개 표시 |
+| `tools/promote.py`로 4개 고정 | 작업 표시줄에 4개 표시 |
 | exe를 다른 폴더로 복사해 실행 | 같은 키가 새 경로로 이동, `IsPromoted=1` 유지 |
 
 `taskkill /F`로 죽이면 그 Explorer 세션에서는 키가 다시 기록되지 않는다. 정상 종료 경로를
