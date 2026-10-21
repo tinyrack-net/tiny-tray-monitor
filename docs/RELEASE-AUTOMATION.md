@@ -333,15 +333,36 @@ Store submission API는 **Entra 앱 + Manager 역할**로만 인증한다. Entra
 | --- | --- | --- |
 | A | 기존 Entra 테넌트를 `Associate Microsoft Entra ID`로 연결 | 이미 테넌트가 있어야 하고 그 global admin 계정이 필요하다. 개인·회사 디렉터리를 Store 배포에 끌어들이는 결과 |
 | B | Partner Center `Create Microsoft Entra ID` | **결제 수단 필요**. 절차가 계정 온보딩에 가까워 부작용 확인이 필요하다 |
-| C | Entra 관리 센터에서 무료 테넌트를 만든 뒤 A로 연결 | 생성은 가볍지만 `admin@`·개인 주소를 쓰지 말라는 문서 지침과 충돌한다. 전용 도메인이 필요할 수 있다 |
+| C | Entra 관리 센터에서 무료 테넌트를 만든 뒤 A로 연결 | **막힘(§8-5)**. MSA만으로는 테넌트를 만들 수 없다는 것을 실측했다 |
 | D | API 자동화를 접고 **초안 생성까지 반자동 유지** | 태그 → GitHub 릴리스는 그대로. Store는 사람이 Partner Center에서 `Start update` |
 | E | 계정을 Company/워크 계정으로 이전 | 변경이 가장 크다. 게시된 제품·평점·트레이 승격이 위험하다 |
+
+### 8-5. C안(무료 테넌트 생성) 시도 결과 — 실패
+
+MSA 기반 계정으로는 테넌트를 만들 수 없다. 세 경로를 모두 실측했다.
+
+| 경로 | 결과 |
+| --- | --- |
+| Entra 관리 센터 (`entra.microsoft.com`) | 로그인은 되지만 포털이 `interaction_required: AADSTS16000: User account ... from identity provider 'live.com' does not exist in tenant 'Microsoft Services'`로 멈춘다. 테넌트 생성 블레이드(`CreateTenantBlade`)는 404 |
+| Azure 포털 `Directories + subscriptions` | **`All Directories → No directories found`**. 관리할 수 있는 디렉터리가 0개이고, 현재 디렉터리는 `f8cdef31-a31e-4b4a-93e4-5f571e91255a`(MSA 기본) 뿐이다 |
+| Azure 포털 테넌트 생성 (`#create/Microsoft.AzureActiveDirectory`) | **401 No access** |
+
+정리하면 테넌트 생성에는 **워크 계정이나 Azure 구독(결제 수단)** 이 필요하다. 이 계정
+(MSA + 결제 수단 없음)에서는 세 경로가 모두 막힌다는 것이 실측 결과다.
+
+남는 현실적 경로:
+
+| 안 | 내용 | 대가 |
+| --- | --- | --- |
+| B | Partner Center `Create Microsoft Entra ID` | **결제 수단 필요**. 문서상 정식 경로이고 가장 지속 가능하다 |
+| B' | Microsoft 365 개발자 프로그램 테넌트를 만들어 연결 | 무료지만 **개발용 테넌트**이고 90일 갱신·회수 위험이 있다. 프로덕션 배포 자격증명으로는 부적합하다(가능한지는 추가 확인 필요) |
+| D | API 자동화를 접고 반자동 유지 | 자동화 이득 없음. 계정 변경도 없음 |
 
 ## 9. 결정 필요 / 미검증
 
 결정 필요:
 
-1. **테넌트 확보 방안** — §8-4의 A~E 중 무엇으로 갈지
+1. **테넌트 확보 방안** — C(무료 테넌트)는 막혔다(§8-5). **B**(결제 수단) / **B'**(M365 개발자 테넌트) / **D**(반자동 유지) 중 선택
 2. **범위** — 제출까지 자동 vs 초안 생성까지 자동(+사람 커밋)
 3. **승인 게이트** — GitHub Environment required reviewers 를 쓸지
 4. **인증 방식** — 클라이언트 시크릿 vs 인증서
@@ -358,6 +379,7 @@ Store submission API는 **Entra 앱 + Manager 역할**로만 인증한다. Entra
 - GitHub Actions 러너에서 .NET 9 설치를 액션이 처리하는지
 - `submission update`가 목록 문구를 안전하게 교체하는지
 - `submission delete`의 정확한 동작
+- Microsoft 365 개발자 프로그램 테넌트로 대체할 수 있는지 (§8-5의 B')
 
 ## 10. 참고 자료
 
