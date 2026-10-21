@@ -200,6 +200,9 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   **Store** workflow (`action=commit`). Since v0.9.0 the published submission carries
   `PriceId=Tier1022` and the Store keeps advanced pricing, so the next release may not need the tier
   at all. See [docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-8.
+- A listing change must not ride along with that commit: `msstore submission publish` resets the
+  listings to the last published values, so edit the copy and submit from Partner Center instead
+  ([docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-9).
 - The installer and MSIX defaults are documented in [docs/PACKAGING.md](docs/PACKAGING.md).
   Store identity and signing are not configured yet; the MSIX is unsigned.
 - Assume the archive is extracted in place: an update must not change the path of

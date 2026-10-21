@@ -62,11 +62,13 @@ jobs:
           Write-Output "submission: $($json.Id)"
           Write-Output "priceId: $($json.Pricing.PriceId)"
           Write-Output "advancedPricing: $($json.Pricing.IsAdvancedPricingModel)"
-          $json.ApplicationPackages |
-            Where-Object { $_.Version } |
-            ForEach-Object { Write-Output "package: $($_.Version)" }
+          # 방금 올린 패키지는 Version 이 비어 있으므로 이름으로 보여준다.
+          $json.ApplicationPackages | ForEach-Object { Write-Output "package: $($_.FileName)" }
       - name: Commit or delete the submission
         shell: pwsh
+        # 주의: 이 커밋은 Partner Center에서 편집해 둔 목록을 되돌린다(실측).
+        # 목록 문구를 바꿀 때는 Partner Center에서 제출하거나, submission update 로
+        # 목록까지 함께 보내야 한다. 근거: docs/RELEASE-AUTOMATION.md §8-9
         env:
           STORE_PRODUCT_ID: ${{ vars.STORE_PRODUCT_ID }}
         run: |
