@@ -49,8 +49,9 @@ TinyTrayManager is open source (MIT). The Microsoft Store build uses the Windows
 
 Requires Windows 10 version 1809 or later.
 
-## What's new (0.10.0)
+## What's new (0.10.1)
 
-- "Run at sign-in" is now on by default for a new install, so the readouts are back after a
-reboot. Uncheck the task in the installer to skip it, and turn it off in Settings at any time.
-- An update never turns it back on once you have turned it off.
+- The readouts stay sharp when you change the display scale while the app is running. Before, they
+kept their old size and Windows stretched them until the app was restarted.
+- At 200% and above the digits are drawn at a whole multiple, so every stroke has the same width
+(at 225%, for example, they are drawn at 2x with a small margin instead of being stretched to 2.25x).
