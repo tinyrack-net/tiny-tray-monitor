@@ -46,8 +46,12 @@
      제대로 되돌려주지 못해 **가격이 초기화될 수 있다.**
 - 그래서 기본 설계는 **"가격은 자동화하지 않는다"** 이고, 제출을 4단으로 쪼갠다:
   **초안 생성 → 가격·패키지 검증 → 사람 승인 → 제출**.
-- **P2 실측(§8)에서 더 앞단의 문제가 드러났다.** 이 Partner Center 계정에는 연결된 Entra
-  테넌트가 없어서 자격증명 자체를 만들 수 없다. 테넌트 확보가 P3의 선행 과제다.
+- **P2 완료(§8-6).** Partner Center 계정에 Entra 테넌트가 없어서 자격증명을 만들 수 없다는
+  사실을 먼저 찾아냈고, 테넌트를 만들어 앱을 **Manager(Windows)** 역할로 등록했다. 자격증명이 실제로
+  동작하는 것까지 확인했다.
+- **P2에서 설계 가정이 하나 확정됐다.** 우리 제품은 **Pricing Version 2**이고 `Pricing.PriceId`는
+  `"Base"`다. 게다가 sales 리소스는 API에서 더 이상 지원되지 않는다(`SalesUnsupportedWarning`).
+  즉 **API로 가격을 읽거나 검증할 수 없다** → 가격을 건드리는 단계는 자동화하지 않는다.
 
 ## 3. 공식 경로 (조사 근거)
 
@@ -77,6 +81,8 @@ Cross-platform CLI(Windows/macOS/Linux)로, Partner Center API를 호출한다. 
    **Manager 역할** 부여
 3. 자격증명 4종 확보: Tenant ID, Client ID, Client Secret(또는 인증서), Seller ID(`94567340`)
 4. **앱이 이미 게시되어 라이브여야 한다** — 0.5.0이 라이브이므로 충족
+
+→ **2026-10-21에 1~4를 모두 끝냈다(§8-6).** 이제 이 단계는 반복 작업이 아니라 "만료 시 회전"만 남는다.
 
 ### 3-3. 유료 제품
 
@@ -256,7 +262,7 @@ push tag v*.*.*
 | 단계 | 내용 | 완료 조건 |
 | --- | --- | --- |
 | **P1** | 릴리스 오케스트레이션: 버전 범프 PR 자동화(선택), 태그 푸시 | `release` job이 기존과 동일하게 동작 |
-| **P2** | **자격증명 스파이크(읽기 전용)** — Entra 앱 등록, Manager 역할, `msstore submission get` | **부분 완료(§8)**: 로컬 도구 준비완료, 계정에 Entra 테넌트가 없다는 것까지 실측. 나머지는 테넌트 확보 후 |
+| **P2** | **자격증명 스파이크(읽기 전용)** — Entra 앱 등록, Manager 역할, `msstore submission get` | **완료(§8-6)**: 테넌트·앱·Manager 역할·자격증명 동작 확인, `Pricing` 실측 |
 | **P3** | `store-publish` 잡 추가(`--noCommit` + 검증 + 승인 + 커밋) | 태그 하나로 Store 제출까지 완료 |
 | **P4** | 목록 문구 자동 반영(`listing.md` → `submission updateMetadata`) | 문구 변경이 제출에 반영되고 가격은 불변 |
 | **P5** | 게시 검증·알림·(선택) winget 매니페스트 | 게시 전이 감지와 실패 알림 |
@@ -358,28 +364,85 @@ MSA 기반 계정으로는 테넌트를 만들 수 없다. 세 경로를 모두 
 | B' | Microsoft 365 개발자 프로그램 테넌트를 만들어 연결 | 무료지만 **개발용 테넌트**이고 90일 갱신·회수 위험이 있다. 프로덕션 배포 자격증명으로는 부적합하다(가능한지는 추가 확인 필요) |
 | D | API 자동화를 접고 반자동 유지 | 자동화 이득 없음. 계정 변경도 없음 |
 
+### 8-6. B안 실행 결과 + API 실측 (2026-10-21, 완료)
+
+Partner Center `Create Microsoft Entra ID` → `signup.microsoft.com` 흐름으로 테넌트와 업무 계정을
+만들고, 그 테넌트에 앱을 등록해 Partner Center에 **Manager(Windows)** 역할로 추가했다.
+`msstore reconfigure`가 **"It seems to be working!"** 로 끝나서 자격증명이 실제로 동작한다는 것까지
+확인했다.
+
+| 항목 | 값 |
+| --- | --- |
+| 테넌트 | `tinyrack.onmicrosoft.com` / `18e19524-3424-4990-82d6-c7b1d12a40bd` |
+| 업무 계정 | `contact@tinyrack.onmicrosoft.com` (Partner Center Account admin, MFA=TOTP) |
+| 결제 계정 | Business name `tinyrack`, 주소는 개인 주소, 카드 = 토스카드 |
+| Entra 앱 | `TinyTrayManager Store automation` / clientId `fe09a92e-39bd-4a94-89c8-918f8ce3b4be` |
+| 클라이언트 시크릿 | secret ID `7e2115e6-7401-414c-b90d-a45235ea7545`, **만료 2028-10-20** |
+| 비밀 저장 | Bitwarden 2건 — 업무 계정(+TOTP), CI용 앱 자격증명 |
+| GitHub | Environment `store` 에 secret 4종 + variable `STORE_PRODUCT_ID` |
+
+같은 작업을 다시 할 때 걸리는 지점:
+
+- **주소 검증 경고가 두 번 뜬다.** "We couldn't validate your address" → `Use this address`로 통과한다.
+  한국 주소는 이 검증을 자주 통과하지 못한다.
+- **카드에 따라 거부된다.** 트레볼로그(Mastercard)는 두 번 거부됐고 토스카드로 성공했다.
+- **MFA 등록이 필수다.** "Action required ... set up multifactor authentication". 인증 앱 QR 대신
+  `Can't scan the QR code?`의 수동 키를 받아 Bitwarden TOTP(`bw get totp`)로 등록해 해결했다.
+- **테넌트는 생성만으로 붙지 않는다.** `Associate Microsoft Entra ID`에서 업무 계정으로 로그인해야
+  연결되고, 그 시점에 Partner Center 세션도 업무 계정으로 바뀐다.
+
+#### Pricing 실측 — 자동화 설계를 바꾸는 사실
+
+`msstore submission get 9MT22CHX25FD`로 마지막 게시 제출을 덤프했다.
+
+| 관측 | 값 | 의미 |
+| --- | --- | --- |
+| `Pricing.PriceId` | **`"Base"`** | 문서가 지목한 그 값이다. 기본 가격이 시장별로 관리된다는 뜻 |
+| `Pricing.IsAdvancedPricingModel` | **`true`** | **Pricing Version 2 확정** |
+| `Pricing.MarketSpecificPricings` | 2건(`LB`, `EH` = `NotAvailable`) | 실제 시장별 가격은 여기에 없다 |
+| `StatusDetails.Warnings` | `SalesUnsupportedWarning: The sales resource is no longer supported. To view or edit the sales data ... use the Dev Center dashboard.` | **API로 가격을 읽거나 쓸 수 없다** |
+
+문서가 경고한 조건(`PriceId == "Base"`)이 우리 제품에서 그대로 재현됐다. 따라서:
+
+- `msstore publish`를 `--priceId` 없이 돌리면 CLI는 "가격을 free로 되돌릴 수 있다"며 **멈춘다.**
+- `submission update`는 `PriceId`가 `Tier<number>`/`Free`/`NotAvailable`이어야 하므로 `Base`를 그대로
+  보내면 **거부된다.**
+- 시장별 가격은 API의 sales 리소스에 있는데 그 리소스가 **더 이상 지원되지 않는다.** 그래서 초안을
+  만들어도 **원화 가격이 보존됐는지 API로 검증할 수 없다.**
+
+결론: **API로 가격을 건드리는 단계는 자동화하지 않는다.** 자동화할 수 있는 최대치는
+`--priceId Tier1022`(USD 1.99에 해당하는 tier, 역산값 — 미검증)로 초안을 만드는 것까지이고,
+커밋은 사람이 Partner Center의 `Pricing and availability`를 눈으로 확인한 뒤에 한다.
+
+덧붙여: 같은 덤프에서 **0.8.0 업데이트가 `Status: Published`, 패키지 `0.8.0.0`** 인 것도 확인했다.
+스토어 페이지 가격은 그대로 **KRW 2,500** 이다.
+
 ## 9. 결정 필요 / 미검증
+
+해결됨:
+
+- 테넌트 확보 — **B안으로 완료**(§8-6). Entra 앱 + Manager(Windows) 역할 + 자격증명 동작 확인
+- 로컬 도구 — 갖춰짐(§8-1)
+- 유료 제품에서 `msstore` 동작 — **동작한다**(§8-6)
+- 제품 `Pricing`의 형태 — **`PriceId="Base"`, `IsAdvancedPricingModel=true`**(§8-6)
 
 결정 필요:
 
-1. **테넌트 확보 방안** — C(무료 테넌트)는 막혔다(§8-5). **B**(결제 수단) / **B'**(M365 개발자 테넌트) / **D**(반자동 유지) 중 선택
-2. **범위** — 제출까지 자동 vs 초안 생성까지 자동(+사람 커밋)
-3. **승인 게이트** — GitHub Environment required reviewers 를 쓸지
-4. **인증 방식** — 클라이언트 시크릿 vs 인증서
-5. **버전 범프 자동화** — release-please 류 도입 여부
-6. **알림 수단** — 실패·게시 알림을 어디로 보낼지
+1. **범위** — 가격을 API로 검증할 수 없으므로 "초안 생성까지 자동 + 사람 커밋"이 사실상 상한이다.
+   그대로 갈지, 아니면 Store 제출을 계속 수동으로 둘지
+2. **승인 게이트** — Environment `store` 에 required reviewers 를 걸지
+3. **인증 방식** — 지금은 클라이언트 시크릿(만료 2028-10-20). 인증서로 바꿀지
+4. **버전 범프 자동화** — release-please 류 도입 여부
+5. **알림 수단** — 실패·게시 알림을 어디로 보낼지
 
 미검증:
 
-- ~~Partner Center 계정에 Entra 테넌트가 연결돼 있는지~~ → **연결 없음, MSA 기반**(§8-2)
-- ~~로컬 도구가 갖춰지는지~~ → 갖춰짐. 단 **.NET 9 런타임은 수동 설치**가 필요했다(§8-1)
-- 유료 제품에서 `msstore` 명령이 실제로 동작하는지 (테넌트·앱 확보 후)
-- 우리 제품 `Pricing`의 실제 형태(`PriceId`, `MarketSpecificPricings`)
-- `--priceId Tier1022`가 KRW 2,500을 보존하는지
-- GitHub Actions 러너에서 .NET 9 설치를 액션이 처리하는지
-- `submission update`가 목록 문구를 안전하게 교체하는지
+- `--priceId Tier1022`가 실제로 USD 1.99 기본가인지 (문서 예시 `Tier1052 = $4.99`에서 역산)
+- `msstore publish --noCommit`이 `PriceId="Base"` 제품에서 어떤 초안을 만드는지, 가격이 어떻게 바뀌는지
+- `submission update`로 목록 문구만 교체하는 것이 가능한지(`PriceId` 요구 때문에 어려울 가능성)
 - `submission delete`의 정확한 동작
-- Microsoft 365 개발자 프로그램 테넌트로 대체할 수 있는지 (§8-5의 B')
+- GitHub Actions 러너에서 .NET 9 설치를 `microsoft-store-apppublisher` 액션이 처리하는지
+- 클라이언트 시크릿 만료(2028-10-20) 전 회전 절차
 
 ## 10. 참고 자료
 
