@@ -54,7 +54,7 @@ Run the validation loop after changes:
 | `build.rs` | Compiles `resources/app.rc` so the exe carries `VERSIONINFO`, the manifest and the icon |
 | `resources/` | `app.rc`, `app.manifest`, `app.ico`, the MSIX tiles under `msix/`, and the Store listing assets under `store/` |
 | `packaging/windows/` | Inno Setup script, MSIX manifest template and the PowerShell build scripts |
-| `docs/` | [PLAN.md](docs/PLAN.md), [SPIKE.md](docs/SPIKE.md), [PACKAGING.md](docs/PACKAGING.md) |
+| `docs/` | [PLAN.md](docs/PLAN.md), [SPIKE.md](docs/SPIKE.md), [PACKAGING.md](docs/PACKAGING.md), [RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) |
 | `tools/` | Python helpers for icon sheets, screenshots, tray keys and `make_assets.py` |
 
 ## Windows Details That Will Bite
