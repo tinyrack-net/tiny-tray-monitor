@@ -46,6 +46,8 @@
      제대로 되돌려주지 못해 **가격이 초기화될 수 있다.**
 - 그래서 기본 설계는 **"가격은 자동화하지 않는다"** 이고, 제출을 4단으로 쪼갠다:
   **초안 생성 → 가격·패키지 검증 → 사람 승인 → 제출**.
+- **P2 실측(§8)에서 더 앞단의 문제가 드러났다.** 이 Partner Center 계정에는 연결된 Entra
+  테넌트가 없어서 자격증명 자체를 만들 수 없다. 테넌트 확보가 P3의 선행 과제다.
 
 ## 3. 공식 경로 (조사 근거)
 
@@ -254,7 +256,7 @@ push tag v*.*.*
 | 단계 | 내용 | 완료 조건 |
 | --- | --- | --- |
 | **P1** | 릴리스 오케스트레이션: 버전 범프 PR 자동화(선택), 태그 푸시 | `release` job이 기존과 동일하게 동작 |
-| **P2** | **자격증명 스파이크(읽기 전용)** — Entra 앱 등록, Manager 역할, `msstore submission get` | 제출 JSON을 로컬에서 덤프. `Pricing.PriceId` / `MarketSpecificPricings` 실제 형태 기록 |
+| **P2** | **자격증명 스파이크(읽기 전용)** — Entra 앱 등록, Manager 역할, `msstore submission get` | **부분 완료(§8)**: 로컬 도구 준비완료, 계정에 Entra 테넌트가 없다는 것까지 실측. 나머지는 테넌트 확보 후 |
 | **P3** | `store-publish` 잡 추가(`--noCommit` + 검증 + 승인 + 커밋) | 태그 하나로 Store 제출까지 완료 |
 | **P4** | 목록 문구 자동 반영(`listing.md` → `submission updateMetadata`) | 문구 변경이 제출에 반영되고 가격은 불변 |
 | **P5** | 게시 검증·알림·(선택) winget 매니페스트 | 게시 전이 감지와 실패 알림 |
@@ -287,27 +289,77 @@ push tag v*.*.*
 | 문서 경고와 실제 동작 불일치 | 설계 오판 | P2 전에는 Store 업로드 자동화를 켜지 않는다 |
 | 목록 문구 교체 사고 | 설명·특징 유실 | get → patch → update, 가격 필드 보존, 초안 검토 |
 
-## 8. 결정 필요 / 미검증
+## 8. P2 실측 기록 (2026-10-21)
+
+자격증명을 만들기 전에 확인할 수 있는 것까지 실측했다. **결론: 이 Partner Center 계정에는
+연결된 Entra 테넌트가 없고, 그래서 Store submission API 경로가 자격증명 단계에서 막혀 있다.**
+
+### 8-1. 로컬 도구
+
+| 항목 | 결과 |
+| --- | --- |
+| .NET 9 데스크톱 런타임 | 없었다(8·10만 있었다). `winget install Microsoft.DotNet.DesktopRuntime.9`로 9.0.21 설치 |
+| msstore CLI | `winget install --id 9P53PC5S0PHJ --source msstore` → **0.4.3.2**. winget 소스가 아니라 **msstore 소스**에만 있다 |
+| 인증 방식 | `reconfigure`에는 tenantId·sellerId·clientId + (clientSecret \| 인증서 \| `--clientAssertion`)만 있다. **인터랙티브 로그인이 없다** → Entra 앱 등록이 필수 |
+| 자격증명이 없을 때 | `msstore info` → `crit: MSStore.CLI.Program[0] SellerId is not set.` |
+
+### 8-2. Partner Center 계정 상태
+
+| 확인 | 결과 |
+| --- | --- |
+| `Account settings → Tenants` | "Current tenant associations" 표가 **비어 있다**. 연결된 Entra 테넌트가 없다 |
+| `Account settings → User management` | "You are currently signed in as admin@tinyrack.net. To manage users, sign in with your associated Microsoft Entra ID credentials." 로그인을 시도하면 `account/v3/notauthorized`로 떨어진다 |
+| 계정 성격 | `Sign in with Microsoft Entra ID`의 계정 선택기가 **"Sign in with admin@tinyrack.net personal Microsoft account"** 로 표시한다. 즉 **MSA(개인 계정) 기반**이고 Entra 워크 계정이 아니다 |
+| `Create Microsoft Entra ID` | `signup.microsoft.com/createaccount?scenario=PartnerCenter`로 이동한다. 단계가 `Account details → Sign-in details → **Payment setup and finish**` 이므로 **결제 수단이 필요하다** |
+| `Associate Microsoft Entra ID` | 연결할 기존 테넌트가 있어야 하고, 그 테넌트의 global admin 자격으로 로그인해야 한다 |
+| `My access` | 워크스페이스는 Apps and games·Edge·Insights·Earnings 모두 "Access granted". 막는 것은 프로그램 권한이 아니라 **계정 관리(Entra) 권한**이다 |
+
+두 버튼(`Create`·`Associate`)은 활성 상태다. 회색으로 보이는 것은 Fluent의 subtle 버튼 스타일이며
+DOM에서 `disabled=false`로 확인했다.
+
+미확인: `Create Microsoft Entra ID`가 이 계정에 테넌트를 **덧붙이는지**, 아니면 별도 워크 계정
+온보딩을 시작하는지. 흐름이 `signup.microsoft.com`(결제 포함)이라 "빈 테넌트만 만드는 것"과
+같지 않다.
+
+### 8-3. 왜 막히는가
+
+Store submission API는 **Entra 앱 + Manager 역할**로만 인증한다. Entra 앱은 테넌트 안에만
+존재하고, 그 테넌트를 Partner Center 계정에 연결해야 한다. 이 계정은 MSA 기반이라 그 테넌트가
+없다. 따라서 P3 설계 이전에 **테넌트 확보**가 선행 과제다.
+
+### 8-4. 선택지
+
+| 안 | 내용 | 비용·위험 |
+| --- | --- | --- |
+| A | 기존 Entra 테넌트를 `Associate Microsoft Entra ID`로 연결 | 이미 테넌트가 있어야 하고 그 global admin 계정이 필요하다. 개인·회사 디렉터리를 Store 배포에 끌어들이는 결과 |
+| B | Partner Center `Create Microsoft Entra ID` | **결제 수단 필요**. 절차가 계정 온보딩에 가까워 부작용 확인이 필요하다 |
+| C | Entra 관리 센터에서 무료 테넌트를 만든 뒤 A로 연결 | 생성은 가볍지만 `admin@`·개인 주소를 쓰지 말라는 문서 지침과 충돌한다. 전용 도메인이 필요할 수 있다 |
+| D | API 자동화를 접고 **초안 생성까지 반자동 유지** | 태그 → GitHub 릴리스는 그대로. Store는 사람이 Partner Center에서 `Start update` |
+| E | 계정을 Company/워크 계정으로 이전 | 변경이 가장 크다. 게시된 제품·평점·트레이 승격이 위험하다 |
+
+## 9. 결정 필요 / 미검증
 
 결정 필요:
 
-1. **범위** — 제출까지 자동 vs 초안 생성까지 자동(+사람 커밋)
-2. **승인 게이트** — GitHub Environment required reviewers 를 쓸지
-3. **인증 방식** — 클라이언트 시크릿 vs 인증서
-4. **버전 범프 자동화** — release-please 류 도입 여부
-5. **알림 수단** — 실패·게시 알림을 어디로 보낼지
+1. **테넌트 확보 방안** — §8-4의 A~E 중 무엇으로 갈지
+2. **범위** — 제출까지 자동 vs 초안 생성까지 자동(+사람 커밋)
+3. **승인 게이트** — GitHub Environment required reviewers 를 쓸지
+4. **인증 방식** — 클라이언트 시크릿 vs 인증서
+5. **버전 범프 자동화** — release-please 류 도입 여부
+6. **알림 수단** — 실패·게시 알림을 어디로 보낼지
 
-미검증(스파이크에서 확정):
+미검증:
 
-- Partner Center 계정에 Entra 테넌트가 연결돼 있는지
-- 유료 제품에서 `msstore` 명령이 실제로 동작하는지
+- ~~Partner Center 계정에 Entra 테넌트가 연결돼 있는지~~ → **연결 없음, MSA 기반**(§8-2)
+- ~~로컬 도구가 갖춰지는지~~ → 갖춰짐. 단 **.NET 9 런타임은 수동 설치**가 필요했다(§8-1)
+- 유료 제품에서 `msstore` 명령이 실제로 동작하는지 (테넌트·앱 확보 후)
 - 우리 제품 `Pricing`의 실제 형태(`PriceId`, `MarketSpecificPricings`)
 - `--priceId Tier1022`가 KRW 2,500을 보존하는지
-- GitHub Action이 .NET 9 데스크톱 런타임 설치를 처리하는지
+- GitHub Actions 러너에서 .NET 9 설치를 액션이 처리하는지
 - `submission update`가 목록 문구를 안전하게 교체하는지
 - `submission delete`의 정확한 동작
 
-## 9. 참고 자료
+## 10. 참고 자료
 
 - [Publish app updates to Microsoft Store with GitHub Actions](https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/github-actions)
 - [Microsoft Store Developer CLI commands (MSIX)](https://learn.microsoft.com/en-us/windows/apps/publish/msstore-dev-cli/commands) — §Paid apps and pricing, 티어 표
