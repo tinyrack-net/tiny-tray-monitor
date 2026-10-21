@@ -144,6 +144,7 @@ Deleted or broken files fall back to the defaults; a broken file is kept as `con
 | `tray-monitor --interfaces` | List network interfaces and mark which ones are counted |
 | `tray-monitor --dump` | Render the icons and print the layout measurements |
 | `tray-monitor --theme` | Print the taskbar theme and whether the dark mode API is available |
+| `tray-monitor --dpi [--watch]` | Print the system and taskbar DPI and the icon size picked from them; `--watch` reprints on change |
 | `tray-monitor --help` | Usage |
 
 The settings window is also reachable from the tray menu; `--settings` is for scripts and

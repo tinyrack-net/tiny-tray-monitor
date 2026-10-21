@@ -150,7 +150,6 @@ struct Slot {
     guid: Option<u128>,
     value: Reading,
     tooltip: String,
-    dirty: bool,
 }
 
 pub struct Tray {
@@ -239,7 +238,6 @@ impl Tray {
                 guid,
                 value: placeholder(metric),
                 tooltip: i18n::metric_label(metric).to_string(),
-                dirty: false,
             });
         }
 
@@ -293,55 +291,55 @@ impl Tray {
         }
     }
 
-    /// 테마나 색 모드가 바뀌면 다음 갱신에서 다시 그린다.
+    /// 아이콘 크기(px)를 바꾼다. 배율이 바뀌면 부른다.
+    ///
+    /// 아이콘은 다시 만들지 않고 `set_icon`으로 새 크기의 비트맵만 넘긴다. 등록(GUID, uID)은
+    /// 그대로라 승격 설정이 보존된다. 값이 오지 않는 지표(GPU가 없는 기기 등)도 옛 크기로
+    /// 남지 않도록 다음 갱신을 기다리지 않고 지금 전부 다시 그린다. 바뀌었으면 이전 크기를
+    /// 돌려준다.
+    pub fn set_px(&mut self, px: i32) -> Option<i32> {
+        let previous = resize(&mut self.px, px)?;
+        self.redraw_all();
+        Some(previous)
+    }
+
+    /// 테마나 색 모드가 바뀌면 지금 전부 다시 그린다.
     pub fn set_style(&mut self, palette: Palette, color_mode: ColorMode) {
         if self.palette == palette && self.color_mode == color_mode {
             return;
         }
         self.palette = palette;
         self.color_mode = color_mode;
+        self.redraw_all();
+    }
+
+    fn redraw_all(&mut self) {
+        let style = (self.palette, self.color_mode, self.px);
         for slot in &mut self.slots {
-            slot.dirty = true;
+            if draw(&mut self.cache, slot, style) {
+                self.renders += 1;
+            }
         }
     }
 
     /// 값과 툴팁을 갱신한다. 표시 문자열이 그대로면 다시 그리지 않는다.
     pub fn update(&mut self, metric: Metric, value: Reading, tooltip: String) {
-        let (palette, color_mode, px) = (self.palette, self.color_mode, self.px);
+        let style = (self.palette, self.color_mode, self.px);
         let Some(slot) = self.slots.iter_mut().find(|slot| slot.metric == metric) else {
             return;
         };
 
         let tooltip_changed = slot.tooltip != tooltip;
         let value_changed = slot.value != value;
-        if !value_changed && !tooltip_changed && !slot.dirty {
+        if !value_changed && !tooltip_changed {
             return;
         }
 
-        if value_changed || slot.dirty {
-            let (label_color, value_color) = palette.colors(color_mode, metric);
-            let bitmap = icon::stacked(
-                &mut self.cache,
-                &metric.caption(value.unit),
-                &value.number,
-                px,
-                label_color,
-                value_color,
-            );
-            match Icon::from_rgba(bitmap.rgba, bitmap.width as u32, bitmap.height as u32) {
-                Ok(icon) => {
-                    if let Err(error) = slot.tray.set_icon(Some(icon)) {
-                        logging::warn(format!("could not update the {metric:?} icon: {error}"));
-                    } else {
-                        self.renders += 1;
-                    }
-                }
-                Err(error) => {
-                    logging::warn(format!("could not build the {metric:?} icon: {error}"))
-                }
-            }
+        if value_changed {
             slot.value = value;
-            slot.dirty = false;
+            if draw(&mut self.cache, slot, style) {
+                self.renders += 1;
+            }
         }
 
         if tooltip_changed {
@@ -370,9 +368,56 @@ impl Tray {
     }
 }
 
+/// 슬롯의 현재 값을 `style`(팔레트, 색 모드, px)로 그려 아이콘을 바꾼다. 바꿨으면 `true`.
+fn draw(cache: &mut GlyphCache, slot: &Slot, style: (Palette, ColorMode, i32)) -> bool {
+    let (palette, color_mode, px) = style;
+    let metric = slot.metric;
+    let (label_color, value_color) = palette.colors(color_mode, metric);
+    let bitmap = icon::stacked(
+        cache,
+        &metric.caption(slot.value.unit),
+        &slot.value.number,
+        px,
+        label_color,
+        value_color,
+    );
+    match Icon::from_rgba(bitmap.rgba, bitmap.width as u32, bitmap.height as u32) {
+        Ok(icon) => match slot.tray.set_icon(Some(icon)) {
+            Ok(()) => true,
+            Err(error) => {
+                logging::warn(format!("could not update the {metric:?} icon: {error}"));
+                false
+            }
+        },
+        Err(error) => {
+            logging::warn(format!("could not build the {metric:?} icon: {error}"));
+            false
+        }
+    }
+}
+
+/// `current`를 `next`로 바꾼다. 같거나 잘못된 값이면 그대로 두고 `None`, 바뀌면 이전 값.
+fn resize(current: &mut i32, next: i32) -> Option<i32> {
+    if next <= 0 || *current == next {
+        return None;
+    }
+    Some(std::mem::replace(current, next))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resize_reports_only_real_changes() {
+        let mut px = 16;
+        assert_eq!(resize(&mut px, 16), None, "같은 크기면 다시 그리지 않는다");
+        assert_eq!(resize(&mut px, 36), Some(16));
+        assert_eq!(px, 36);
+        assert_eq!(resize(&mut px, 0), None, "잘못된 크기는 무시한다");
+        assert_eq!(px, 36);
+        assert_eq!(resize(&mut px, 16), Some(36));
+    }
 
     #[test]
     fn menu_ids_are_unique() {

@@ -4,8 +4,8 @@
 //! 없고, 같은 입력이면 OS와 무관하게 같은 픽셀이 나온다. 그래서 픽셀 단위 테스트가
 //! 가능하다.
 //!
-//! 글리프는 16px master 하나뿐이다. 배율은 master를 정수배 또는 NN으로 늘리는
-//! [super::render::scale_nearest]가 담당한다.
+//! 글리프는 16px master 하나뿐이다. 배율은 master를 정수배(+여백) 또는 NN으로 늘리는
+//! [super::render::scale_fit]이 담당한다.
 
 use super::glyphs::{self, Glyph};
 use super::render::{Bitmap, Color};

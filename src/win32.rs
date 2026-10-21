@@ -4,14 +4,15 @@ use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError, HWND};
 use windows::Win32::Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MoveFileExW};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem, GetDpiForWindow,
+    GetSystemMetricsForDpi, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::Shell::{
     NIF_GUID, NIF_TIP, NIM_MODIFY, NOTIFYICONDATAW, Shell_NotifyIconW, ShellExecuteW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetSystemMetrics, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST, MESSAGEBOX_STYLE,
-    MessageBoxW, SM_CXSMICON, SW_SHOWNORMAL,
+    FindWindowW, GetSystemMetrics, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST,
+    MESSAGEBOX_STYLE, MessageBoxW, SM_CXSMICON, SW_SHOWNORMAL,
 };
 use windows::core::{GUID, PCWSTR};
 
@@ -30,9 +31,53 @@ pub fn set_dpi_awareness() -> bool {
     unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).is_ok() }
 }
 
-/// 트레이 아이콘 한 칸의 크기(px). 배율에 따라 16/24/32 등이 된다.
+/// 트레이 아이콘 한 칸의 크기(px). 배율에 따라 16/20/24/…/36 등이 된다.
+///
+/// `GetSystemMetrics(SM_CXSMICON)`은 쓰지 않는다. PerMonitorV2 프로세스에서는 그 값이
+/// 프로세스가 시작할 때의 시스템 DPI에 묶여, 실행 중에 배율을 바꾸면 옛 크기의 아이콘을
+/// 셸이 늘려 흐릿해진다(`docs/SPIKE.md` §16). 트레이를 실제로 그리는 주 작업 표시줄의
+/// DPI로 계산하고, 그 창을 찾지 못하면 시스템 DPI로 물러선다.
+///
+/// 매 틱 부르므로 창 핸들을 캐시하지 않는다. Explorer가 다시 시작해도 따라간다.
 pub fn tray_icon_size() -> i32 {
-    unsafe { GetSystemMetrics(SM_CXSMICON) }.max(16)
+    let dpi = taskbar_dpi().unwrap_or_else(|| unsafe { GetDpiForSystem() });
+    icon_size_for_dpi(dpi)
+}
+
+/// 주어진 DPI의 작은 아이콘 크기. 최소 16px.
+pub fn icon_size_for_dpi(dpi: u32) -> i32 {
+    unsafe { GetSystemMetricsForDpi(SM_CXSMICON, dpi) }.max(16)
+}
+
+/// 주 작업 표시줄(`Shell_TrayWnd`)의 DPI. 창이 없으면(Explorer 재시작 중 등) `None`.
+pub fn taskbar_dpi() -> Option<u32> {
+    let class = wide("Shell_TrayWnd");
+    let hwnd = unsafe { FindWindowW(PCWSTR(class.as_ptr()), PCWSTR::null()) }.ok()?;
+    match unsafe { GetDpiForWindow(hwnd) } {
+        0 => None,
+        dpi => Some(dpi),
+    }
+}
+
+/// DPI 진단 값. `--dpi`가 출력한다.
+pub struct DpiReport {
+    /// `GetSystemMetrics(SM_CXSMICON)`: 예전 방식. 시작 시점 값에 묶이는지 본다.
+    pub legacy_px: i32,
+    /// `GetDpiForSystem`
+    pub system_dpi: u32,
+    /// `GetDpiForWindow(Shell_TrayWnd)`
+    pub taskbar_dpi: Option<u32>,
+    /// [tray_icon_size]가 고르는 크기.
+    pub px: i32,
+}
+
+pub fn dpi_report() -> DpiReport {
+    DpiReport {
+        legacy_px: unsafe { GetSystemMetrics(SM_CXSMICON) },
+        system_dpi: unsafe { GetDpiForSystem() },
+        taskbar_dpi: taskbar_dpi(),
+        px: tray_icon_size(),
+    }
 }
 
 /// Windows 표시 언어의 LANGID. 지원하지 않는 언어는 호출자가 영어로 처리한다.
@@ -703,6 +748,21 @@ mod tests {
     fn tray_icon_size_is_sane() {
         let size = tray_icon_size();
         assert!((16..=256).contains(&size), "{size}");
+    }
+
+    /// 배율별 크기는 현재 프로세스 DPI와 무관하게 DPI로만 정해져야 한다.
+    #[test]
+    fn icon_size_follows_the_dpi() {
+        for (dpi, px) in [
+            (96, 16),
+            (120, 20),
+            (144, 24),
+            (168, 28),
+            (192, 32),
+            (216, 36),
+        ] {
+            assert_eq!(icon_size_for_dpi(dpi), px, "{dpi} dpi");
+        }
     }
 
     #[test]

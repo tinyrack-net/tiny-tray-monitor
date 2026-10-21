@@ -613,3 +613,51 @@ GUID 등록은 승격을 감지하기 위해서가 아니라 사용자의 선택
   한다. 정상 종료는 `Exit` 메뉴나 IPC 창의 `WM_CLOSE`(installer가 쓰는 경로)다.
 - 셸이 승격을 기록할 자리가 없는 상태(키 없음)에서는 사용자가 고정을 눌러도 기억되지 않는다.
   그때는 Explorer를 재시작한 뒤 앱을 다시 실행한다.
+
+## 16. 실행 중 배율 변경과 트레이 아이콘 크기 (v0.11.0)
+
+225%로 배율을 바꾸자 트레이 아이콘이 흐릿해졌다. 앱을 켜 둔 채 바꿨을 때만 생겼다.
+
+### 로그
+
+MSIX 설치본의 로그(`LocalState\log.txt`)에 단서가 남아 있었다.
+
+| 시작 | `tray icon size` | 비고 |
+| --- | --- | --- |
+| 11:55 | 16px | 이 인스턴스가 실행 중에 배율이 225%로 바뀌었다 |
+| 12:28 (재시작) | 36px | 재시작하면 크기가 맞다 |
+
+`main.rs`가 시작할 때 `GetSystemMetrics(SM_CXSMICON)`을 한 번 읽어 `Tray`에 고정했다. 실행
+중에는 크기가 바뀌지 않으므로 16px 비트맵을 셸이 36px 칸에 보간해 늘렸다.
+
+### 왜 `GetSystemMetrics`를 다시 읽는 것으로는 안 되나
+
+PerMonitorV2 프로세스의 `GetSystemMetrics`는 시스템 DPI 기준 값을 돌려주고, 시스템 DPI는
+프로세스가 시작될 때 정해진다. 로그도 재시작해야 36px가 나왔다. 그래서
+DPI를 명시하는 `GetSystemMetricsForDpi(SM_CXSMICON, dpi)`를 쓰고, dpi는 트레이를 실제로
+그리는 주 작업 표시줄 창(`Shell_TrayWnd`)의 `GetDpiForWindow`에서 얻는다.
+
+| 값 | 실행 중 배율 변경을 따라가나 (예상, `--dpi --watch`로 확인) |
+| --- | --- |
+| `GetSystemMetrics(SM_CXSMICON)` | 아니다(시작 시점 값, 위 로그와 일치) |
+| `GetDpiForSystem()` | 아니다(시작 시점 값) |
+| `GetDpiForWindow(Shell_TrayWnd)` | 따라간다 |
+
+`tray-monitor --dpi --watch`가 세 값을 1초마다 비교해 출력한다. 100%에서의 출력:
+
+```
+system dpi  96  taskbar dpi   96  GetSystemMetrics(SM_CXSMICON) 16px  -> icon 16px (1x)
+```
+
+### 고친 것
+
+| 항목 | 변경 |
+| --- | --- |
+| 크기 계산 | `win32::tray_icon_size` = `GetSystemMetricsForDpi(SM_CXSMICON, 작업 표시줄 DPI)`, 창이 없으면 `GetDpiForSystem` |
+| 추적 | `App::tick`이 매 틱 다시 잰다. 타이머 창은 message-only라 `WM_DPICHANGED`/`WM_SETTINGCHANGE`를 받지 못해 폴링한다 |
+| 반영 | `Tray::set_px`가 모든 슬롯을 `set_icon`으로 즉시 다시 그린다. 아이콘은 다시 만들지 않는다(규칙 1, 17) |
+| 로그 | `tray icon size 16px -> 36px` |
+| 렌더 | 2x 이상은 정수배 + 여백([PIXEL-FONT.md](PIXEL-FONT.md) §10) |
+
+값 표본이 없는 지표(GPU가 없는 기기 등)는 `update`가 불리지 않는다. 다음 갱신을 기다리면
+그 아이콘만 옛 크기로 남으므로 `set_px`는 저장된 값으로 바로 다시 그린다.

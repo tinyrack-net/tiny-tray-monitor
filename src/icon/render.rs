@@ -114,6 +114,64 @@ pub fn scale_nearest(src: &Bitmap, size: i32) -> Bitmap {
     out
 }
 
+/// master를 아이콘 크기에 맞추는 방법.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fit {
+    /// 정수 `scale`배로 키우고 남는 픽셀은 `offset`만큼 여백으로 둔다(가운데 정렬).
+    /// 획 두께가 모두 `scale`px로 고르다.
+    Integer { scale: i32, offset: i32 },
+    /// 셀을 채우도록 NN으로 늘린다. 획이 ±1px 들쭉날쭉하다.
+    Nearest,
+}
+
+/// `px` 아이콘에 `master` 비트맵을 어떻게 넣을지 정한다.
+///
+/// - 정수배(16/32/48)는 그대로 복제한다.
+/// - 2배 이상 들어가면(36/40/44/52…) 가장 큰 정수배로 그리고 남는 픽셀을 여백으로
+///   둔다. 글자는 11~27% 작아지지만 획이 고르고 또렷하다.
+/// - 1배밖에 안 들어가면(20/24/28) 여백이 너무 커지므로(최대 43%) 셀을 채우는 NN을
+///   유지한다.
+///
+/// 근거는 `docs/PIXEL-FONT.md` §10.
+pub fn fit(master: i32, px: i32) -> Fit {
+    let master = master.max(1);
+    let scale = px / master;
+    if px % master == 0 || scale >= 2 {
+        Fit::Integer {
+            scale: scale.max(1),
+            offset: (px - scale.max(1) * master).max(0) / 2,
+        }
+    } else {
+        Fit::Nearest
+    }
+}
+
+/// 진단 출력용 이름. `2x`, `2x+2`, `NN 1.50x`.
+pub fn fit_label(px: i32) -> String {
+    let master = super::pixel::MASTER_PX;
+    match fit(master, px) {
+        Fit::Integer { scale, offset: 0 } => format!("{scale}x"),
+        Fit::Integer { scale, offset } => format!("{scale}x+{offset}"),
+        Fit::Nearest => format!("NN {:.2}x", px as f32 / master as f32),
+    }
+}
+
+/// 정사각 master를 `size`의 아이콘으로 만든다. 방법은 [fit]이 정한다.
+pub fn scale_fit(src: &Bitmap, size: i32) -> Bitmap {
+    let size = size.max(1);
+    match fit(src.width, size) {
+        Fit::Integer { scale, offset } => {
+            let mut out = Bitmap::transparent(size, size);
+            if src.width <= 0 || src.height <= 0 || src.rgba.is_empty() {
+                return out;
+            }
+            out.blit_over(&scale_nearest(src, src.width * scale), offset, offset);
+            out
+        }
+        Fit::Nearest => scale_nearest(src, size),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,6 +236,73 @@ mod tests {
                     pixel[3]
                 );
             }
+        }
+    }
+
+    #[test]
+    fn fit_prefers_integer_multiples_from_two_up() {
+        assert_eq!(
+            fit(16, 16),
+            Fit::Integer {
+                scale: 1,
+                offset: 0
+            }
+        );
+        assert_eq!(fit(16, 20), Fit::Nearest);
+        assert_eq!(fit(16, 24), Fit::Nearest);
+        assert_eq!(fit(16, 28), Fit::Nearest);
+        assert_eq!(
+            fit(16, 32),
+            Fit::Integer {
+                scale: 2,
+                offset: 0
+            }
+        );
+        assert_eq!(
+            fit(16, 36),
+            Fit::Integer {
+                scale: 2,
+                offset: 2
+            }
+        );
+        assert_eq!(
+            fit(16, 44),
+            Fit::Integer {
+                scale: 2,
+                offset: 6
+            }
+        );
+        assert_eq!(
+            fit(16, 52),
+            Fit::Integer {
+                scale: 3,
+                offset: 2
+            }
+        );
+    }
+
+    /// 225%(36px)는 2배로 그리고 사방에 2px 여백을 둔다.
+    #[test]
+    fn padded_fit_duplicates_and_centres() {
+        let src = dot(0, 0, 255, 16);
+        let scaled = scale_fit(&src, 36);
+        assert_eq!((scaled.width, scaled.height), (36, 36));
+        for (x, y) in [(2, 2), (3, 2), (2, 3), (3, 3)] {
+            assert_eq!(scaled.alpha_at(x, y), 255, "({x},{y})");
+        }
+        assert_eq!(scaled.alpha_at(1, 1), 0, "여백은 비어 있다");
+        assert_eq!(scaled.alpha_at(4, 2), 0);
+        let last = dot(15, 15, 255, 16);
+        let scaled = scale_fit(&last, 36);
+        assert_eq!(scaled.alpha_at(33, 33), 255);
+        assert_eq!(scaled.alpha_at(34, 34), 0);
+    }
+
+    #[test]
+    fn fit_without_padding_matches_nearest() {
+        let src = dot(3, 7, 255, 16);
+        for size in [16, 20, 24, 28, 32, 48] {
+            assert_eq!(scale_fit(&src, size), scale_nearest(&src, size), "{size}");
         }
     }
 
