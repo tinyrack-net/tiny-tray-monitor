@@ -49,10 +49,13 @@ TinyTrayManager is open source (MIT). The Microsoft Store build uses the Windows
 
 Requires Windows 10 version 1809 or later.
 
-## What's new (0.9.0)
+## What's new (0.9.1)
 
 - The readouts no longer interrupt you on the first run to ask about pinning: where they live is
 your choice, and the app stops checking.
 - The settings window now shows where to pin them and has an **Open taskbar settings** button that
 takes you straight there.
 - Your pinning still survives an update, because each readout keeps its fixed identity.
+
+Note: 0.9.0 shipped these changes, but the listing still described 0.8.0 because the copy was never
+updated for it. This release carries the corrected text.
