@@ -59,13 +59,25 @@ CloseApplications=no
 RestartApplications=no
 AllowNoIcons=yes
 ShowLanguageDialog=auto
+; checkedonce(자동 시작 기본 체크)가 이전 설치의 작업 선택을 읽어야 동작한다. 기본값이지만
+; 의존성을 분명히 하려고 적어 둔다.
+UsePreviousTasks=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 
+[CustomMessages]
+english.Autostart=Run at sign-in
+korean.Autostart=로그인할 때 실행
+english.StartupGroup=Startup
+korean.StartupGroup=시작 프로그램
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+; 새 설치에서만 기본 체크된다. 이전 버전이 설치되어 있으면 checkedonce가 체크를 풀어,
+; 업그레이드가 앱 설정에서 바꾼 자동 시작 선택을 덮어쓰지 않는다.
+Name: "autostart"; Description: "{cm:Autostart}"; GroupDescription: "{cm:StartupGroup}"; Flags: checkedonce
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
@@ -75,6 +87,11 @@ Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{autoprograms}\{#AppDisplayName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppDisplayName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+
+[Registry]
+; 새 설치에서 autostart 작업이 선택되어 있으면 앱과 같은 형식(따옴표로 감싼 exe 경로)으로
+; Run 값을 넣는다. startup.rs의 is_enabled_named가 이 문자열을 그대로 비교한다.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#AppName}"; ValueData: """{app}\{#AppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppDisplayName}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
@@ -135,7 +152,8 @@ begin
   Result := '{#AppDisplayName} is still running. Close it from the tray menu and run Setup again.';
 end;
 
-{ 앱이 켜 둔 HKCU Run 값을 제거한다. 설치할 때는 만들지 않는다(자동 시작은 앱 설정). }
+{ 설치가 만든 값은 [Registry]의 uninsdeletevalue가 지운다. 여기서는 사용자가 앱 설정에서
+  직접 켠 경우까지 포함해 남은 값을 확실히 지운다. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then

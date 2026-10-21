@@ -203,7 +203,9 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
 - A listing change must not ride along with that commit: `msstore submission publish` resets the
   listings to the last published values, so edit the copy and submit from Partner Center instead
   ([docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-9).
-- The installer and MSIX defaults are documented in [docs/PACKAGING.md](docs/PACKAGING.md).
+- The installer and MSIX defaults are documented in [docs/PACKAGING.md](docs/PACKAGING.md):
+  a new install turns on `Run at sign-in` (an installer task plus `StartupTask Enabled="true"`),
+  and an upgrade keeps whatever the user chose.
   Store identity and signing are not configured yet; the MSIX is unsigned.
 - Assume the archive is extracted in place: an update must not change the path of
   `tray-monitor.exe`, or every user loses their tray setting.

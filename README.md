@@ -31,6 +31,9 @@ per-user install under `%LOCALAPPDATA%\Programs\tray-monitor`, so no UAC prompt 
 install path stays the same across upgrades. `/ALLUSERS` (or the wizard) can install it for every
 user instead. Uninstalling keeps `%APPDATA%\tray-monitor`.
 
+The wizard turns on **Run at sign-in** by default, so the readouts are back after a reboot.
+Uncheck the task on the wizard page to skip it. An upgrade keeps whatever you chose afterwards.
+
 ### Portable
 
 Download `tray-monitor-<version>-windows-x64.zip`, unpack it anywhere and run
@@ -44,8 +47,10 @@ and run `Add-AppxPackage -Register AppxManifest.xml` in developer mode. A packag
 config and log in
 `%LOCALAPPDATA%\Packages\Tinyrack.TinyTrayManager_<hash>\LocalState`, uses the Windows startup-task API
 instead of the `Run` key, and keeps the tray promotion across package updates because each
-readout registers with a fixed GUID that Windows keys the setting on. Launching it
-from the Start menu only starts the tray; run it again or use the tray menu to open the settings.
+readout registers with a fixed GUID that Windows keys the setting on. The package is enabled at
+sign-in on first install, and turning it off in Settings or Task Manager survives later updates.
+Launching it from the Start menu only starts the tray; run it again or use the tray menu to open
+the settings.
 See [docs/PACKAGING.md](docs/PACKAGING.md).
 
 ### The readouts start hidden
@@ -90,7 +95,7 @@ one window. There is only ever one settings window:
 | Update every | 250 ms to 10 s. Pick a preset or type an exact number of milliseconds |
 | Colours | One colour per readout, or a single colour from the taskbar theme |
 | Network | Count virtual adapters (Hyper-V, VPN, vSwitch) in the network total |
-| Startup | Run at sign-in: adds or removes the `HKCU\...\Run` entry (or the package startup task) |
+| Startup | Run at sign-in: adds or removes the `HKCU\...\Run` entry (or the package startup task). A new install turns it on; turn it off here |
 | Language | `Automatic (system)`, English, 한국어 or 日本語. Applies at once to the window, the tray menu and the tooltips |
 | Buttons | Reset everything in `config.toml` to the defaults |
 
