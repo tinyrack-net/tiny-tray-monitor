@@ -8,7 +8,7 @@
     - dpiAwareness PerMonitorV2: 모니터별 배율에 맞춰 대화상자와 메시지 박스를 시스템이
       스케일한다. src/win32.rs의 런타임 호출은 매니페스트가 없을 때의 폴백이다.
   -->
-  <assemblyIdentity type="win32" name="tray-monitor" version="1.0.0.0"/>
+  <assemblyIdentity type="win32" name="tiny-tray-monitor" version="1.0.0.0"/>
   <dependency>
     <dependentAssembly>
       <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls"

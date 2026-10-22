@@ -1,4 +1,4 @@
-# tray-monitor 개발 명령
+# TinyTrayMonitor 개발 명령
 #
 # make validate : 커밋 전 필수 검사 (CI 의 Quality Gate 와 같은 검사)
 # make dump     : 아이콘 렌더 결과를 덤프하고 비교 시트를 만든다
@@ -47,10 +47,10 @@ assets:
 
 # installer와 MSIX는 미리 빌드된 exe에서 버전을 읽는다.
 installer: build
-	pwsh -NoProfile -File packaging/windows/build-installer.ps1 -Exe target/release/tray-monitor.exe -OutputDir dist
+	pwsh -NoProfile -File packaging/windows/build-installer.ps1 -Exe target/release/tiny-tray-monitor.exe -OutputDir dist
 
 msix: build
-	pwsh -NoProfile -File packaging/windows/build-msix.ps1 -Exe target/release/tray-monitor.exe -OutputDir dist
+	pwsh -NoProfile -File packaging/windows/build-msix.ps1 -Exe target/release/tiny-tray-monitor.exe -OutputDir dist
 
 package: installer msix
 

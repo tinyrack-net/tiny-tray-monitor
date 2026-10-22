@@ -108,6 +108,9 @@ pub fn set_guid_tooltip(hwnd: *mut core::ffi::c_void, guid: u128, tooltip: &str)
 /// 중복 실행을 막는다. 이미 실행 중이면 `false`.
 ///
 /// 뮤텍스 핸들은 프로세스가 끝날 때까지 유지해야 하므로 의도적으로 해제하지 않는다.
+///
+/// 이름은 v0.11.0의 이름 변경 전 그대로다. 옛 `tray-monitor.exe`와 새 실행 파일이 서로를
+/// 알아봐야 둘이 함께 뜨지 않는다.
 pub fn acquire_single_instance() -> bool {
     acquire_named("Local\\tray-monitor-single-instance")
 }
@@ -1053,7 +1056,7 @@ mod tests {
     #[test]
     fn second_instance_is_detected() {
         // 실행 중인 앱과 겹치지 않도록 테스트 전용 이름을 쓴다.
-        let name = format!("Local\tray-monitor-test-{}", std::process::id());
+        let name = format!("Local\tiny-tray-monitor-test-{}", std::process::id());
         let first = acquire_named(&name);
         let second = acquire_named(&name);
         assert!(first, "첫 호출은 통과해야 한다");
@@ -1062,8 +1065,8 @@ mod tests {
 
     #[test]
     fn different_names_do_not_collide() {
-        let a = format!("Local\tray-monitor-a-{}", std::process::id());
-        let b = format!("Local\tray-monitor-b-{}", std::process::id());
+        let a = format!("Local\tiny-tray-monitor-a-{}", std::process::id());
+        let b = format!("Local\tiny-tray-monitor-b-{}", std::process::id());
         assert!(acquire_named(&a));
         assert!(acquire_named(&b));
     }

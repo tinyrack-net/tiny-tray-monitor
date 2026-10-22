@@ -1,11 +1,11 @@
 [package]
-name = "tray-monitor"
+name = "tiny-tray-monitor"
 version = "0.10.1"
 edition = "2024"
 rust-version = "1.85"
 description = "CPU, memory, network, GPU and disk readouts in the Windows system tray"
 license = "MIT"
-repository = "https://github.com/tinyrack-net/tray-monitor"
+repository = "https://github.com/tinyrack-net/tiny-tray-monitor"
 publish = false
 
 [dependencies]

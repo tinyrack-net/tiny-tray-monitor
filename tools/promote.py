@@ -1,4 +1,4 @@
-"""tray-monitor 의 트레이 아이콘을 트레이에 고정(승격)시킨다.
+"""TinyTrayMonitor 의 트레이 아이콘을 트레이에 고정(승격)시킨다.
 
 Windows는 새 트레이 아이콘을 오버플로우(^)에 숨긴다. 앱은 고정 여부를 안내하지도
 읽지도 않으므로, 개발 중 화면 확인은 이 스크립트로 한다.
@@ -17,7 +17,7 @@ DEFAULT_EXE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "target",
     "release",
-    "tray-monitor.exe",
+    "tiny-tray-monitor.exe",
 )
 
 

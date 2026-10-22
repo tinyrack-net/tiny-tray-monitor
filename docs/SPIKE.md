@@ -717,3 +717,40 @@ system dpi  96  taskbar dpi   96  GetSystemMetrics(SM_CXSMICON) 16px  -> icon 16
 
 - 핸들을 열어 두면 USB 드라이브의 "안전하게 제거"가 막힌다. 표본마다 열고 닫는다.
 - 미디어가 없는 이동식 드라이브(`F:`)는 `GetDiskFreeSpaceExW`가 실패한다. 목록에서 뺀다.
+
+## 18. 표시 이름과 실행 파일 이름 변경 (v0.11.0)
+
+질문: 작업 관리자와 Windows 설정 "기타 시스템 트레이 아이콘"에 보이는 이름을 바꿀 수 있는가,
+아이콘마다 다른 이름(`TinyTrayMonitor - CPU Usage`)을 줄 수 있는가, exe 이름을 바꾸면 트레이
+고정이 풀리는가. Windows 11 26H2(빌드 26300)에서 쟀다.
+
+### 아이콘별 이름은 불가능
+
+C# 프로브(.NET Framework `csc`)로 아이콘 셋을 등록했다. A: GUID + `NIM_ADD` 때 툴팁,
+B: GUID + 나중에 `NIM_MODIFY`로 툴팁, C: GUID 없이 uID + 툴팁.
+
+| 관찰 | 결과 |
+| --- | --- |
+| `NotifyIconSettings\InitialTooltip` | **C(uID)에만** 기록된다. A·B(GUID)는 등록 때 툴팁을 줘도 비어 있다 |
+| 설정 목록, VERSIONINFO 없는 exe | 세 아이콘 모두 `tm-name-probe.exe`(파일 이름) |
+| 설정 목록, `AssemblyTitle("Probe Title")` + `AssemblyProduct("Probe Product")` | 세 아이콘 모두 `Probe Title`. 즉 `FileDescription`이고 `ProductName`이 아니다 |
+| 툴팁 문자열 | 목록 어디에도 나오지 않는다 |
+
+설정 앱은 목록을 캐시하므로 `SystemSettings` 프로세스를 끝내고 다시 열어야 새 항목이 보인다.
+v0.10까지 이 목록에 8줄이 모두 "CPU, memory, network, GPU and disk readouts in the Windows
+system tray"로 보였던 이유도 이것이다. 이름은 프로세스 단위이고, 줄마다 구분되는 것은 아이콘
+그림뿐이다. → `FileDescription = "TinyTrayMonitor"`.
+
+### exe 이름을 바꿔도 고정은 유지된다
+
+v0.10.1 이후 빌드를 `tiny-tray-monitor.exe`로 복사해 다른 폴더에서 실행했다(원래 exe는 정상
+종료). 8개 GUID 키가 모두 새 경로(`...\tiny-tray-monitor.exe`)로 갱신되었고 `IsPromoted=1`이
+그대로였다. §15의 "폴더를 옮겨도 유지"가 파일 이름 변경에도 성립한다. 경로 등록(uID) 아이콘에는
+해당하지 않는다(AGENTS 규칙 24).
+
+### Store 이름
+
+게시된 앱의 이름은 같은 제품에 이름을 추가 예약하고 다음 제출의 Store 등록 정보에서 고르면 바뀐다
+(Microsoft Learn *Manage app name reservations for MSIX app*). 패키지 identity(`Identity Name`)는
+예약 때의 `tinyrack.TinyTrayManager`로 남기고 `DisplayName`만 바꾼다. 2026-10-22에
+`TinyTrayMonitor`를 예약했다(3개월 안에 제출해야 유지된다).

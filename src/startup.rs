@@ -14,7 +14,9 @@ use windows_registry::CURRENT_USER;
 use crate::platform;
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const VALUE_NAME: &str = "tray-monitor";
+const VALUE_NAME: &str = "TinyTrayMonitor";
+/// v0.11.0 이전의 `Run` 값 이름. [`migrate_legacy`]가 새 이름으로 옮긴다.
+const LEGACY_VALUE_NAME: &str = "tray-monitor";
 
 /// AppxManifest.xml의 `uap5:StartupTask TaskId`와 같아야 한다.
 const TASK_ID: &str = "TrayMonitorStartup";
@@ -48,6 +50,30 @@ pub fn set(enabled: bool) -> Result<(), String> {
         return set_task(enabled);
     }
     set_named(VALUE_NAME, enabled)
+}
+
+/// v0.11.0 이전 `Run` 값(`tray-monitor`)을 지금 실행 파일의 새 값으로 옮긴다.
+///
+/// 압축본을 같은 폴더에 풀어 업데이트하면 옛 `tray-monitor.exe`가 남고, 옛 값이 그것을
+/// 가리켜 로그인할 때 옛 버전이 뜬다. 옛 값이 있었다는 것은 사용자가 자동 실행을 켰다는
+/// 뜻이므로 지금 실행 파일로 다시 등록한다. 한 일을 로그에 남길 문장으로 돌려준다.
+pub fn migrate_legacy() -> Option<String> {
+    if platform::packaged() {
+        return None;
+    }
+    let key = CURRENT_USER.create(RUN_KEY).ok()?;
+    let old = key.get_string(LEGACY_VALUE_NAME).ok()?;
+    if let Err(error) = set_named(VALUE_NAME, true) {
+        return Some(format!("could not move the startup entry ({old}): {error}"));
+    }
+    match key.remove_value(LEGACY_VALUE_NAME) {
+        Ok(()) => Some(format!(
+            "moved the startup entry from {LEGACY_VALUE_NAME} ({old}) to {VALUE_NAME}"
+        )),
+        Err(error) => Some(format!(
+            "registered {VALUE_NAME} but could not remove {LEGACY_VALUE_NAME}: {error}"
+        )),
+    }
 }
 
 fn is_enabled_named(name: &str) -> bool {
@@ -104,7 +130,7 @@ fn set_task(enabled: bool) -> Result<(), String> {
     }
 
     Err(match state.0 {
-        1 => "Windows Settings has disabled startup for TinyTrayManager. \
+        1 => "Windows Settings has disabled startup for TinyTrayMonitor. \
               Turn it on in Settings > Apps > Startup."
             .to_string(),
         3 => "Startup is disabled by policy.".to_string(),
@@ -146,8 +172,8 @@ mod tests {
     #[test]
     fn paths_with_spaces_are_quoted() {
         assert_eq!(
-            quote_command(r"C:\Program Files\tray-monitor\tray-monitor.exe"),
-            r#""C:\Program Files\tray-monitor\tray-monitor.exe""#
+            quote_command(r"C:\Program Files\TinyTrayMonitor\tiny-tray-monitor.exe"),
+            r#""C:\Program Files\TinyTrayMonitor\tiny-tray-monitor.exe""#
         );
     }
 
@@ -172,7 +198,7 @@ mod tests {
     /// 해제 경로는 읽기 전용 키로 열어 `Access is denied`로 실패한 적이 있다.
     #[test]
     fn enabling_and_disabling_round_trips() {
-        let name = format!("tray-monitor-test-{}", std::process::id());
+        let name = format!("tiny-tray-monitor-test-{}", std::process::id());
         set_named(&name, true).expect("등록");
         assert!(is_enabled_named(&name));
 
