@@ -480,6 +480,25 @@ v0.9.0에서 확인된 값: 초안 `PriceId=Tier1022`, `IsAdvancedPricingModel=f
 
 `store.yml`에 이 경고를 주석으로 남기고, 표시 단계는 패키지를 이름으로 출력하도록 바꿠다.
 
+### 8-10. v0.11.0 — 이름 변경 릴리스 (2026-10-22)
+
+이름을 TinyTrayManager에서 TinyTrayMonitor로 바꾼 릴리스. 패키지 identity(`tinyrack.TinyTrayManager`)는
+그대로 두고 Store 표시 이름만 바꿨다(근거: `docs/SPIKE.md` §18).
+
+| 단계 | 내용 |
+| --- | --- |
+| 이름 예약 | Partner Center → Manage app names → `TinyTrayMonitor` 예약("Reserved for this app"). 예약 후 3개월 안에 제출해야 유지된다 |
+| 초안 | 태그 → `store-draft` 성공. `PriceId=Tier1022`, 패키지 `tiny-tray-monitor-0.11.0-…msix` |
+| **실수** | 초안의 Store listing(이름·설명·What's new)을 Partner Center에서 고친 뒤 `Store` 워크플로 `action=commit`으로 커밋했다. §8-9대로 **목록 편집이 버려지고** 패키지만 0.11.0으로 게시됐다(Submission 9) |
+| 복구 | Partner Center `Start update` → Store listing에서 *Product name* 드롭다운을 `TinyTrayMonitor`로, 설명·What's new·기능 목록 교체 → `Submit for certification`(Submission 10) |
+
+교훈: **Store listing을 바꾸는 릴리스는 `action=commit`을 쓰지 않는다.** 초안을 만든 뒤 Partner Center에서
+목록을 고치고 그 화면의 `Submit for certification`으로 제출한다. 이 순서면 제출이 한 번으로 끝난다.
+
+참고: API(`msstore submission get`)는 Partner Center UI가 덮어쓴 초안에서도 목록을 옛 값으로 보여 줬고,
+UI의 Packages 화면은 API가 올린 새 패키지를 `PendingUpload` 동안 보여 주지 않았다. 둘이 어긋나도
+커밋 전에는 어느 쪽이 실린다고 단정하지 않는다.
+
 ## 9. 결정 필요 / 미검증
 
 해결됨:
