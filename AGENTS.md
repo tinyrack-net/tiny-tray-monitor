@@ -244,7 +244,8 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   listings to the last published values, so edit the copy and submit from Partner Center instead
   ([docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-9, §8-10).
   When a release changes the listing (name, description, What's new), do not run the **Store**
-  workflow at all: edit the draft in Partner Center and press `Submit for certification` there. v0.11.0 learned this the hard way and needed a second submission.
+  workflow at all: edit the draft in Partner Center and press `Submit for certification` there.
+  v0.11.0 learned this the hard way and needed a second submission.
 - The installer and MSIX defaults are documented in [docs/PACKAGING.md](docs/PACKAGING.md):
   a new install turns on `Run at sign-in` (an installer task plus `StartupTask Enabled="true"`),
   and an upgrade keeps whatever the user chose.
