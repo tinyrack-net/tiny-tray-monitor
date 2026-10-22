@@ -23,12 +23,10 @@ listings are in `listing.ko.md` and `listing.ja.md`; keep all three in step.
 
 **Screenshots:** `screenshots/en/01-settings.png`, `screenshots/en/02-tray.png`
 
-**Pricing:** Free until 2026-12-31; a scheduled change makes it paid (`Tier1022`, USD 1.99) on
-2027-01-01 in every market. Remove the first paragraph of each description after that date.
+**Pricing:** Free; a scheduled change makes it paid (`Tier1022`, USD 1.99) on 2027-01-01 in every market
+(Partner Center → Pricing and availability, time zone *Local*). The listing copy does not mention it.
 
 ## Description
-
-Free until December 31, 2026. From January 1, 2027 it becomes a paid app; if you get it before then, you keep it and its updates for free.
 
 TinyTrayMonitor keeps an eye on your PC from the Windows system tray. Eight compact readouts show what is happening right now:
 
