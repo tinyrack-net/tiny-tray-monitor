@@ -41,7 +41,7 @@ pub fn set_interval(interval_ms: u32) {
     });
 }
 
-const CLASS_NAME: &str = "tray-monitor-timer";
+const CLASS_NAME: &str = "tiny-tray-monitor-timer";
 
 /// 콜백을 꺼내 실행하고 되돌려 놓는다. 재진입하면 콜백이 없어 건너뛴다.
 fn dispatch_tick() {

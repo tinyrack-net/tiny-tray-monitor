@@ -66,10 +66,10 @@ jobs:
       - name: Smoke test the diagnostics
         # The tray app itself needs a desktop session, so only the diagnostics run here.
         run: |
-          .\target\release\tray-monitor.exe --help
-          .\target\release\tray-monitor.exe --interfaces
-          .\target\release\tray-monitor.exe --theme
-          .\target\release\tray-monitor.exe --dump
+          .\target\release\tiny-tray-monitor.exe --help
+          .\target\release\tiny-tray-monitor.exe --interfaces
+          .\target\release\tiny-tray-monitor.exe --theme
+          .\target\release\tiny-tray-monitor.exe --dump
       - name: Check the rendered icons
         # 이름을 나열하지 않는다. 지표를 늘리면 dump 파일 이름도 바뀌므로
         # 개수와 내용만 확인한다.
@@ -82,8 +82,8 @@ jobs:
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: tray-monitor-windows-x64
-          path: target/release/tray-monitor.exe
+          name: tiny-tray-monitor-windows-x64
+          path: target/release/tiny-tray-monitor.exe
 
   package:
     name: Package
@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
-          name: tray-monitor-windows-x64
+          name: tiny-tray-monitor-windows-x64
           path: artifact
       - name: Check the committed assets
         run: python tools/make_assets.py --check
@@ -102,15 +102,15 @@ jobs:
         run: python tools/pixelfont.py --check
       - name: Build the installer
         shell: pwsh
-        run: pwsh -NoProfile -File ./packaging/windows/build-installer.ps1 -Exe artifact/tray-monitor.exe -OutputDir dist
+        run: pwsh -NoProfile -File ./packaging/windows/build-installer.ps1 -Exe artifact/tiny-tray-monitor.exe -OutputDir dist
       - name: Build the MSIX
         shell: pwsh
-        run: pwsh -NoProfile -File ./packaging/windows/build-msix.ps1 -Exe artifact/tray-monitor.exe -OutputDir dist
+        run: pwsh -NoProfile -File ./packaging/windows/build-msix.ps1 -Exe artifact/tiny-tray-monitor.exe -OutputDir dist
       - name: Smoke test the installer
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $dir = Join-Path $env:RUNNER_TEMP 'tray-monitor-install'
+          $dir = Join-Path $env:RUNNER_TEMP 'tiny-tray-monitor-install'
           Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
 
           $setup = Get-ChildItem dist -Filter '*-setup.exe' | Select-Object -First 1
@@ -120,7 +120,7 @@ jobs:
             -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "installer exited with $($install.ExitCode)" }
 
-          $exe = Join-Path $dir 'tray-monitor.exe'
+          $exe = Join-Path $dir 'tiny-tray-monitor.exe'
           if (-not (Test-Path $exe)) { throw 'installed executable missing' }
           # GUI subsystem exe does not set $LASTEXITCODE. Start-Process waits and
           # gives the real exit code.
@@ -133,7 +133,7 @@ jobs:
           if (Test-Path $exe) { throw 'uninstaller left the executable behind' }
       - uses: actions/upload-artifact@v4
         with:
-          name: tray-monitor-packages
+          name: tiny-tray-monitor-packages
           path: |
             dist/*.exe
             dist/*.msix
@@ -176,17 +176,17 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
-          name: tray-monitor-windows-x64
+          name: tiny-tray-monitor-windows-x64
           path: artifact
       - uses: actions/download-artifact@v4
         with:
-          name: tray-monitor-packages
+          name: tiny-tray-monitor-packages
           path: dist
       - name: Check the tag against the binary
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart('v')
-          $built = (Get-Item artifact/tray-monitor.exe).VersionInfo.ProductVersion
+          $built = (Get-Item artifact/tiny-tray-monitor.exe).VersionInfo.ProductVersion
           if ($version -ne $built) {
             throw "tag v$version does not match the binary ($built)"
           }
@@ -194,10 +194,10 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart('v')
-          $name = "tray-monitor-$version-windows-x64"
+          $name = "tiny-tray-monitor-$version-windows-x64"
           $stage = "dist/$name"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item -Path artifact/tray-monitor.exe -Destination $stage
+          Copy-Item -Path artifact/tiny-tray-monitor.exe -Destination $stage
           Copy-Item -Path README.md, LICENSE -Destination $stage
           Compress-Archive -Path "$stage/*" -DestinationPath "dist/$name.zip"
       - name: Write checksums
@@ -249,7 +249,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
-          name: tray-monitor-packages
+          name: tiny-tray-monitor-packages
           path: dist
       - uses: microsoft/microsoft-store-apppublisher@v1.1
       - name: Reconfigure the Store CLI
@@ -323,7 +323,7 @@ jobs:
 
           Nothing is live yet. Before committing:
 
-          1. Open Partner Center -> TinyTrayManager -> the pending submission.
+          1. Open Partner Center -> TinyTrayMonitor -> the pending submission.
           2. Check **Pricing and availability**. The submission API cannot read or
              write per-market prices, so CI cannot verify them for you.
           3. Check that the package version and the listing are the ones you expect.

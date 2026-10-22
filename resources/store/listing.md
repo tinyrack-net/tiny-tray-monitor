@@ -2,7 +2,7 @@
 
 Copy for Partner Center → Store listing. Keep it in sync with the app.
 
-**Product name:** TinyTrayManager
+**Product name:** TinyTrayMonitor
 
 **Short description:** CPU, memory, network, GPU and disk readouts in your Windows system tray.
 
@@ -14,7 +14,7 @@ Copy for Partner Center → Store listing. Keep it in sync with the app.
 
 **Privacy policy:** https://tinyrack.net/privacy/
 
-**Website:** https://github.com/tinyrack-net/tray-monitor
+**Website:** https://github.com/tinyrack-net/tiny-tray-monitor
 
 **Category:** Utilities & tools
 
@@ -22,7 +22,7 @@ Copy for Partner Center → Store listing. Keep it in sync with the app.
 
 ## Description
 
-TinyTrayManager keeps an eye on your PC from the Windows system tray. Eight compact readouts show what is happening right now:
+TinyTrayMonitor keeps an eye on your PC from the Windows system tray. Eight compact readouts show what is happening right now:
 
 - CPU usage
 - Memory usage
@@ -49,7 +49,7 @@ taskbar settings.
 - No account, no telemetry, no network access. Settings and logs stay on your PC.
 - Small and native: Win32 and GDI, no Electron, no background service.
 
-TinyTrayManager is open source (MIT). The Microsoft Store build uses the Windows package identity and startup-task APIs, and keeps your tray layout across updates.
+TinyTrayMonitor is open source (MIT). The Microsoft Store build uses the Windows package identity and startup-task APIs, and keeps your tray layout across updates.
 
 Requires Windows 10 version 1809 or later.
 

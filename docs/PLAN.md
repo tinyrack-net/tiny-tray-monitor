@@ -993,3 +993,12 @@ pub fn text(lang: Lang) -> &'static Text;
 | 아이콘 | `make dump` + 시트 | 다크/라이트 16~36px에서 `DSK`/`DIO` 판독 |
 
 남은 일: Store 스크린샷 재촬영(`resources/store/screenshots/`는 아직 6개·옛 창이다).
+
+## 19. 이름 변경: TinyTrayMonitor / tiny-tray-monitor.exe (v0.11.0)
+
+- 표시 이름 `TinyTrayManager` → `TinyTrayMonitor`(앱, installer, MSIX `DisplayName`, Store 등록 정보).
+- exe `tray-monitor.exe` → `tiny-tray-monitor.exe`, 설정·로그 폴더와 `Run` 값도 새 이름으로 옮긴다.
+- `FileDescription`을 제품 이름으로 둔다. 작업 관리자와 작업 표시줄 설정이 이 값을 보여 준다.
+- 아이콘별 이름은 Windows가 지원하지 않아 하지 않는다. 근거와 그대로 둔 이름은 `docs/SPIKE.md` §18,
+  `docs/PACKAGING.md` §12.
+- 저장소 `tinyrack-net/tray-monitor` → `tinyrack-net/tiny-tray-monitor`.

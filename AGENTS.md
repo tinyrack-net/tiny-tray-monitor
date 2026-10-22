@@ -1,11 +1,13 @@
-# tray-monitor
+# TinyTrayMonitor
 
 ## Project Overview
 
-**tray-monitor** shows CPU, memory, network, GPU and disk readouts in the Windows system tray.
-The Microsoft Store listing is named **TinyTrayManager** (`tinyrack.TinyTrayManager`, Store ID
-`9MT22CHX25FD`). The exe name, install path and config folders stay `tray-monitor` so existing
-installs keep their tray promotion.
+**TinyTrayMonitor** (`tiny-tray-monitor.exe`) shows CPU, memory, network, GPU and disk readouts
+in the Windows system tray. The Microsoft Store product is `9MT22CHX25FD`; its package identity
+stays `tinyrack.TinyTrayManager`, the name it was first reserved under, because a new identity is a
+new product. Until v0.10 the app was called TinyTrayManager and the exe `tray-monitor.exe`; v0.11.0
+renamed both once, and the code that moves the old folders, `Run` value and executable is the only
+place the old names may appear (rule 28).
 
 - **Main technologies:** Rust (edition 2024), `windows`, `windows-future`, `tray-icon`,
   `windows-registry`, `serde` + `toml`. All dependencies come from crates.io; there are no git
@@ -50,7 +52,7 @@ Run the validation loop after changes:
 | `src/tray/` | Tray slots, the context menu and the per-metric registration GUIDs |
 | `src/config.rs` | `config.toml` |
 | `src/i18n.rs` | The English / Korean / Japanese string tables and the current language |
-| `src/platform.rs` | Package detection and the config/data locations (`LocalState` for MSIX) |
+| `src/platform.rs` | Package detection, the config/data locations (`LocalState` for MSIX) and the v0.11.0 folder move |
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
 | `src/settings/` | The settings window: a pure model, the page table and device choices (`pages.rs`) and the Win32 dialog |
 | `src/ipc.rs` | Hidden window that hands a second launch over to the running instance |
@@ -85,8 +87,10 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
    out of its cell before running it and skips a re-entrant call.
 7. **Do not treat a failed `RefCell` borrow as a reason to exit.** `runtime::should_exit`
    returns false when the app is borrowed.
-8. **Keep the executable path stable.** The tray setting is keyed on it, so an update that moves
-   the binary resets the user's choice. Release archives extract in place.
+8. **Keep the executable path stable.** A path-registered icon is keyed on it, so an update that
+   moves the binary resets the user's choice. Release archives extract in place. The GUID icons
+   (rule 17) survive a move and a rename (`docs/SPIKE.md` §18), which is what made the v0.11.0
+   rename possible; do not lean on that for anything else.
 9. **Cache glyph renderings.** The pixel renderer is cheap, but values are a small finite set, so
    a per-string cache avoids re-allocating a bitmap on every tick. The hit rate is in the log.
 10. **`rc.exe` has no default include path, and comctl32 v6 misreports its version.** Run
@@ -114,7 +118,7 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
 15. **A package must not rely on `%APPDATA%`.** New folders are redirected to
     `LocalCache\Roaming`, while existing ones are not, so the location depends on install
     history. `platform.rs` writes config and log to `LocalState` and copies an existing
-    `%APPDATA%\tray-monitor` config on the first packaged run.
+    `%APPDATA%\TinyTrayMonitor` config on the first packaged run.
 16. **Do not call `StartupTask` from an input-synchronous handler.** Calling
     `RequestEnableAsync` inside `WM_COMMAND` fails with `RPC_E_CANTCALLOUT_ININPUTSYNCCALL`.
     The settings dialog posts `WM_APP_AUTOSTART` to itself and commits in that message instead.
@@ -175,7 +179,7 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     gets no `WM_DPICHANGED`), and `Tray::set_px` redraws every slot with `set_icon` at once,
     never recreating an icon (rule 1). From 2x up the 16px master is drawn at an integer
     multiple and centred (`render::fit`, 36px = 2x + 2px margin), so strokes stay uniform.
-    `tray-monitor --dpi --watch` shows the values live. `docs/SPIKE.md` §16.
+    `tiny-tray-monitor --dpi --watch` shows the values live. `docs/SPIKE.md` §16.
 26. **Open disk devices with no access rights and close them every sample.** `CreateFileW` on
     `\\.\PhysicalDriveN` or `\\.\C:` with `dwDesiredAccess = 0` answers
     `IOCTL_DISK_PERFORMANCE` and `IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS` without administrator
@@ -191,6 +195,18 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     7 below the last row, 6 between groups); the comment above the groups in `resources/app.rc`
     states it and `settings::dialog::tests::groups_follow_one_grid` fails on any control that
     drifts off it. Move a control by whole rows, never by eye.
+28. **The name Windows shows is `FileDescription`, and the v0.11.0 rename left a few old names on
+    purpose.** Task Manager and Settings > Taskbar > *Other system tray icons* show the
+    VERSIONINFO `FileDescription` (the exe name if it is missing) for every icon of the process;
+    the tooltip never appears there, so per-readout names are impossible. Keep
+    `FileDescription` equal to `PRODUCT_NAME`. Renaming the exe kept all eight pins because the
+    keys follow the GUIDs. These keep the old names and must stay: the MSIX identity
+    `tinyrack.TinyTrayManager` (a new identity is a new Store product), `Application Id` and
+    `TaskId`, the installer `AppId`, the mutex `Local\tray-monitor-single-instance` and the IPC
+    class `tray-monitor-ipc` (the old build and the installer must still find the running app).
+    `platform::migrate_legacy_dirs` moves the old folders before logging starts and
+    `startup::migrate_legacy` moves the old `Run` value. `docs/SPIKE.md` §18,
+    `docs/PACKAGING.md` §12.
 
 ## Merging
 
@@ -215,7 +231,7 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   ```
 
 - The `release` job downloads the artifacts from the `package` job, checks that the tag matches
-  the binary's `VERSIONINFO`, and publishes `tray-monitor-<version>-windows-x64.zip`,
+  the binary's `VERSIONINFO`, and publishes `tiny-tray-monitor-<version>-windows-x64.zip`,
   `...-setup.exe`, `...msix` and `SHA256SUMS` (LF).
 - The same tag hands the MSIX to the Store as a **draft** (`store-draft` in the pipeline) and stops
   there. This product is priced per market, so the submission API cannot carry the base price back on
@@ -232,7 +248,7 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   and an upgrade keeps whatever the user chose.
   Store identity and signing are not configured yet; the MSIX is unsigned.
 - Assume the archive is extracted in place: an update must not change the path of
-  `tray-monitor.exe`, or every user loses their tray setting.
+  `tiny-tray-monitor.exe` without a reason as strong as the v0.11.0 rename.
 
 ## Testing
 
@@ -242,7 +258,7 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   (glyph table shape, string widths, output stays 1-bit at every scale). No GDI is left in the
   icon path.
 - The tray itself has no automated test. Use `make run`, then check the readouts, the context
-  menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. The log records a heartbeat every 60 updates
+  menu and `%LOCALAPPDATA%\TinyTrayMonitor\log.txt`. The log records a heartbeat every 60 updates
   with the current values and the glyph cache hit rate.
 - Log messages are English only. `logging::tests::source_strings_are_english` rejects Hangul
   in any non-test string literal, because `{error}`/`{note}` values end up in the log too. The

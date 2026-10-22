@@ -1,15 +1,15 @@
 <div align="center">
 
-# tray-monitor
+# TinyTrayMonitor
 
 **CPU, memory, network, GPU and disk readouts in the Windows system tray.**
 
-[![CI](https://github.com/tinyrack-net/tray-monitor/actions/workflows/pipeline.yml/badge.svg)](https://github.com/tinyrack-net/tray-monitor/actions/workflows/pipeline.yml)
+[![CI](https://github.com/tinyrack-net/tiny-tray-monitor/actions/workflows/pipeline.yml/badge.svg)](https://github.com/tinyrack-net/tiny-tray-monitor/actions/workflows/pipeline.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
 
-tray-monitor puts eight live readouts in the taskbar notification area, each showing
+TinyTrayMonitor puts eight live readouts in the taskbar notification area, each showing
 what it measures and its current value:
 
 ```
@@ -26,27 +26,34 @@ directly.
 
 ### Installer (recommended)
 
-Download `tray-monitor-<version>-windows-x64-setup.exe` from
-[Releases](https://github.com/tinyrack-net/tray-monitor/releases) and run it. The default is a
-per-user install under `%LOCALAPPDATA%\Programs\tray-monitor`, so no UAC prompt appears and the
+Download `tiny-tray-monitor-<version>-windows-x64-setup.exe` from
+[Releases](https://github.com/tinyrack-net/tiny-tray-monitor/releases) and run it. The default is a
+per-user install under `%LOCALAPPDATA%\Programs\TinyTrayMonitor`, so no UAC prompt appears and the
 install path stays the same across upgrades. `/ALLUSERS` (or the wizard) can install it for every
-user instead. Uninstalling keeps `%APPDATA%\tray-monitor`.
+user instead. Uninstalling keeps `%APPDATA%\TinyTrayMonitor`.
+
+Until v0.10 the app was called **TinyTrayManager** and the executable `tray-monitor.exe`. Upgrading
+with the installer replaces the old executable in the folder you installed to, moves
+`%APPDATA%\tray-monitor` and `%LOCALAPPDATA%\tray-monitor` to the new names on the first run and
+carries over **Run at sign-in**. Pinned readouts stay pinned: Windows keys them on the per-readout
+GUIDs, not on the file name.
 
 The wizard turns on **Run at sign-in** by default, so the readouts are back after a reboot.
 Uncheck the task on the wizard page to skip it. An upgrade keeps whatever you chose afterwards.
 
 ### Portable
 
-Download `tray-monitor-<version>-windows-x64.zip`, unpack it anywhere and run
-`tray-monitor.exe`.
+Download `tiny-tray-monitor-<version>-windows-x64.zip`, unpack it anywhere and run
+`tiny-tray-monitor.exe`.
 
 ### MSIX (Store build)
 
-Releases also contain `tray-monitor-<version>-windows-x64.msix`. It is **unsigned**: Windows will
+Releases also contain `tiny-tray-monitor-<version>-windows-x64.msix`. It is **unsigned**: Windows will
 not install the file directly. The Store signs the submitted package; for local testing, unpack it
 and run `Add-AppxPackage -Register AppxManifest.xml` in developer mode. A packaged build keeps its
 config and log in
-`%LOCALAPPDATA%\Packages\Tinyrack.TinyTrayManager_<hash>\LocalState`, uses the Windows startup-task API
+`%LOCALAPPDATA%\Packages\tinyrack.TinyTrayManager_<hash>\LocalState` (the package identity keeps
+its first name so the Store treats it as the same product), uses the Windows startup-task API
 instead of the `Run` key, and keeps the tray promotion across package updates because each
 readout registers with a fixed GUID that Windows keys the setting on. The package is enabled at
 sign-in on first install, and turning it off in Settings or Task Manager survives later updates.
@@ -59,11 +66,11 @@ See [docs/PACKAGING.md](docs/PACKAGING.md).
 Windows puts **new** tray icons in the overflow area (`^`) instead of the taskbar, so nothing
 shows up there on the first run. Pin them yourself:
 
-- Settings > Personalisation > Taskbar > **Other system tray icons** > turn on tray-monitor
+- Settings > Personalisation > Taskbar > **Other system tray icons** > turn on TinyTrayMonitor
 - or drag the icons out of the `^` overflow
 
 The settings window (right-click a readout > **Settings…**) says this too and has an
-**Open taskbar settings** button that opens the page for you. tray-monitor never reads the
+**Open taskbar settings** button that opens the page for you. TinyTrayMonitor never reads the
 setting; pinning is up to you. Each readout registers with a fixed GUID, so a package update
 that moves the executable keeps your choice.
 
@@ -75,7 +82,7 @@ Right-click any of the icons.
 | --- | --- |
 | Settings… | Opens the settings window |
 | CPU / Memory / Network down / Network up / GPU / GPU VRAM / Disk usage / Disk activity | Show or hide that readout. The last visible one cannot be turned off |
-| Exit | Stops tray-monitor |
+| Exit | Stops TinyTrayMonitor |
 
 Hovering an icon shows the exact numbers, including upload rate, memory in GB and the disk
 read and write rates.
@@ -87,7 +94,7 @@ in one window. The list on the left picks a page: **General** for the settings s
 readout, then one page each for **CPU**, **Memory**, **GPU**, **Network** and **Disk**. There is
 only ever one settings window:
 
-| Situation | `Settings…` in the tray menu | Running `tray-monitor.exe` again |
+| Situation | `Settings…` in the tray menu | Running `tiny-tray-monitor.exe` again |
 | --- | --- | --- |
 | Settings window open | Brings it to the front | Brings it to the front |
 | Settings window closed | Opens it | Opens it in the running instance |
@@ -117,9 +124,9 @@ device comes back.
 
 ## Configuration
 
-`%APPDATA%\tray-monitor\config.toml` is created on first run. In the MSIX package the file lives
+`%APPDATA%\TinyTrayMonitor\config.toml` is created on first run. In the MSIX package the file lives
 in `%LOCALAPPDATA%\Packages\tinyrack.TinyTrayManager_<hash>\LocalState\config.toml`; an existing
-config from `%APPDATA%\tray-monitor` is copied there on the first packaged run.
+config from `%APPDATA%\TinyTrayMonitor` is copied there on the first packaged run.
 
 ```toml
 poll_interval_ms = 1000          # 250 ~ 10000
@@ -149,7 +156,7 @@ A `network = ...` setting written by v0.1.0 is migrated to `network_down` and
 
 `language = "auto"` follows the Windows display language. Only English, Korean and Japanese
 are bundled; any other language falls back to English. Logs are always written in English to
-`%LOCALAPPDATA%\tray-monitor\log.txt`.
+`%LOCALAPPDATA%\TinyTrayMonitor\log.txt`.
 
 Deleted or broken files fall back to the defaults; a broken file is kept as `config.toml.bak`.
 
@@ -157,14 +164,14 @@ Deleted or broken files fall back to the defaults; a broken file is kept as `con
 
 | Command | What it does |
 | --- | --- |
-| `tray-monitor` | Run the tray app |
-| `tray-monitor --settings` | Run and open the settings window at once (or show it in the running instance) |
-| `tray-monitor --probe` | Print the metrics every second, without any tray icon |
-| `tray-monitor --interfaces` | List network interfaces and mark which ones are counted |
-| `tray-monitor --dump` | Render the icons and print the layout measurements |
-| `tray-monitor --theme` | Print the taskbar theme and whether the dark mode API is available |
-| `tray-monitor --dpi [--watch]` | Print the system and taskbar DPI and the icon size picked from them; `--watch` reprints on change |
-| `tray-monitor --help` | Usage |
+| `tiny-tray-monitor` | Run the tray app |
+| `tiny-tray-monitor --settings` | Run and open the settings window at once (or show it in the running instance) |
+| `tiny-tray-monitor --probe` | Print the metrics every second, without any tray icon |
+| `tiny-tray-monitor --interfaces` | List network interfaces and mark which ones are counted |
+| `tiny-tray-monitor --dump` | Render the icons and print the layout measurements |
+| `tiny-tray-monitor --theme` | Print the taskbar theme and whether the dark mode API is available |
+| `tiny-tray-monitor --dpi [--watch]` | Print the system and taskbar DPI and the icon size picked from them; `--watch` reprints on change |
+| `tiny-tray-monitor --help` | Usage |
 
 The settings window is also reachable from the tray menu; `--settings` is for scripts and
 keyboard launchers.
@@ -213,7 +220,7 @@ words at this size. Measurements for every candidate are in
 
 - The taskbar decides the order of the icons. Drag them to reorder.
 - Dark mode uses the unofficial `uxtheme` ordinals (133/135/136). If a future Windows build
-  drops them, the window stays light; `tray-monitor --theme` says which case you are in.
+  drops them, the window stays light; `tiny-tray-monitor --theme` says which case you are in.
 - The icons are rendered for the display scaling that was active at startup. Changing the
   scaling keeps the existing bitmaps; the taskbar scales them.
 - Requires Windows 11 or Windows 10 (build 17063 or later for `GetIfTable2`).
@@ -244,8 +251,8 @@ make package     # build the installer and the MSIX into dist/
 scripts directly:
 
 ```
-pwsh -File packaging/windows/build-installer.ps1 -Exe target/release/tray-monitor.exe
-pwsh -File packaging/windows/build-msix.ps1 -Exe target/release/tray-monitor.exe
+pwsh -File packaging/windows/build-installer.ps1 -Exe target/release/tiny-tray-monitor.exe
+pwsh -File packaging/windows/build-msix.ps1 -Exe target/release/tiny-tray-monitor.exe
 ```
 
 Layout changes should be checked visually. `make dump` writes `out/<theme>_px<size>_<metric>@16x.bmp`

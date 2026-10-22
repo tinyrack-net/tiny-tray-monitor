@@ -1,6 +1,6 @@
 # Store assets
 
-Assets for the Microsoft Store listing of **TinyTrayManager** (Partner Center → Store listing).
+Assets for the Microsoft Store listing of **TinyTrayMonitor** (Partner Center → Store listing).
 
 | File | Use |
 | --- | --- |
@@ -17,9 +17,9 @@ Regenerate the logo with `python tools/make_assets.py`.
 
 Both screenshots are composed from a real capture of the running app, never drawn by hand:
 
-1. Set `language = "en"` in `%APPDATA%\tray-monitor\config.toml` so the dialog matches the
+1. Set `language = "en"` in `%APPDATA%\TinyTrayMonitor\config.toml` so the dialog matches the
    en-US listing.
-2. `cargo build --release` and start `target\release\tray-monitor.exe --settings`.
+2. `cargo build --release` and start `target\release\tiny-tray-monitor.exe --settings`.
 3. `python tools/promote.py` promotes the six icons out of the tray overflow; restart the app
    afterwards so Windows picks the promotion up.
 4. Capture the desktop at native resolution, then capture the dialog on its own with

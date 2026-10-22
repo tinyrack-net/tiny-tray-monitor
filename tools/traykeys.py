@@ -1,4 +1,4 @@
-"""HKCU NotifyIconSettings 를 파싱해 tray-monitor 의 아이콘 키를 출력한다.
+"""HKCU NotifyIconSettings 를 파싱해 TinyTrayMonitor 의 아이콘 키를 출력한다.
 
 진단용 도구. 아이콘 정체성은 `(ExecutablePath, UID)` 로 확인됐고, `InitialTooltip` 은
 키가 아니라 최초 등록 시점에 기록되는 값이다. GUID로 등록한 아이콘은 `IconGuid` 가
@@ -39,6 +39,7 @@ def query():
 
     rows = []
     for key, v in blocks.items():
+        # 옛 tray-monitor.exe 와 새 tiny-tray-monitor.exe 를 함께 잡는다.
         if "tray-monitor" in v.get("ExecutablePath", "").lower():
             rows.append(
                 (
@@ -54,7 +55,7 @@ def query():
 
 if __name__ == "__main__":
     rows = query()
-    print(f"{len(rows)} icon keys for tray-monitor")
+    print(f"{len(rows)} icon keys for TinyTrayMonitor")
     for tip, key, promoted, guid, uid in rows:
         print(
             f"  promoted={promoted:<8} uid={uid:<6} tooltip={tip!r:<20} "

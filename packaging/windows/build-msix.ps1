@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Builds the MSIX package for tray-monitor.
+    Builds the MSIX package for TinyTrayMonitor.
 
 .DESCRIPTION
     The package is unsigned. It is meant for Store submission (where Microsoft
@@ -15,7 +15,7 @@
     and MSIX_PUBLISHER_DISPLAY_NAME. The real values come from Partner Center.
 
 .PARAMETER Exe
-    Path to the release tray-monitor.exe. Required.
+    Path to the release tiny-tray-monitor.exe. Required.
 
 .PARAMETER OutputDir
     Directory for the .msix. Defaults to <repo>\dist.
@@ -30,10 +30,12 @@
     Display name of the publisher. Defaults to tinyrack.
 
 .PARAMETER DisplayName
-    Product display name. Defaults to TinyTrayManager.
+    Product display name. Defaults to TinyTrayMonitor. The identity name stays
+    tinyrack.TinyTrayManager: changing it would make the Store treat the update as
+    another product.
 
 .EXAMPLE
-    pwsh -File packaging/windows/build-msix.ps1 -Exe target/release/tray-monitor.exe
+    pwsh -File packaging/windows/build-msix.ps1 -Exe target/release/tiny-tray-monitor.exe
 #>
 [CmdletBinding()]
 param(
@@ -48,7 +50,7 @@ param(
 
     [string]$PublisherDisplayName = $(if ($env:MSIX_PUBLISHER_DISPLAY_NAME) { $env:MSIX_PUBLISHER_DISPLAY_NAME } else { 'tinyrack' }),
 
-    [string]$DisplayName = $(if ($env:MSIX_DISPLAY_NAME) { $env:MSIX_DISPLAY_NAME } else { 'TinyTrayManager' }),
+    [string]$DisplayName = $(if ($env:MSIX_DISPLAY_NAME) { $env:MSIX_DISPLAY_NAME } else { 'TinyTrayMonitor' }),
 
     [ValidateSet('x64', 'arm64')]
     [string]$Arch = 'x64'
@@ -103,7 +105,7 @@ if (Test-Path $stage) {
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'Assets') | Out-Null
 
-Copy-Item $Exe (Join-Path $stage 'tray-monitor.exe')
+Copy-Item $Exe (Join-Path $stage 'tiny-tray-monitor.exe')
 Copy-Item (Join-Path $assets '*.png') (Join-Path $stage 'Assets')
 
 $manifest = Get-Content $template -Raw -Encoding UTF8
@@ -149,7 +151,7 @@ if (-not $makeappx) {
     throw "makeappx.exe not found under Windows Kits\10\bin. Install the Windows SDK."
 }
 
-$package = Join-Path $OutputDir "tray-monitor-$shortVersion-windows-$Arch.msix"
+$package = Join-Path $OutputDir "tiny-tray-monitor-$shortVersion-windows-$Arch.msix"
 if (Test-Path $package) {
     Remove-Item -Force $package
 }
@@ -170,7 +172,7 @@ if (Test-Path $verify) {
 if ($LASTEXITCODE -ne 0) {
     throw "makeappx unpack failed with exit code $LASTEXITCODE."
 }
-foreach ($name in @('AppxManifest.xml', 'tray-monitor.exe', 'Assets\StoreLogo.png', 'Assets\Square150x150Logo.png')) {
+foreach ($name in @('AppxManifest.xml', 'tiny-tray-monitor.exe', 'Assets\StoreLogo.png', 'Assets\Square150x150Logo.png')) {
     if (-not (Test-Path (Join-Path $verify $name))) {
         throw "Package is missing $name."
     }

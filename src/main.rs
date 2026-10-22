@@ -41,22 +41,24 @@ fn install_panic_hook() {
     }));
 }
 
-/// 사용자에게 보이는 제품 이름. Store 표시 이름과 맞춘다.
-/// exe 이름과 설치·설정 경로는 업데이트 호환을 위해 `tray-monitor`로 유지한다.
-pub const PRODUCT_NAME: &str = "TinyTrayManager";
+/// 사용자에게 보이는 제품 이름. Store 표시 이름과 VERSIONINFO의 `FileDescription`과 맞춘다.
+///
+/// 작업 관리자와 Windows 설정의 "기타 시스템 트레이 아이콘" 목록은 툴팁이 아니라
+/// `FileDescription`을 이름으로 보여 준다(`docs/SPIKE.md` §18).
+pub const PRODUCT_NAME: &str = "TinyTrayMonitor";
 
 const USAGE: &str = "\
-TinyTrayManager - CPU / memory / network readouts in the Windows tray
+TinyTrayMonitor - CPU, memory, network, GPU and disk readouts in the Windows tray
 
 usage:
-  tray-monitor                run the tray app
-  tray-monitor --settings     run and open the settings window
-  tray-monitor --probe        print metrics every second (no tray)
-  tray-monitor --interfaces   list network interfaces and what is counted
-  tray-monitor --dump         dump icon renderings and layout measurements
-  tray-monitor --theme        print the taskbar theme and dark mode support
-  tray-monitor --dpi [--watch] print the DPI values that pick the icon size
-  tray-monitor --help         show this message
+  tiny-tray-monitor                 run the tray app
+  tiny-tray-monitor --settings      run and open the settings window
+  tiny-tray-monitor --probe         print metrics every second (no tray)
+  tiny-tray-monitor --interfaces    list network interfaces and what is counted
+  tiny-tray-monitor --dump          dump icon renderings and layout measurements
+  tiny-tray-monitor --theme         print the taskbar theme and dark mode support
+  tiny-tray-monitor --dpi [--watch] print the DPI values that pick the icon size
+  tiny-tray-monitor --help          show this message
 ";
 
 fn main() {
@@ -100,8 +102,13 @@ fn main() {
     }
 
     let dpi_set_at_runtime = win32::set_dpi_awareness();
+    // 로그가 새 폴더에 쌓이도록 로그를 열기 전에 옛 폴더를 옮긴다.
+    let moved = platform::migrate_legacy_dirs();
     logging::init();
     install_panic_hook();
+    for note in moved {
+        logging::info(note);
+    }
     // App이 `config.toml`의 언어를 적용하기 전까지 쓸 기본값. 실패 알림도 이 언어로 나간다.
     i18n::use_system_language();
     // 매니페스트의 DPI 선언이 실제로 링크되었는지 로그로 확인한다(실패하면 런타임 폴백이다).
@@ -120,6 +127,10 @@ fn main() {
         logging::info("already running, exiting");
         win32::inform(PRODUCT_NAME, &i18n::already_running(PRODUCT_NAME));
         return;
+    }
+
+    if let Some(note) = startup::migrate_legacy() {
+        logging::info(note);
     }
 
     let px = win32::tray_icon_size();

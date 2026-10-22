@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Builds the Inno Setup installer for tray-monitor.
+    Builds the Inno Setup installer for TinyTrayMonitor.
 
 .DESCRIPTION
     The version comes from the built executable's VERSIONINFO, so the installer
@@ -9,7 +9,7 @@
     $env:ISCC, the per-user winget location, or the machine-wide install.
 
 .PARAMETER Exe
-    Path to the release tray-monitor.exe. Required.
+    Path to the release tiny-tray-monitor.exe. Required.
 
 .PARAMETER OutputDir
     Directory for the setup executable. Defaults to <repo>\dist.
@@ -18,7 +18,7 @@
     Explicit path to ISCC.exe. Usually unnecessary.
 
 .EXAMPLE
-    pwsh -File packaging/windows/build-installer.ps1 -Exe target/release/tray-monitor.exe
+    pwsh -File packaging/windows/build-installer.ps1 -Exe target/release/tiny-tray-monitor.exe
 #>
 [CmdletBinding()]
 param(
@@ -33,7 +33,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$iss = Join-Path $PSScriptRoot 'tray-monitor.iss'
+$iss = Join-Path $PSScriptRoot 'tiny-tray-monitor.iss'
 
 if (-not (Test-Path $Exe)) {
     throw "Executable not found: $Exe. Run 'cargo build --release' first."
@@ -80,7 +80,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "ISCC failed with exit code $LASTEXITCODE."
 }
 
-$setup = Join-Path $OutputDir "tray-monitor-$version-windows-x64-setup.exe"
+$setup = Join-Path $OutputDir "tiny-tray-monitor-$version-windows-x64-setup.exe"
 if (-not (Test-Path $setup)) {
     throw "ISCC reported success but $setup is missing."
 }

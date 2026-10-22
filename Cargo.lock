@@ -1003,6 +1003,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tiny-tray-monitor"
+version = "0.10.1"
+dependencies = [
+ "embed-resource",
+ "serde",
+ "toml 1.1.8+spec-1.1.0",
+ "tray-icon",
+ "windows",
+ "windows-future",
+ "windows-registry",
+]
+
+[[package]]
 name = "toml"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1105,19 +1118,6 @@ dependencies = [
  "png",
  "thiserror 2.0.21",
  "windows-sys",
-]
-
-[[package]]
-name = "tray-monitor"
-version = "0.10.1"
-dependencies = [
- "embed-resource",
- "serde",
- "toml 1.1.8+spec-1.1.0",
- "tray-icon",
- "windows",
- "windows-future",
- "windows-registry",
 ]
 
 [[package]]

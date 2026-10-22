@@ -195,7 +195,7 @@ pub struct Text {
 }
 
 pub const EN: Text = Text {
-    window_title: "TinyTrayManager settings",
+    window_title: "TinyTrayMonitor settings",
     close: "Close",
     reset: "Reset to defaults",
     reset_done: "Reset to defaults",
@@ -300,7 +300,7 @@ pub const EN: Text = Text {
 };
 
 pub const KO: Text = Text {
-    window_title: "TinyTrayManager 설정",
+    window_title: "TinyTrayMonitor 설정",
     close: "닫기",
     reset: "기본값으로 복원",
     reset_done: "기본값으로 복원했습니다",
@@ -405,7 +405,7 @@ pub const KO: Text = Text {
 };
 
 pub const JA: Text = Text {
-    window_title: "TinyTrayManager の設定",
+    window_title: "TinyTrayMonitor の設定",
     close: "閉じる",
     reset: "既定値に戻す",
     reset_done: "既定値に戻しました",
@@ -976,8 +976,8 @@ mod tests {
                 info_gpu("8.00 GB"),
                 info_network_all(3),
                 info_disk("Samsung SSD", "1.07 TB", "1.86 TB"),
-                already_running("TinyTrayManager"),
-                start_failed("TinyTrayManager", "boom"),
+                already_running("TinyTrayMonitor"),
+                start_failed("TinyTrayMonitor", "boom"),
                 save_failed("denied"),
                 autostart_failed("denied"),
                 note_interval_clamped(1, 250),

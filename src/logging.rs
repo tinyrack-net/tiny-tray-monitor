@@ -1,7 +1,7 @@
 //! 파일 로그.
 //!
 //! 릴리스 빌드는 콘솔이 없으므로(`windows_subsystem`) 문제를 추적할 수 없다.
-//! `%LOCALAPPDATA%\tray-monitor\log.txt`에 남기고, 일정 크기를 넘으면 한 번 갈아치운다.
+//! `%LOCALAPPDATA%\TinyTrayMonitor\log.txt`에 남기고, 일정 크기를 넘으면 한 번 갈아치운다.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -13,7 +13,7 @@ const MAX_BYTES: u64 = 256 * 1024;
 
 static LOGGER: OnceLock<Mutex<Option<File>>> = OnceLock::new();
 
-/// `%LOCALAPPDATA%\tray-monitor` (패키지에서는 `LocalState`)
+/// `%LOCALAPPDATA%\TinyTrayMonitor` (패키지에서는 `LocalState`)
 pub fn data_dir() -> PathBuf {
     crate::platform::data_dir()
 }
@@ -103,7 +103,11 @@ mod tests {
     #[test]
     fn data_dir_is_under_local_appdata() {
         let dir = data_dir();
-        assert!(dir.ends_with("tray-monitor"), "{}", dir.display());
+        assert!(
+            dir.ends_with(crate::platform::DIR_NAME),
+            "{}",
+            dir.display()
+        );
         if let Some(base) = std::env::var_os("LOCALAPPDATA") {
             assert!(dir.starts_with(PathBuf::from(base)));
         }

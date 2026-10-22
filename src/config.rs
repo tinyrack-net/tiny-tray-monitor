@@ -205,7 +205,7 @@ impl Config {
     }
 }
 
-/// `%APPDATA%\tray-monitor` (패키지에서는 `LocalState`)
+/// `%APPDATA%\TinyTrayMonitor` (패키지에서는 `LocalState`)
 pub fn config_dir() -> PathBuf {
     crate::platform::config_dir()
 }
@@ -271,7 +271,7 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("tray-monitor-test-{name}"));
+        let dir = std::env::temp_dir().join(format!("tiny-tray-monitor-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }

@@ -64,7 +64,7 @@ manifest 최소 형태(검증됨):
   </Dependencies>
   <Capabilities><rescap:Capability Name="runFullTrust" /></Capabilities>
   <Applications>
-    <Application Id="TrayMonitor" Executable="tray-monitor.exe"
+    <Application Id="TrayMonitor" Executable="tiny-tray-monitor.exe"
                  EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements DisplayName="tray-monitor" Description="…"
         Square44x44Logo="Assets\Square44x44Logo.png"
@@ -73,7 +73,7 @@ manifest 최소 형태(검증됨):
       </uap:VisualElements>
       <Extensions>
         <uap5:Extension Category="windows.startupTask"
-                        Executable="tray-monitor.exe"
+                        Executable="tiny-tray-monitor.exe"
                         EntryPoint="Windows.FullTrustApplication">
           <uap5:StartupTask TaskId="TrayMonitorStartup" Enabled="true"
                             DisplayName="tray-monitor" />
@@ -97,7 +97,7 @@ manifest 최소 형태(검증됨):
 2. **파일 쓰기 가상화**
    - `%APPDATA%`에 **새 폴더**를 만들면
      `%LOCALAPPDATA%\Packages\<PFN>\LocalCache\Roaming`으로 리다이렉트된다.
-   - 이미 존재하는 `%APPDATA%\tray-monitor` 안의 파일은 실제 경로에 쓴다(실측).
+   - 이미 존재하는 `%APPDATA%\TinyTrayMonitor` 안의 파일은 실제 경로에 쓴다(실측).
    - 즉 **설치 이력에 따라 설정/로그 위치가 달라진다.**
      설정 창이 바꾼 값이 다른 파일에 저장될 수 있다.
    - 대응: 패키지 모드에서는 `LocalState`를 명시적으로 쓴다.
@@ -147,7 +147,7 @@ manifest 최소 형태(검증됨):
 | 항목 | 결정 | 근거 |
 | --- | --- | --- |
 | Installer | **Inno Setup 6** | 조직 표준(tinest)과 동일, 러너 사전 설치, 사용자 단위 설치로 UAC 불필요, 경로 고정 |
-| 설치 범위 | 기본 **per-user**(`{localappdata}\Programs\tray-monitor`), `PrivilegesRequiredOverridesAllowed=commandline dialog` | 트레이 앱은 HKCU 설정과 per-user가 일치. 추후 관리자 권한이 필요해지면 설치 프로그램만 per-machine으로 전환하거나 드라이버를 별도 MSI로 분리 |
+| 설치 범위 | 기본 **per-user**(`{localappdata}\Programs\TinyTrayMonitor`), `PrivilegesRequiredOverridesAllowed=commandline dialog` | 트레이 앱은 HKCU 설정과 per-user가 일치. 추후 관리자 권한이 필요해지면 설치 프로그램만 per-machine으로 전환하거나 드라이버를 별도 MSI로 분리 |
 | 서명 | **이번 스코프 없음** (unsigned 빌드) | MSIX는 Store 제출 시 Microsoft가 서명. 일반 배포용 MSIX는 추후 인증서/Artifact Signing 필요 |
 | MSIX 데이터 경로 | **패키지 인식 경로 분기** | Store 정책에 안전. `unvirtualizedResources` 불필요 |
 | MSIX 자동 시작 | **StartupTask API** | 패키지에서 Run 키가 무동작 |
@@ -164,9 +164,9 @@ manifest 최소 형태(검증됨):
 
 | 파일 | 설명 |
 | --- | --- |
-| `tray-monitor-X.Y.Z-windows-x64.zip` | 기존 포터블 |
-| `tray-monitor-X.Y.Z-windows-x64-setup.exe` | Inno Setup installer |
-| `tray-monitor-X.Y.Z-windows-x64.msix` | Store 제출용(현재 unsigned) |
+| `tiny-tray-monitor-X.Y.Z-windows-x64.zip` | 기존 포터블 |
+| `tiny-tray-monitor-X.Y.Z-windows-x64-setup.exe` | Inno Setup installer |
+| `tiny-tray-monitor-X.Y.Z-windows-x64.msix` | Store 제출용(현재 unsigned) |
 | `SHA256SUMS` | 위 세 파일(LF 개행 유지) |
 
 ---
@@ -201,13 +201,13 @@ manifest 최소 형태(검증됨):
 ```rust
 pub fn packaged() -> bool;            // GetCurrentPackageFullName != APPMODEL_ERROR_NO_PACKAGE
 pub fn package_family_name() -> Option<String>;
-pub fn config_dir() -> PathBuf;       // 패키지: LocalState, 그 외: %APPDATA%\tray-monitor
-pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALAPPDATA%\tray-monitor
+pub fn config_dir() -> PathBuf;       // 패키지: LocalState, 그 외: %APPDATA%\TinyTrayMonitor
+pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALAPPDATA%\TinyTrayMonitor
 ```
 
 - `config.rs::config_dir()`, `logging.rs::data_dir()`가 이 모듈을 쓰도록 바꾼다.
 - 패키지 첫 실행 마이그레이션: `LocalState`에 설정이 없고
-  `%APPDATA%\tray-monitor\config.toml`이 읽히면 복사한다(읽기는 가상화되지 않음 — 실측).
+  `%APPDATA%\TinyTrayMonitor\config.toml`이 읽히면 복사한다(읽기는 가상화되지 않음 — 실측).
 - 순수 경로 결정 함수(`resolve_dirs(packaged, pfn, appdata, localappdata)`)를 분리해 단위 테스트.
 - `logging::init()`은 마이그레이션 뒤에 호출되도록 순서 확인.
 
@@ -232,22 +232,22 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 ### 4.3 Installer (P3)
 
-`packaging/windows/tray-monitor.iss`:
+`packaging/windows/tiny-tray-monitor.iss`:
 
-- `AppId` 고정 GUID, `DefaultDirName={autopf}\tray-monitor`,
+- `AppId` 고정 GUID, `DefaultDirName={autopf}\TinyTrayMonitor`,
   `PrivilegesRequired=lowest`, `PrivilegesRequiredOverridesAllowed=commandline dialog`.
 - `AppMutex=Local\tray-monitor-single-instance`,
   `CloseApplications=yes`, `RestartApplications=no`.
 - `[Code] PrepareToInstall`:
   - `FindWindow('tray-monitor-ipc', '')` → `PostMessage(WM_CLOSE)`.
   - 창이 사라질 때까지 최대 5초 대기. 그래도 있으면 종료를 요청하는 메시지.
-- `[Registry]`: 언인스톨 시 `HKCU\...\Run\tray-monitor` 제거(`uninsdeletevalue`).
-  설정 파일(`%APPDATA%\tray-monitor`)은 남긴다.
+- `[Registry]`: 언인스톨 시 `HKCU\...\Run\TinyTrayMonitor` 제거(옛 `tray-monitor` 값도)(`uninsdeletevalue`).
+  설정 파일(`%APPDATA%\TinyTrayMonitor`)은 남긴다.
 - `[Icons]`: 시작 메뉴 바로가기, 선택적 바탕 화면 아이콘.
 - `[Run]`: `runasoriginaluser`, `skipifsilent`로 설치 후 실행.
-- `SetupIconFile=resources\app.ico`, `UninstallDisplayIcon={app}\tray-monitor.exe`,
+- `SetupIconFile=resources\app.ico`, `UninstallDisplayIcon={app}\tiny-tray-monitor.exe`,
   `LicenseFile=LICENSE`, `MinVersion=10.0.17763`, 영문/한국어.
-- 출력: `tray-monitor-<ver>-windows-x64-setup.exe`.
+- 출력: `tiny-tray-monitor-<ver>-windows-x64-setup.exe`.
 
 `packaging/windows/build-installer.ps1`:
 
@@ -265,7 +265,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 - 기본값 `tinyrack.TinyTrayManager`, `CN=42FA8D93-3683-4A00-A40C-5ED8A02E8B3A`.
   환경 변수 `MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER`, `MSIX_PUBLISHER_DISPLAY_NAME`로 덮어쓰기.
 - 선택 사항: `uap5:AppExecutionAlias`(`desktop4:Subsystem="windows"`)로
-  `tray-monitor --dump` 같은 진단 명령을 패키지 설치에서도 쓸 수 있게 한다(구현 시 검증).
+  `tiny-tray-monitor --dump` 같은 진단 명령을 패키지 설치에서도 쓸 수 있게 한다(구현 시 검증).
 
 `packaging/windows/build-msix.ps1`:
 
@@ -275,7 +275,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 - `makeappx pack /d <staging> /p <out> /o`.
 - 검증: `makeappx unpack` 왕복 + manifest/자산/exe 존재 확인.
 - 서명 없음. 추후 인증서가 생기면 `signtool` 단계만 추가.
-- 출력: `tray-monitor-<ver>-windows-x64.msix`.
+- 출력: `tiny-tray-monitor-<ver>-windows-x64.msix`.
 
 `packaging/windows/Assets/`:
 
@@ -334,7 +334,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 3. MSIX `-Register` → 트레이, 설정 창, `Run at sign-in` 토긘이 StartupTask를 켜는지.
 4. MSIX에서 설정 변경 → `LocalState\config.toml`에 기록되는지.
 5. MSIX 버전 업데이트 → 같은 GUID 키가 새 경로로 옮겨지고 승격 유지, 온보딩 없음.
-6. 새 설치 직후 `HKCU\...\Run`에 `tray-monitor` 값이 있는지, 설정에서 끄면 사라지는지,
+6. 새 설치 직후 `HKCU\...\Run`에 `TinyTrayMonitor` 값이 있는지, 설정에서 끄면 사라지는지,
    업그레이드해도 다시 생기지 않는지(§11).
 
 ---
@@ -451,9 +451,29 @@ GUID만으로 성립했다.
 
 - 제거는 두 경로 모두 Run 값을 지운다(`[Registry] Flags: uninsdeletevalue` + `[Code]`의
   `RegDeleteValue`). 앱 설정에서 직접 켠 값도 남지 않는다.
-- 설치 프로그램의 마지막 페이지 "Launch TinyTrayManager" 체크박스(기본 체크)는 그대로 둔다.
+- 설치 프로그램의 마지막 페이지 "Launch TinyTrayMonitor" 체크박스(기본 체크)는 그대로 둔다.
   무인 설치에서는 실행하지 않는다(`skipifsilent`) — CI의 무인 설치/제거 스모크가 앱이 떠
   있는 상태와 부딪히지 않게 한다.
-- 값 형식은 앱과 같아야 한다: `"C:\...\tray-monitor.exe"`(따옴표 포함). `startup.rs`의
+- 값 형식은 앱과 같아야 한다: `"C:\...\tiny-tray-monitor.exe"`(따옴표 포함). `startup.rs`의
   `is_enabled_named`가 문자열을 그대로 비교한다.
 - 포터블 zip은 설치 단계가 없어 예전처럼 꺼진 상태로 시작한다.
+
+## 12. v0.11.0 이름 변경 (TinyTrayManager / tray-monitor.exe → TinyTrayMonitor / tiny-tray-monitor.exe)
+
+한 번만 하는 변경이다. 바뀐 것과 그대로 둔 것을 구분해 적는다.
+
+| 항목 | 이전 | 이후 | 이유 |
+| --- | --- | --- | --- |
+| exe | `tray-monitor.exe` | `tiny-tray-monitor.exe` | 작업 관리자 표시 |
+| `FileDescription` / `ProductName` | 긴 설명 / `TinyTrayManager` | `TinyTrayMonitor` | 작업 관리자와 "기타 시스템 트레이 아이콘"이 `FileDescription`을 보여 준다(SPIKE §18) |
+| 설정·로그 폴더 | `%APPDATA%`/`%LOCALAPPDATA%\tray-monitor` | `...\TinyTrayMonitor` | 첫 실행에서 `platform::migrate_legacy_dirs`가 폴더를 옮긴다. 옛 버전이 떠 있어 옮기지 못하면 `config.toml`만 복사 |
+| `Run` 값 | `tray-monitor` | `TinyTrayMonitor` | installer `CurStepChanged`와 앱 `startup::migrate_legacy`가 둘 다 옮긴다(압축본 사용자는 앱이 옮긴다) |
+| 새 설치 폴더 | `{autopf}\tray-monitor` | `{autopf}\TinyTrayMonitor` | 업그레이드는 `UsePreviousAppDir`로 기존 폴더를 그대로 쓴다 |
+| 옛 exe·바로 가기 | | `[InstallDelete]`로 삭제 | 시작 메뉴에 옛 이름이 남지 않게 |
+| 릴리스 파일 | `tray-monitor-<ver>-…` | `tiny-tray-monitor-<ver>-…` | |
+| MSIX `DisplayName` | `TinyTrayManager` | `TinyTrayMonitor` | Partner Center에 `TinyTrayMonitor` 이름을 추가 예약했다 |
+| **그대로** MSIX `Identity Name` | `tinyrack.TinyTrayManager` | 같음 | 바꾸면 새 제품이다(구매·업데이트·`LocalState`가 끊긴다) |
+| **그대로** `Application Id`, `TaskId` | `TrayMonitor`, `TrayMonitorStartup` | 같음 | 시작 메뉴 고정·자동 시작 상태 유지 |
+| **그대로** installer `AppId` | `{3E1D7B2A-…}` | 같음 | 업그레이드로 인식 |
+| **그대로** mutex, IPC 창 클래스 | `Local\tray-monitor-single-instance`, `tray-monitor-ipc` | 같음 | 옛 버전과 새 버전이 서로를 찾고, installer가 옛 버전도 종료시킨다 |
+| **그대로** 트레이 GUID | `tray::TRAY_GUIDS` | 같음 | 고정 유지(실측: exe 이름만 바꿔도 8개 모두 `IsPromoted=1` 유지) |

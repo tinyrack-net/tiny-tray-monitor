@@ -1,4 +1,4 @@
-// tray-monitor 리소스.
+// TinyTrayMonitor 리소스.
 //
 // - VERSIONINFO: 파일 속성(속성 > 자세히)에 보이는 버전. 숫자는 build.rs가 만든
 //   version_defines.rc에서 온다. 여기에 손으로 적지 않는다.
@@ -79,12 +79,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "tinyrack"
-            VALUE "FileDescription", "CPU, memory, network, GPU and disk readouts in the Windows system tray"
+            VALUE "FileDescription", "TinyTrayMonitor"
             VALUE "FileVersion", APP_VERSION_STRING
-            VALUE "InternalName", "tray-monitor"
+            VALUE "InternalName", "tiny-tray-monitor"
             VALUE "LegalCopyright", "Copyright (c) 2026 winetree94"
-            VALUE "OriginalFilename", "tray-monitor.exe"
-            VALUE "ProductName", "TinyTrayManager"
+            VALUE "OriginalFilename", "tiny-tray-monitor.exe"
+            VALUE "ProductName", "TinyTrayMonitor"
             VALUE "ProductVersion", APP_VERSION_STRING
         END
     END
