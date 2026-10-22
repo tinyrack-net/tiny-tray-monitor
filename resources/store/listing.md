@@ -53,11 +53,7 @@ TinyTrayMonitor is open source (MIT). The Microsoft Store build uses the Windows
 
 Requires Windows 10 version 1809 or later.
 
-## What's new (0.11.0)
+## What's new (0.12.0)
 
-- TinyTrayManager is now **TinyTrayMonitor**. Task Manager and the taskbar settings show the new
-name. Your settings and pinned readouts carry over.
-- Two new readouts: disk usage (DSK) and disk activity (DIO), for the system drive or the drive
-you pick.
-- Pick which graphics card, network adapter and drive each readout measures.
-- A new settings window with a page per readout, and a light, dark or automatic window theme.
+- Every part of the app now uses the TinyTrayMonitor name, including its startup entry.
+- If the readouts no longer start at sign-in after this update, turn on "Run at sign-in" in Settings once.
