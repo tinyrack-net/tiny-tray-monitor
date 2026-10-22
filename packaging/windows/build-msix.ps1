@@ -125,8 +125,8 @@ if ($xml.Package.Identity.Version -ne $quad) {
 }
 $task = $xml.Package.Applications.Application.Extensions.ChildNodes |
     Where-Object { $_.StartupTask } | Select-Object -First 1
-if (-not $task -or $task.StartupTask.TaskId -ne 'TrayMonitorStartup') {
-    throw 'Manifest is missing the TrayMonitorStartup startup task.'
+if (-not $task -or $task.StartupTask.TaskId -ne 'TinyTrayMonitorStartup') {
+    throw 'Manifest is missing the TinyTrayMonitorStartup startup task.'
 }
 
 function Find-MakeAppx {

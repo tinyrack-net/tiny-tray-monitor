@@ -40,10 +40,8 @@
   </Capabilities>
 
   <Applications>
-    <!-- Id와 TaskId는 이름을 바꿔도 그대로 둔다. 바꾸면 시작 메뉴 고정과
-         사용자가 고른 자동 시작 상태가 새 앱으로 취급된다. -->
     <Application
-      Id="TrayMonitor"
+      Id="TinyTrayMonitor"
       Executable="tiny-tray-monitor.exe"
       EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
@@ -64,7 +62,7 @@
           Executable="tiny-tray-monitor.exe"
           EntryPoint="Windows.FullTrustApplication">
           <uap5:StartupTask
-            TaskId="TrayMonitorStartup"
+            TaskId="TinyTrayMonitorStartup"
             Enabled="true"
             DisplayName="@DISPLAY_NAME@" />
         </uap5:Extension>

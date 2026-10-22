@@ -102,13 +102,8 @@ fn main() {
     }
 
     let dpi_set_at_runtime = win32::set_dpi_awareness();
-    // 로그가 새 폴더에 쌓이도록 로그를 열기 전에 옛 폴더를 옮긴다.
-    let moved = platform::migrate_legacy_dirs();
     logging::init();
     install_panic_hook();
-    for note in moved {
-        logging::info(note);
-    }
     // App이 `config.toml`의 언어를 적용하기 전까지 쓸 기본값. 실패 알림도 이 언어로 나간다.
     i18n::use_system_language();
     // 매니페스트의 DPI 선언이 실제로 링크되었는지 로그로 확인한다(실패하면 런타임 폴백이다).
@@ -127,10 +122,6 @@ fn main() {
         logging::info("already running, exiting");
         win32::inform(PRODUCT_NAME, &i18n::already_running(PRODUCT_NAME));
         return;
-    }
-
-    if let Some(note) = startup::migrate_legacy() {
-        logging::info(note);
     }
 
     let px = win32::tray_icon_size();

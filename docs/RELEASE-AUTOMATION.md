@@ -5,7 +5,7 @@
 구체화한 문서다.
 
 - 저장소: `github.com/tinyrack-net/tiny-tray-monitor` (v0.11.0 전 `tray-monitor`, GitHub가 옛 주소를 넘겨 준다)
-- 제품: **TinyTrayMonitor** (v0.11.0 전 TinyTrayManager, 패키지 identity는 `tinyrack.TinyTrayManager` 그대로, Store ID `9MT22CHX25FD`, 유료 USD 1.99 / KRW 2,500)
+- 제품: **TinyTrayMonitor** (v0.11.0 전 TinyTrayManager. 패키지 identity `tinyrack.TinyTrayManager`는 Partner Center가 고정, Store ID `9MT22CHX25FD`, 유료 USD 1.99 / KRW 2,500)
 - 이 문서는 계획이다. 실측하지 않은 항목은 **미검증**으로 표시한다.
 
 ---
