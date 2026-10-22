@@ -12,8 +12,6 @@ Partner Center → Store listing → 日本語(日本)。英語の `listing.md` 
 
 ## Description
 
-2026 年 12 月 31 日まで無料です。2027 年 1 月 1 日から有料になります。それまでに入手した方は、その後も無料で使い続けられ、更新も受け取れます。
-
 TinyTrayMonitor は Windows のシステム トレイで PC の状態を表示します。8 つの小さな項目が、いま起きていることをすぐに教えてくれます。
 
 - CPU 使用率

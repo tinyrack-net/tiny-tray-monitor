@@ -12,8 +12,6 @@ Partner Center → Store listing → 한국어(대한민국). 영어 `listing.md
 
 ## Description
 
-2026년 12월 31일까지 무료입니다. 2027년 1월 1일부터 유료로 전환되며, 그 전에 받은 분은 계속 무료로 사용하고 업데이트도 받습니다.
-
 TinyTrayMonitor는 Windows 시스템 트레이에서 PC 상태를 보여 줍니다. 작은 지표 8개가 지금 일어나는 일을 바로 알려 줍니다.
 
 - CPU 사용률
