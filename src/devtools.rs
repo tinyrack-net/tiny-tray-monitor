@@ -126,6 +126,8 @@ fn tag(metric: Metric) -> &'static str {
         Metric::NetworkUp => "NETU",
         Metric::Gpu => "GPU",
         Metric::GpuVram => "VRM",
+        Metric::DiskUsage => "DSK",
+        Metric::DiskActive => "DIO",
     }
 }
 
@@ -138,6 +140,8 @@ fn sample_value(metric: Metric) -> (&'static str, &'static str) {
         Metric::NetworkUp => ("1.2", "MB"),
         Metric::Gpu => ("14", "%"),
         Metric::GpuVram => ("75", "%"),
+        Metric::DiskUsage => ("58", "%"),
+        Metric::DiskActive => ("100", "%"),
     }
 }
 
@@ -253,7 +257,7 @@ pub fn dump() {
 
     println!();
     println!(
-        "out/{{dark,light}}_px{{{}}}_{{CPU,MEM,NETD,NETU,GPU,VRM}}@{ZOOM}x.bmp",
+        "out/{{dark,light}}_px{{{}}}_{{CPU,MEM,NETD,NETU,GPU,VRM,DSK,DIO}}@{ZOOM}x.bmp",
         DUMP_SIZES.map(|px| px.to_string()).join(",")
     );
     println!("out/{{dark,light}}_long_{{cpu100,dn1.2gb,dn999kb}}@{ZOOM}x.bmp");
@@ -261,12 +265,13 @@ pub fn dump() {
 
 /// 1초마다 지표를 출력한다.
 pub fn probe() {
-    let mut sampler = metrics::Sampler::new(true);
+    let config = crate::config::Store::load().config;
+    let mut sampler = metrics::Sampler::new(config.exclude_virtual_adapters, &config.devices);
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let sample = sampler.sample();
         println!(
-            "cpu {:>6}  mem {:>6}  net down {:>12} up {:>12}  gpu {:>6}  vram {:>6}   icons [{}/{}/{}/{}/{}/{}]",
+            "cpu {:>6}  mem {:>6}  net down {:>12} up {:>12}  gpu {:>6}  vram {:>6}  disk {:>6}  io {:>6} (r {:>12} w {:>12})   icons [{}/{}/{}/{}/{}/{}/{}/{}]",
             sample
                 .cpu_percent
                 .map(|v| format!("{v:.1}%"))
@@ -292,6 +297,22 @@ pub fn probe() {
                 .map(|v| format!("{:.1}%", v.percent))
                 .unwrap_or_else(|| "-".into()),
             sample
+                .disk_usage
+                .map(|d| format!("{:.1}%", d.percent))
+                .unwrap_or_else(|| "-".into()),
+            sample
+                .disk_active
+                .map(|d| format!("{:.1}%", d.percent))
+                .unwrap_or_else(|| "-".into()),
+            sample
+                .disk_active
+                .map(|d| metrics::format::rate_long(d.read))
+                .unwrap_or_else(|| "-".into()),
+            sample
+                .disk_active
+                .map(|d| metrics::format::rate_long(d.write))
+                .unwrap_or_else(|| "-".into()),
+            sample
                 .cpu_percent
                 .map(metrics::format::percent)
                 .unwrap_or_default(),
@@ -314,6 +335,14 @@ pub fn probe() {
             sample
                 .gpu_vram
                 .map(|v| metrics::format::percent(v.percent))
+                .unwrap_or_default(),
+            sample
+                .disk_usage
+                .map(|d| metrics::format::percent(d.percent))
+                .unwrap_or_default(),
+            sample
+                .disk_active
+                .map(|d| metrics::format::percent(d.percent))
                 .unwrap_or_default(),
         );
     }
@@ -358,7 +387,7 @@ mod tests {
     /// `tools/icon_sheet.py`의 TAGS와 같아야 시트가 만들어진다.
     #[test]
     fn dump_tags_match_the_sheet_tool() {
-        let expected = ["CPU", "MEM", "NETD", "NETU", "GPU", "VRM"];
+        let expected = ["CPU", "MEM", "NETD", "NETU", "GPU", "VRM", "DSK", "DIO"];
         let actual: Vec<&str> = Metric::ALL.iter().map(|metric| tag(*metric)).collect();
         assert_eq!(actual, expected);
     }

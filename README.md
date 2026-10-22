@@ -2,24 +2,25 @@
 
 # tray-monitor
 
-**CPU, memory, network and GPU readouts in the Windows system tray.**
+**CPU, memory, network, GPU and disk readouts in the Windows system tray.**
 
 [![CI](https://github.com/tinyrack-net/tray-monitor/actions/workflows/pipeline.yml/badge.svg)](https://github.com/tinyrack-net/tray-monitor/actions/workflows/pipeline.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
 
-tray-monitor puts six live readouts in the taskbar notification area, each showing
+tray-monitor puts eight live readouts in the taskbar notification area, each showing
 what it measures and its current value:
 
 ```
- VRM   GPU   ↑KB   ↓MB   MEM   CPU
- 90    14    341   1.7   41    34
+ DIO   DSK   VRM   GPU   ↑KB   ↓MB   MEM   CPU
+ 6     58    90    14    341   1.7   41    34
 ```
 
 No administrator rights, no kernel driver, no background service. It reads CPU time
-counters, `GlobalMemoryStatusEx`, the interface table and the GPU engine statistics
-(`D3DKMTQueryStatistics`) directly.
+counters, `GlobalMemoryStatusEx`, the interface table, the GPU engine statistics
+(`D3DKMTQueryStatistics`) and the disk performance counters (`IOCTL_DISK_PERFORMANCE`)
+directly.
 
 ## Install
 
@@ -73,15 +74,18 @@ Right-click any of the icons.
 | Item | What it does |
 | --- | --- |
 | Settings… | Opens the settings window |
-| CPU / Memory / Network down / Network up / GPU / GPU VRAM | Show or hide that readout. The last visible one cannot be turned off |
+| CPU / Memory / Network down / Network up / GPU / GPU VRAM / Disk usage / Disk activity | Show or hide that readout. The last visible one cannot be turned off |
 | Exit | Stops tray-monitor |
 
-Hovering an icon shows the exact numbers, including upload rate and memory in GB.
+Hovering an icon shows the exact numbers, including upload rate, memory in GB and the disk
+read and write rates.
 
 ## Settings window
 
-Everything the menu does, plus the update interval, colours, network counting and startup, in
-one window. There is only ever one settings window:
+Everything the menu does, plus the update interval, colours, the device to measure and startup,
+in one window. The list on the left picks a page: **General** for the settings shared by every
+readout, then one page each for **CPU**, **Memory**, **GPU**, **Network** and **Disk**. There is
+only ever one settings window:
 
 | Situation | `Settings…` in the tray menu | Running `tray-monitor.exe` again |
 | --- | --- | --- |
@@ -89,20 +93,27 @@ one window. There is only ever one settings window:
 | Settings window closed | Opens it | Opens it in the running instance |
 | App not running | — | Starts the tray app without the settings window |
 
-| Setting | Notes |
-| --- | --- |
-| Readouts | CPU, memory, network down and up, GPU and GPU VRAM. The last one cannot be turned off, and the preview shows what the tray icons look like right now |
-| Update every | 250 ms to 10 s. Pick a preset or type an exact number of milliseconds |
-| Colours | One colour per readout, or a single colour from the taskbar theme |
-| Network | Count virtual adapters (Hyper-V, VPN, vSwitch) in the network total |
-| Startup | Run at sign-in: adds or removes the `HKCU\...\Run` entry (or the package startup task). A new install turns it on; turn it off here |
-| Language | `Automatic (system)`, English, 한국어 or 日本語. Applies at once to the window, the tray menu and the tooltips |
-| Buttons | Reset everything in `config.toml` to the defaults |
+| Page | Setting | Notes |
+| --- | --- | --- |
+| General | Update every | 250 ms to 10 s. Pick a preset or type an exact number of milliseconds |
+| General | Icon text | One colour per readout, or a single colour from the taskbar theme |
+| General | Window | `Automatic` follows the taskbar; `Light` or `Dark` forces this window and the tray menu. The tray icons always follow the taskbar so they stay readable |
+| General | Startup | Run at sign-in: adds or removes the `HKCU\...\Run` entry (or the package startup task). A new install turns it on; turn it off here |
+| General | Language | `Automatic (system)`, English, 한국어 or 日本語. Applies at once to the window, the tray menu and the tooltips |
+| CPU, Memory | Readouts | Show or hide the readout. The device line names the processor or the installed memory |
+| GPU | Device | `Automatic` measures the adapter with the most dedicated memory; or pick one adapter |
+| Network | Device | `All adapters` sums every counted adapter; or pick one, such as `Ethernet` or `Wi-Fi`. `Count virtual adapters` (Hyper-V, VPN, vSwitch) applies to the sum |
+| Disk | Device | `Automatic` measures the drive Windows is installed on; or pick a drive. Activity is the busy time of the physical disk behind that drive |
+| Every page | Readouts | The last visible readout cannot be turned off |
+| Buttons | Reset to defaults | Reset everything in `config.toml` to the defaults |
 
 There is no OK button: every change applies immediately and is written to `config.toml` at
 once, so the tray icons are the preview. Close the window with the button or `Escape`.
 
-With a dark taskbar the window opens dark, and the tray menu follows the same setting.
+A chosen device that disappears (a USB drive pulled out, a renamed adapter) is kept in the
+settings and marked `(not found)`; the readout falls back to the automatic choice until the
+device comes back.
+
 
 ## Configuration
 
@@ -114,6 +125,7 @@ config from `%APPDATA%\tray-monitor` is copied there on the first packaged run.
 poll_interval_ms = 1000          # 250 ~ 10000
 exclude_virtual_adapters = true  # skip adapters that mirror physical traffic
 color_mode = "metric"            # "metric" = one colour per readout, "theme" = single colour
+ui_theme = "auto"                # window and tray menu: "auto" | "light" | "dark"
 language = "auto"                # "auto" | "en" | "ko" | "ja"
 
 [show]
@@ -123,6 +135,13 @@ network_down = true
 network_up = true
 gpu = true
 gpu_vram = true
+disk_usage = true
+disk_active = true
+
+[devices]                        # empty = automatic
+gpu = ""                         # adapter name, e.g. "NVIDIA GeForce RTX 4060"
+network = ""                     # interface alias, e.g. "Ethernet" or "Wi-Fi"
+disk = ""                        # drive, e.g. "D:"
 ```
 
 A `network = ...` setting written by v0.1.0 is migrated to `network_down` and
@@ -168,6 +187,8 @@ keyboard launchers.
 | Network down / up | `GetIfTable2` byte counters, loopback and tunnel interfaces excluded |
 | GPU | `D3DKMTQueryStatistics` per-engine running time deltas. The readout is the busiest engine of the adapter with the largest dedicated memory |
 | GPU VRAM | The same call, summed over the adapter's non-aperture segments, against the DXGI dedicated limit |
+| Disk usage | `GetDiskFreeSpaceExW` on the chosen drive |
+| Disk activity | `IOCTL_DISK_PERFORMANCE` on the physical disk behind that drive, opened with no access rights: `1 - idle / elapsed`, the same figure as *Active time* in Task Manager. A volume that spans several disks shows the busiest one |
 
 Values are formatted to fit a square icon and drawn with a built-in 1-bit pixel font
 (a 5px caption over a 10px value) into an RGBA bitmap, then handed to `Shell_NotifyIcon` as an
@@ -198,9 +219,11 @@ words at this size. Measurements for every candidate are in
 - Requires Windows 11 or Windows 10 (build 17063 or later for `GetIfTable2`).
 - CPU temperature, fan speed and voltages are not included: they need administrator rights
   and a kernel driver.
-- The GPU readout follows one adapter: the one with the largest dedicated memory. On a laptop
-  whose display adapter is not that one, the number belongs to the other GPU. The value is the
-  busiest engine of that adapter, so it can differ from the per-engine graphs in Task Manager.
+- The GPU readout follows one adapter: by default the one with the largest dedicated memory.
+  Pick another on the GPU page. The value is the busiest engine of that adapter, so it can
+  differ from the per-engine graphs in Task Manager.
+- The disk readouts follow one drive. Activity belongs to the whole physical disk, so two
+  drives on the same disk show the same activity.
 - The MSIX package is unsigned (developer mode or Store signing needed). A package update
   changes the executable path, but the fixed per-readout GUIDs keep the tray promotion. If the
   shell rejects a GUID, the app falls back to per-path registration, which Windows ties to the

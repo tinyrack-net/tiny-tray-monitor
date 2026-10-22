@@ -939,3 +939,57 @@ pub fn text(lang: Lang) -> &'static Text;
 
 `taskkill /F`로 죽이면 그 Explorer 세션에서는 키가 다시 기록되지 않는다. 정상 종료 경로를
 쓴다(문서화했다).
+
+---
+
+## 18. 디스크 사용량·로드율과 설정 창 페이지 (v0.11.0)
+
+디스크 지표 두 개를 추가하고, 설정 창을 분야별 페이지로 나눠 GPU·네트워크·디스크마다 잴 장치를
+고를 수 있게 했다. 실측 근거는 [SPIKE.md](SPIKE.md) §17.
+
+### 결정
+
+| 항목 | 결정 | 이유 |
+| --- | --- | --- |
+| 사용량 | `GetDiskFreeSpaceExW`, 기본은 Windows가 설치된 드라이브 | 사용자가 가장 먼저 신경 쓰는 공간이다 |
+| 로드율 | 드라이브가 놓인 물리 디스크의 `IOCTL_DISK_PERFORMANCE`, `1 - ΔIdleTime/ΔQueryTime` | 작업 관리자 "활성 시간"과 같은 공식. 관리자 권한이 필요 없다 |
+| 여러 디스크 볼륨 | 가장 바쁜 디스크의 값, 처리량은 합 | GPU의 가장 바쁜 엔진과 같은 요약 방식 |
+| 핸들 | 표본마다 열고 닫는다 | 열어 두면 USB 드라이브의 안전한 제거를 막는다 |
+| 캡션 | `DSK`/`DIO`, 글리프 `D`/`S`/`I`/`O` 추가 | 3글자 예산(§1). 시트로 16~36px 판독을 확인했다 |
+| 지표 등록 | `Metric::ALL` 끝에 붙이고 GUID 2개를 새로 발급 | 순서가 바뀌면 기존 승격이 어긋난다(§10, §17) |
+| 기본값 | 둘 다 `true` | GPU 때와 같다 |
+| 장치 저장 | `[devices]`에 이름으로(`gpu`=어댑터 설명, `network`=별칭, `disk`=`D:`) | 인덱스·LUID는 재부팅마다 바뀐다. 빈 값은 자동 |
+| 사라진 장치 | 값을 지우지 않고 자동으로 물러선다. 콤보에 `(not found)` | USB를 다시 꽂으면 그대로 따라간다 |
+| 네트워크 목록 | `GetAdaptersAddresses`(사람이 아는 9개) | `GetIfTable2`는 WFP/QoS 필터 인스턴스까지 59개 |
+| 창 구조 | 왼쪽 목록(오너드로) + 페이지. General / CPU / Memory / GPU / Network / Disk | 분야별 장치 선택이 들어갈 자리가 필요했다. 탭 컨트롤은 다크 모드 테마가 없다 |
+| 창 테마 | `ui_theme` = auto / light / dark. 창과 트레이 메뉴만 바꾸고 아이콘은 늘 작업 표시줄을 따른다 | 아이콘 색을 창 테마에 묶으면 작업 표시줄 위에서 안 보일 수 있다 |
+
+### 구현 메모
+
+- 페이지 정의·장치 콤보 항목·장치 그룹 배치는 `settings/pages.rs`의 순수 함수다. 콤보 항목은
+  `(label, value)`로 들고 있다가 고른 위치를 값으로 바꾼다.
+- 분야 페이지는 같은 컨트롤(`IDC_SHOW_1/2`, `IDC_DEVICE`, `IDC_DEVICE_INFO`)을 돌려 쓴다.
+  장치 그룹 높이는 페이지마다 달라 `place_control`이 DLU로 옮긴다.
+- 페이지 제목은 지표 색(창 테마의 팔레트)으로, 목록 항목은 지표 색 점과 선택 막대로 그린다.
+- 다크 모드 제목 표시줄은 `DWMWA_USE_IMMERSIVE_DARK_MODE`(공개 API)로 맞춘다.
+- 네트워크에서 인터페이스 하나를 고르면 `Count virtual adapters` 체크박스를 끈다(합산에만 의미).
+- 그룹 안 배치는 격자 하나를 따른다: 좌우 여백 8, 설명 +11, 줄은 +24부터 14 간격, 마지막 줄 아래
+  7, 그룹 사이 6, 열은 라벨 112 / 값 164 / 두 번째 열 274(DLU). 그룹 높이는 `29 + 14 × 줄 수`라
+  장치 그룹도 `pages::grid`로 같은 규칙을 따른다. `groups_follow_one_grid`·`groups_are_evenly_spaced`
+  테스트가 `.rc`를 읽어 지킨다.
+- 아이콘 미리보기는 뺐다. 즉시 적용이라 트레이 아이콘이 곧 미리보기고, 미리보기는 창 높이만
+  차지했다. `settings/preview.rs`와 그것만 쓰던 `icon/gdi.rs`(DIB 변환)도 함께 지웠다. 창은
+  400×284 DLU다.
+
+### 검증
+
+| 항목 | 방법 | 결과 |
+| --- | --- | --- |
+| 로드율 | 64 MB 쓰기 두 번 + `--probe` | 쓰기 40~96 MB/s, 활성 2~8% |
+| 로드율 공식 | PDH `PhysicalDisk(*)\% Idle Time`와 같은 1초 구간 비교 | 1~1.4%p 이내 |
+| 장치 선택 | 설정 창에서 Ethernet 선택 | `config.toml`의 `network = "Ethernet"`, 로그 `network device = Ethernet`, 툴팁에 인터페이스 이름 |
+| 승격 보존 | `tools/traykeys.py` | 기존 6개 `promoted=0x1` 유지, 새 GUID 2개 `unset` |
+| 창 | 영어·한국어, 다크·라이트·자동, 모든 페이지 캡처 | 잘림·겹침 없음 |
+| 아이콘 | `make dump` + 시트 | 다크/라이트 16~36px에서 `DSK`/`DIO` 판독 |
+
+남은 일: Store 스크린샷 재촬영(`resources/store/screenshots/`는 아직 6개·옛 창이다).

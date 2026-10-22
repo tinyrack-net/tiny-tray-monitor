@@ -171,20 +171,27 @@ pub fn inform(title: &str, text: &str) {
 /// 설정 창이 쓰는 Win32 호출을 여기에 모아 둔다(`unsafe`는 이 모듈과 [crate::icon::gdi]에만
 /// 둔다는 경계). 바깥에는 안전한 Rust만 넘어간다.
 pub mod dialog {
-    use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT, WPARAM};
+    use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, POINT, RECT, WPARAM};
     use windows::Win32::Graphics::Gdi::{
-        DeleteObject, GetMonitorInfoW, HBITMAP, HGDIOBJ, HMONITOR, InvalidateRect,
-        MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
+        COLOR_BTNFACE, CreateFontIndirectW, CreateSolidBrush, DT_END_ELLIPSIS, DT_NOPREFIX,
+        DT_SINGLELINE, DT_VCENTER, DeleteObject, DrawTextW, FW_SEMIBOLD, FillRect, GetMonitorInfoW,
+        GetObjectW, GetSysColor, GetSysColorBrush, HDC, HFONT, HGDIOBJ, HMONITOR, InvalidateRect,
+        LOGFONTW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint, SelectObject, SetBkMode,
+        SetTextColor, TRANSPARENT,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::Controls::{
-        BST_CHECKED, ICC_STANDARD_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx,
+        BST_CHECKED, DRAWITEMSTRUCT, ICC_STANDARD_CLASSES, INITCOMMONCONTROLSEX,
+        InitCommonControlsEx, MEASUREITEMSTRUCT, ODS_SELECTED,
     };
+    use windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
     use windows::Win32::UI::WindowsAndMessaging::{
         BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_RESETCONTENT, CB_SETCURSEL,
-        DialogBoxParamW, EndDialog, GetCursorPos, GetDlgItemTextW, GetWindowRect, IMAGE_BITMAP,
-        PostMessageW, STM_SETIMAGE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SendDlgItemMessageW,
-        SetDlgItemTextW, SetForegroundWindow, SetWindowPos, SetWindowTextW,
+        DialogBoxParamW, EndDialog, GetCursorPos, GetDlgItem, GetDlgItemTextW, GetWindowRect,
+        LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL, MapDialogRect, PostMessageW,
+        SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SendDlgItemMessageW,
+        SendMessageW, SetDlgItemTextW, SetForegroundWindow, SetWindowPos, SetWindowTextW,
+        ShowWindow, WM_GETFONT, WM_SETFONT,
     };
     use windows::core::PCWSTR;
 
@@ -294,26 +301,6 @@ pub mod dialog {
         }
     }
 
-    /// 정적 컨트롤의 비트맵을 바꾸고 **이전 비트맵을 지운다.**
-    ///
-    /// `STM_SETIMAGE`는 이전 핸들을 돌려주므로 여기서 지우지 않으면 갱신할 때마다 GDI
-    /// 핸들이 샌다.
-    pub fn set_bitmap(hwnd: HWND, id: i32, bitmap: HBITMAP) {
-        let previous = unsafe {
-            SendDlgItemMessageW(
-                hwnd,
-                id,
-                STM_SETIMAGE,
-                WPARAM(IMAGE_BITMAP.0 as usize),
-                LPARAM(bitmap.0 as isize),
-            )
-        };
-        let previous = HBITMAP(previous.0 as *mut core::ffi::c_void);
-        if !previous.is_invalid() {
-            let _ = unsafe { DeleteObject(HGDIOBJ(previous.0)) };
-        }
-    }
-
     /// 커서가 있는 모니터의 작업 영역 가운데로 옮긴다.
     ///
     /// PMv2라 크기는 시스템이 배율에 맞춰 정한다. 위치만 잡아 준다.
@@ -361,6 +348,280 @@ pub mod dialog {
     /// 대화상자를 앞으로 가져온다. 트레이 클릭으로 열면 이미 활성 상태다.
     pub fn bring_to_front(hwnd: HWND) {
         let _ = unsafe { SetForegroundWindow(hwnd) };
+    }
+
+    /// `lparam`(`WM_CTLCOLOR*`의 컨트롤 핸들)이 이 id의 컨트롤인가.
+    pub fn is_control(hwnd: HWND, id: i32, lparam: LPARAM) -> bool {
+        unsafe { GetDlgItem(Some(hwnd), id) }.is_ok_and(|control| control.0 as isize == lparam.0)
+    }
+
+    /// 밝은 테마의 대화상자 배경색(R, G, B).
+    pub fn face_color() -> (u8, u8, u8) {
+        let value = unsafe { GetSysColor(COLOR_BTNFACE) };
+        (
+            (value & 0xFF) as u8,
+            ((value >> 8) & 0xFF) as u8,
+            ((value >> 16) & 0xFF) as u8,
+        )
+    }
+
+    /// 밝은 테마의 대화상자 배경 브러시. 시스템 브러시라 지우지 않는다.
+    pub fn face_brush() -> isize {
+        unsafe { GetSysColorBrush(COLOR_BTNFACE) }.0 as isize
+    }
+
+    /// 컨트롤을 보이거나 숨긴다. 페이지를 바꿀 때 쓴다.
+    pub fn show_control(hwnd: HWND, id: i32, visible: bool) {
+        if let Ok(control) = unsafe { GetDlgItem(Some(hwnd), id) } {
+            let _ = unsafe { ShowWindow(control, if visible { SW_SHOW } else { SW_HIDE }) };
+        }
+    }
+
+    /// 컨트롤을 켜거나 끈다(회색).
+    pub fn enable_control(hwnd: HWND, id: i32, enabled: bool) {
+        if let Ok(control) = unsafe { GetDlgItem(Some(hwnd), id) } {
+            let _ = unsafe { EnableWindow(control, enabled) };
+        }
+    }
+
+    /// 컨트롤을 대화상자 단위(DLU) 좌표로 옮기고 크기를 바꾼다.
+    ///
+    /// 페이지마다 장치 그룹의 높이가 달라 `.rc` 하나로는 배치를 정할 수 없다. DLU로 계산해야
+    /// 글꼴·배율이 바뀌어도 `.rc`와 같은 비율을 유지한다.
+    pub fn place_control(hwnd: HWND, id: i32, x: i32, y: i32, width: i32, height: i32) {
+        let Ok(control) = (unsafe { GetDlgItem(Some(hwnd), id) }) else {
+            return;
+        };
+        let mut rect = RECT {
+            left: x,
+            top: y,
+            right: x + width,
+            bottom: y + height,
+        };
+        if unsafe { MapDialogRect(hwnd, &mut rect) }.is_err() {
+            return;
+        }
+        let _ = unsafe {
+            SetWindowPos(
+                control,
+                None,
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        };
+    }
+
+    /// 대화상자 단위를 픽셀로. (가로, 세로)
+    pub fn dialog_units(hwnd: HWND, x: i32, y: i32) -> (i32, i32) {
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: x,
+            bottom: y,
+        };
+        let _ = unsafe { MapDialogRect(hwnd, &mut rect) };
+        (rect.right, rect.bottom)
+    }
+
+    /// 목록의 항목을 지우고 다시 넣는다.
+    pub fn list_reset(hwnd: HWND, id: i32, items: &[&str]) {
+        unsafe {
+            SendDlgItemMessageW(hwnd, id, LB_RESETCONTENT, WPARAM(0), LPARAM(0));
+        }
+        for item in items {
+            let text = super::wide(item);
+            unsafe {
+                SendDlgItemMessageW(
+                    hwnd,
+                    id,
+                    LB_ADDSTRING,
+                    WPARAM(0),
+                    LPARAM(text.as_ptr() as isize),
+                );
+            }
+        }
+    }
+
+    /// 목록에서 고른 위치. 고른 것이 없으면 -1.
+    pub fn list_selection(hwnd: HWND, id: i32) -> i32 {
+        let index = unsafe { SendDlgItemMessageW(hwnd, id, LB_GETCURSEL, WPARAM(0), LPARAM(0)) };
+        index.0 as i32
+    }
+
+    /// 목록의 선택을 바꾼다. `LBN_SELCHANGE`는 오지 않는다.
+    pub fn list_select(hwnd: HWND, id: i32, index: i32) {
+        unsafe {
+            SendDlgItemMessageW(hwnd, id, LB_SETCURSEL, WPARAM(index as usize), LPARAM(0));
+        }
+    }
+
+    /// 대화상자 글꼴을 바탕으로 크기와 굵기를 바꾼 글꼴. 돌려받은 쪽이 [delete_font]로 지운다.
+    ///
+    /// `scale`은 백분율이다(150 = 1.5배). 대화상자 글꼴을 따라가므로 배율이 바뀌어도 맞는다.
+    pub fn derived_font(hwnd: HWND, scale: i32, semibold: bool) -> Option<HFONT> {
+        let base = unsafe { SendMessageW(hwnd, WM_GETFONT, Some(WPARAM(0)), Some(LPARAM(0))) };
+        if base.0 == 0 {
+            return None;
+        }
+        let mut font = LOGFONTW::default();
+        let size = std::mem::size_of::<LOGFONTW>() as i32;
+        let read = unsafe {
+            GetObjectW(
+                HGDIOBJ(base.0 as *mut core::ffi::c_void),
+                size,
+                Some(&mut font as *mut LOGFONTW as *mut core::ffi::c_void),
+            )
+        };
+        if read == 0 {
+            return None;
+        }
+        font.lfHeight = font.lfHeight * scale / 100;
+        if semibold {
+            font.lfWeight = FW_SEMIBOLD.0 as i32;
+        }
+        let created = unsafe { CreateFontIndirectW(&font) };
+        (!created.is_invalid()).then_some(created)
+    }
+
+    /// 컨트롤 글꼴을 바꾼다. 글꼴은 부른 쪽이 들고 있다가 창이 닫힐 때 지운다.
+    pub fn set_font(hwnd: HWND, id: i32, font: HFONT) {
+        unsafe {
+            SendDlgItemMessageW(hwnd, id, WM_SETFONT, WPARAM(font.0 as usize), LPARAM(1));
+        }
+    }
+
+    pub fn delete_font(font: HFONT) {
+        let _ = unsafe { DeleteObject(HGDIOBJ(font.0)) };
+    }
+
+    /// 오너드로 목록 항목 하나를 그리는 데 필요한 값.
+    pub struct NavItem<'a> {
+        pub text: &'a str,
+        /// 왼쪽 막대와 점의 색(R, G, B).
+        pub accent: (u8, u8, u8),
+        pub background: (u8, u8, u8),
+        pub selected_background: (u8, u8, u8),
+        pub text_color: (u8, u8, u8),
+    }
+
+    /// `WM_MEASUREITEM`: 목록 항목 높이를 대화상자 단위로 정한다.
+    ///
+    /// # Safety
+    /// `lparam`은 `WM_MEASUREITEM`이 넘긴 `MEASUREITEMSTRUCT` 포인터여야 한다.
+    pub unsafe fn measure_item(hwnd: HWND, lparam: LPARAM, height_dlu: i32) {
+        let item = lparam.0 as *mut MEASUREITEMSTRUCT;
+        if let Some(item) = unsafe { item.as_mut() } {
+            let (_, height) = dialog_units(hwnd, 0, height_dlu);
+            item.itemHeight = height.max(1) as u32;
+        }
+    }
+
+    /// `WM_DRAWITEM`이 그릴 항목. 목록의 몇 번째인지와 선택 여부.
+    ///
+    /// # Safety
+    /// `lparam`은 `WM_DRAWITEM`이 넘긴 `DRAWITEMSTRUCT` 포인터여야 한다.
+    pub unsafe fn draw_target(lparam: LPARAM) -> Option<(i32, usize, bool)> {
+        let item = unsafe { (lparam.0 as *const DRAWITEMSTRUCT).as_ref() }?;
+        let index = usize::try_from(item.itemID as i32).ok()?;
+        Some((
+            item.CtlID as i32,
+            index,
+            item.itemState.0 & ODS_SELECTED.0 != 0,
+        ))
+    }
+
+    fn colorref((r, g, b): (u8, u8, u8)) -> COLORREF {
+        COLORREF(r as u32 | (g as u32) << 8 | (b as u32) << 16)
+    }
+
+    fn fill(device: HDC, rect: &RECT, color: (u8, u8, u8)) {
+        let brush = unsafe { CreateSolidBrush(colorref(color)) };
+        unsafe { FillRect(device, rect, brush) };
+        let _ = unsafe { DeleteObject(HGDIOBJ(brush.0)) };
+    }
+
+    /// 왼쪽 목록 항목을 그린다. 선택된 항목은 배경을 칠하고 왼쪽에 지표 색 막대를 둔다.
+    ///
+    /// # Safety
+    /// `lparam`은 `WM_DRAWITEM`이 넘긴 `DRAWITEMSTRUCT` 포인터여야 한다.
+    pub unsafe fn draw_nav_item(hwnd: HWND, lparam: LPARAM, item: &NavItem, selected: bool) {
+        let Some(draw) = (unsafe { (lparam.0 as *const DRAWITEMSTRUCT).as_ref() }) else {
+            return;
+        };
+        let device = draw.hDC;
+        let rect = draw.rcItem;
+        let (unit_x, unit_y) = dialog_units(hwnd, 4, 8);
+        let unit_x = unit_x.max(1);
+
+        fill(
+            device,
+            &rect,
+            if selected {
+                item.selected_background
+            } else {
+                item.background
+            },
+        );
+
+        // 선택 막대: 왼쪽 가장자리, 위아래 여백을 둔 세로 막대.
+        let bar_inset = (rect.bottom - rect.top) / 4;
+        if selected {
+            let bar = RECT {
+                left: rect.left,
+                top: rect.top + bar_inset,
+                right: rect.left + (unit_x * 3 / 4).max(3),
+                bottom: rect.bottom - bar_inset,
+            };
+            fill(device, &bar, item.accent);
+        }
+
+        // 지표 색 점.
+        let dot = (unit_y / 2).max(6);
+        let dot_left = rect.left + unit_x * 2;
+        let dot_top = rect.top + (rect.bottom - rect.top - dot) / 2;
+        fill(
+            device,
+            &RECT {
+                left: dot_left,
+                top: dot_top,
+                right: dot_left + dot,
+                bottom: dot_top + dot,
+            },
+            item.accent,
+        );
+
+        let mut text_rect = RECT {
+            left: dot_left + dot + unit_x * 2,
+            top: rect.top,
+            right: rect.right - unit_x,
+            bottom: rect.bottom,
+        };
+        let font =
+            unsafe { SendMessageW(draw.hwndItem, WM_GETFONT, Some(WPARAM(0)), Some(LPARAM(0))) };
+        let previous = (font.0 != 0)
+            .then(|| unsafe { SelectObject(device, HGDIOBJ(font.0 as *mut core::ffi::c_void)) });
+        unsafe {
+            SetBkMode(device, TRANSPARENT);
+            SetTextColor(device, colorref(item.text_color));
+        }
+        // 빈 문자열을 넘기지 않는다(AGENTS 규칙 3).
+        if !item.text.is_empty() {
+            let mut text: Vec<u16> = item.text.encode_utf16().collect();
+            unsafe {
+                DrawTextW(
+                    device,
+                    &mut text,
+                    &mut text_rect,
+                    DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS,
+                );
+            }
+        }
+        if let Some(previous) = previous {
+            unsafe { SelectObject(device, previous) };
+        }
     }
 }
 
@@ -493,6 +754,7 @@ pub mod dark {
     use std::cell::{Cell, RefCell};
 
     use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, WPARAM};
+    use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
     use windows::Win32::Graphics::Gdi::{
         CreateSolidBrush, DeleteObject, HBRUSH, HDC, HGDIOBJ, SetBkColor, SetBkMode, SetTextColor,
         TRANSPARENT,
@@ -564,6 +826,16 @@ pub mod dark {
 
     /// 창과 그 자식 컨트롤에 테마를 입힌다.
     pub fn apply_to_window(hwnd: HWND, dark: bool) {
+        // 제목 표시줄은 DWM이 그린다. 공개 API(Windows 10 20H1 이상)라 실패해도 무시한다.
+        let value = windows::core::BOOL::from(dark);
+        let _ = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                &value as *const _ as *const c_void,
+                std::mem::size_of::<windows::core::BOOL>() as u32,
+            )
+        };
         let allow = uxtheme::<AllowDarkModeForWindow>(133);
         if let Some(allow) = allow {
             unsafe { allow(hwnd, i32::from(dark)) };
@@ -612,6 +884,19 @@ pub mod dark {
         }
 
         Some(brush.0 as isize)
+    }
+
+    /// 정적 컨트롤 하나의 글자색만 바꾼다(페이지 제목). 배경은 테마를 따른다.
+    ///
+    /// 다크면 다크 배경 브러시를, 아니면 `None`을 돌려줘 부른 쪽이 시스템 브러시를 쓰게 한다.
+    pub fn paint_text(wparam: WPARAM, (r, g, b): (u8, u8, u8), dark: bool) -> Option<isize> {
+        let device = HDC(wparam.0 as *mut c_void);
+        let color = r as u32 | (g as u32) << 8 | (b as u32) << 16;
+        unsafe {
+            SetTextColor(device, COLORREF(color));
+            SetBkMode(device, TRANSPARENT);
+        }
+        dark.then(|| brush().0 as isize)
     }
 
     /// 이 메시지가 색을 돌려주는 메시지인가.

@@ -14,7 +14,7 @@ BMP는 bottom-up이므로 읽을 때 행 순서를 뒤집는다.
 import struct
 import sys
 
-TAGS = ["CPU", "MEM", "NETD", "NETU", "GPU", "VRM"]
+TAGS = ["CPU", "MEM", "NETD", "NETU", "GPU", "VRM", "DSK", "DIO"]
 SEP = 4
 
 

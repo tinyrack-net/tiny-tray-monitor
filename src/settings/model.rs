@@ -3,7 +3,9 @@
 //! 화면(대화상자)과 저장 구조([Config]) 사이를 순수 함수로 잇는다. 여기 있는 것은 부작용이
 //! 없어서 전부 단위 테스트로 검증한다: 값 보정, 마지막 지표 규칙, 바뀐 항목만 뽑아내기.
 
-use crate::config::{ColorMode, Config, MAX_POLL_INTERVAL_MS, MIN_POLL_INTERVAL_MS, Show};
+use crate::config::{
+    ColorMode, Config, Devices, MAX_POLL_INTERVAL_MS, MIN_POLL_INTERVAL_MS, Show, UiTheme,
+};
 use crate::i18n::Language;
 use crate::icon::Metric;
 
@@ -16,10 +18,13 @@ pub struct SettingsDraft {
     pub poll_interval_ms: u64,
     pub show: Show,
     pub color_mode: ColorMode,
+    pub ui_theme: UiTheme,
     /// 가상 어댑터를 집계에 넣는가. `Config`에는 반대 의미로 저장된다.
     pub count_virtual: bool,
     pub autostart: bool,
     pub language: Language,
+    /// 분야별 장치. 빈 값은 자동이다.
+    pub devices: Devices,
 }
 
 /// [SettingsDraft::validate]가 값을 바로잡을 때 남기는 메모.
@@ -40,9 +45,11 @@ impl SettingsDraft {
             poll_interval_ms: config.poll_interval_ms,
             show: config.show,
             color_mode: config.color_mode,
+            ui_theme: config.ui_theme,
             count_virtual: !config.exclude_virtual_adapters,
             autostart,
             language: config.language,
+            devices: config.devices.clone(),
         }
     }
 
@@ -76,9 +83,16 @@ pub enum Effect {
     Interval(u64),
     Visible(Metric, bool),
     ColorMode(ColorMode),
+    UiTheme(UiTheme),
     CountVirtual(bool),
     Autostart(bool),
     Language(Language),
+    /// GPU 어댑터 이름. 빈 값은 자동.
+    GpuDevice(String),
+    /// 네트워크 인터페이스 이름. 빈 값은 모든 어댑터.
+    NetworkDevice(String),
+    /// 드라이브(`D:`). 빈 값은 시스템 드라이브.
+    DiskDevice(String),
 }
 
 impl Effect {
@@ -90,8 +104,12 @@ impl Effect {
             Effect::Interval(ms) => config.poll_interval_ms = *ms,
             Effect::Visible(metric, visible) => config.show.set(*metric, *visible),
             Effect::ColorMode(mode) => config.color_mode = *mode,
+            Effect::UiTheme(theme) => config.ui_theme = *theme,
             Effect::CountVirtual(count) => config.exclude_virtual_adapters = !*count,
             Effect::Language(language) => config.language = *language,
+            Effect::GpuDevice(name) => config.devices.gpu = name.clone(),
+            Effect::NetworkDevice(name) => config.devices.network = name.clone(),
+            Effect::DiskDevice(drive) => config.devices.disk = drive.clone(),
             Effect::Autostart(_) => {}
         }
     }
@@ -133,6 +151,10 @@ pub fn diff(applied: &SettingsDraft, next: &SettingsDraft) -> Vec<Effect> {
         effects.push(Effect::ColorMode(next.color_mode));
     }
 
+    if applied.ui_theme != next.ui_theme {
+        effects.push(Effect::UiTheme(next.ui_theme));
+    }
+
     if applied.count_virtual != next.count_virtual {
         effects.push(Effect::CountVirtual(next.count_virtual));
     }
@@ -143,6 +165,18 @@ pub fn diff(applied: &SettingsDraft, next: &SettingsDraft) -> Vec<Effect> {
 
     if applied.language != next.language {
         effects.push(Effect::Language(next.language));
+    }
+
+    if applied.devices.gpu != next.devices.gpu {
+        effects.push(Effect::GpuDevice(next.devices.gpu.clone()));
+    }
+
+    if applied.devices.network != next.devices.network {
+        effects.push(Effect::NetworkDevice(next.devices.network.clone()));
+    }
+
+    if applied.devices.disk != next.devices.disk {
+        effects.push(Effect::DiskDevice(next.devices.disk.clone()));
     }
 
     effects
@@ -253,6 +287,13 @@ mod tests {
             vec![Effect::ColorMode(ColorMode::Theme)]
         );
 
+        let mut ui_theme = applied.clone();
+        ui_theme.ui_theme = UiTheme::Light;
+        assert_eq!(
+            diff(&applied, &ui_theme),
+            vec![Effect::UiTheme(UiTheme::Light)]
+        );
+
         let mut virtual_adapters = applied.clone();
         virtual_adapters.count_virtual = true;
         assert_eq!(
@@ -300,6 +341,7 @@ mod tests {
         Effect::Interval(500).apply_to_config(&mut config);
         Effect::Visible(Metric::NetworkDown, false).apply_to_config(&mut config);
         Effect::ColorMode(ColorMode::Theme).apply_to_config(&mut config);
+        Effect::UiTheme(UiTheme::Dark).apply_to_config(&mut config);
         Effect::CountVirtual(true).apply_to_config(&mut config);
         Effect::Language(Language::Ko).apply_to_config(&mut config);
         Effect::Autostart(true).apply_to_config(&mut config);
@@ -307,6 +349,7 @@ mod tests {
         assert_eq!(config.poll_interval_ms, 500);
         assert!(!config.show.network_down);
         assert_eq!(config.color_mode, ColorMode::Theme);
+        assert_eq!(config.ui_theme, UiTheme::Dark);
         assert_eq!(config.language, Language::Ko);
         assert!(!config.exclude_virtual_adapters, "count와 exclude는 반대다");
         assert!(config.show.cpu, "자동 실행은 설정 파일과 무관하다");
@@ -324,11 +367,19 @@ mod tests {
                 network_up: false,
                 gpu: false,
                 gpu_vram: false,
+                disk_usage: false,
+                disk_active: false,
                 network: None,
             },
             color_mode: ColorMode::Theme,
+            ui_theme: UiTheme::Light,
             exclude_virtual_adapters: false,
             language: Language::Ja,
+            devices: Devices {
+                gpu: "Radeon".into(),
+                network: "Ethernet".into(),
+                disk: "D:".into(),
+            },
         };
         let draft = SettingsDraft::from_config(&config, true);
         assert!(draft.count_virtual, "exclude=false 이면 집계에 포함한다");
@@ -343,6 +394,36 @@ mod tests {
             effect.apply_to_config(&mut restored);
         }
         assert_eq!(restored, config);
+    }
+
+    /// 장치를 바꾸면 그 분야의 효과 하나만 나오고, 설정에 그대로 들어간다.
+    #[test]
+    fn device_changes_are_reported_and_applied() {
+        let applied = SettingsDraft::from_config(&Config::default(), false);
+        let mut next = applied.clone();
+        next.devices.gpu = "Radeon".into();
+        next.devices.network = "Wi-Fi".into();
+        next.devices.disk = "D:".into();
+
+        let effects = diff(&applied, &next);
+        assert_eq!(
+            effects,
+            vec![
+                Effect::GpuDevice("Radeon".into()),
+                Effect::NetworkDevice("Wi-Fi".into()),
+                Effect::DiskDevice("D:".into()),
+            ]
+        );
+
+        let mut config = Config::default();
+        for effect in &effects {
+            effect.apply_to_config(&mut config);
+        }
+        assert_eq!(config.devices, next.devices);
+
+        // 자동으로 되돌리면 빈 값이 저장된다.
+        let back = diff(&next, &applied);
+        assert!(back.contains(&Effect::DiskDevice(String::new())));
     }
 
     #[test]

@@ -34,6 +34,8 @@ pub struct App {
     last_network_up: Option<String>,
     last_gpu: Option<String>,
     last_gpu_vram: Option<String>,
+    last_disk_usage: Option<String>,
+    last_disk_active: Option<String>,
 }
 
 impl App {
@@ -47,8 +49,9 @@ impl App {
 
         let palette = theme::current();
         let autostart = startup::is_enabled();
-        // 트레이 메뉴도 작업 표시줄 테마를 따른다(메뉴는 창이 아니라 앱 단위로 칠해진다).
-        crate::win32::dark::set_app_mode(!palette.light);
+        // 트레이 메뉴는 창과 같은 테마를 쓴다(메뉴는 창이 아니라 앱 단위로 칠해진다).
+        theme::set_ui_theme(store.config.ui_theme);
+        crate::win32::dark::set_app_mode(theme::ui_dark());
         logging::info(format!(
             "config poll={}ms show={:?} color={:?} exclude_virtual={} autostart={autostart} language={:?}",
             store.config.poll_interval_ms,
@@ -59,7 +62,7 @@ impl App {
         ));
 
         let tray = Tray::new(px, &store.config, palette)?;
-        let sampler = Sampler::new(store.config.exclude_virtual_adapters);
+        let sampler = Sampler::new(store.config.exclude_virtual_adapters, &store.config.devices);
 
         // 기본값 파일을 남겨 사용자가 편집할 수 있게 한다.
         if let Err(error) = store.save_config() {
@@ -82,6 +85,8 @@ impl App {
             last_network_up: None,
             last_gpu: None,
             last_gpu_vram: None,
+            last_disk_usage: None,
+            last_disk_active: None,
         })
     }
 
@@ -126,7 +131,7 @@ impl App {
                 });
                 self.palette = palette;
                 self.tray.set_style(palette, self.store.config.color_mode);
-                crate::win32::dark::set_app_mode(!palette.light);
+                crate::win32::dark::set_app_mode(theme::ui_dark());
             }
         }
 
@@ -166,8 +171,11 @@ impl App {
             // 방향별로 아이콘을 나눠 쓴다. 툴팁은 두 방향을 함께 보여준다.
             let down = format::rate_reading(net.down);
             let up = format::rate_reading(net.up);
-            let tooltip =
-                i18n::network_tooltip(&format::rate_long(net.down), &format::rate_long(net.up));
+            let (down_long, up_long) = (format::rate_long(net.down), format::rate_long(net.up));
+            let tooltip = match self.sampler.network_device() {
+                Some(device) => i18n::network_device_tooltip(device, &down_long, &up_long),
+                None => i18n::network_tooltip(&down_long, &up_long),
+            };
             self.last_network_down = Some(down.compact());
             self.last_network_up = Some(up.compact());
             self.tray.update(Metric::NetworkDown, down, tooltip.clone());
@@ -196,6 +204,30 @@ impl App {
             );
             self.tray.update(Metric::GpuVram, value, tooltip);
         }
+
+        if let Some(usage) = sample.disk_usage {
+            let value = format::percent_reading(usage.percent);
+            self.last_disk_usage = Some(value.compact());
+            let tooltip = i18n::disk_usage_tooltip(
+                &metrics::disk::letter_value(usage.letter),
+                &format::percent(usage.percent),
+                &format::bytes(usage.used),
+                &format::bytes(usage.total),
+            );
+            self.tray.update(Metric::DiskUsage, value, tooltip);
+        }
+
+        if let Some(activity) = sample.disk_active {
+            let value = format::percent_reading(activity.percent);
+            self.last_disk_active = Some(value.compact());
+            let tooltip = i18n::disk_active_tooltip(
+                &metrics::disk::letter_value(activity.letter),
+                &format::percent(activity.percent),
+                &format::rate_long(activity.read),
+                &format::rate_long(activity.write),
+            );
+            self.tray.update(Metric::DiskActive, value, tooltip);
+        }
     }
 
     /// 주기적으로 상태를 남긴다. 값이 멈추면(타이머가 죽으면) 로그도 멈추므로 진단에 쓴다.
@@ -206,7 +238,7 @@ impl App {
         }
         let stats = self.tray.cache_stats();
         logging::info(format!(
-            "update #{}: cpu {} mem {} net down {} up {} gpu {} vram {} | glyph cache {:.0}% (hit {} miss {} entries {}) icon swaps {}",
+            "update #{}: cpu {} mem {} net down {} up {} gpu {} vram {} disk {} io {} | glyph cache {:.0}% (hit {} miss {} entries {}) icon swaps {}",
             self.ticks,
             self.last_cpu.as_deref().unwrap_or("-"),
             self.last_memory.as_deref().unwrap_or("-"),
@@ -214,6 +246,8 @@ impl App {
             self.last_network_up.as_deref().unwrap_or("-"),
             self.last_gpu.as_deref().unwrap_or("-"),
             self.last_gpu_vram.as_deref().unwrap_or("-"),
+            self.last_disk_usage.as_deref().unwrap_or("-"),
+            self.last_disk_active.as_deref().unwrap_or("-"),
             stats.hit_ratio(),
             stats.hits,
             stats.misses,
@@ -325,6 +359,12 @@ impl App {
                 logging::info(format!("color mode = {mode:?}"));
                 None
             }
+            Effect::UiTheme(ui_theme) => {
+                theme::set_ui_theme(*ui_theme);
+                crate::win32::dark::set_app_mode(theme::ui_dark());
+                logging::info(format!("window theme = {ui_theme:?}"));
+                None
+            }
             Effect::CountVirtual(count) => {
                 self.sampler.set_exclude_virtual_adapters(!count);
                 logging::info(format!("count virtual adapters = {count}"));
@@ -334,6 +374,21 @@ impl App {
                 i18n::set_language(i18n::resolve(*language));
                 self.tray.relabel();
                 logging::info(format!("language = {language:?}"));
+                None
+            }
+            Effect::GpuDevice(name) => {
+                self.sampler.set_gpu_device(name);
+                logging::info(format!("gpu device = {}", device_name(name)));
+                None
+            }
+            Effect::NetworkDevice(name) => {
+                self.sampler.set_network_device(name);
+                logging::info(format!("network device = {}", device_name(name)));
+                None
+            }
+            Effect::DiskDevice(drive) => {
+                self.sampler.set_disk_device(drive);
+                logging::info(format!("disk device = {}", device_name(drive)));
                 None
             }
             Effect::Autostart(enabled) => match startup::set(*enabled) {
@@ -373,4 +428,9 @@ impl App {
             logging::info(format!("tray event {event:?}"));
         }
     }
+}
+
+/// 로그에 남길 장치 이름. 빈 값은 자동이다.
+fn device_name(value: &str) -> &str {
+    if value.is_empty() { "auto" } else { value }
 }

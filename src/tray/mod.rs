@@ -26,13 +26,15 @@ use crate::theme::Palette;
 use crate::win32;
 
 /// 메뉴 항목 id. 이벤트 처리에서 문자열로 비교한다.
-pub const MENU_SHOW: [&str; 6] = [
+pub const MENU_SHOW: [&str; 8] = [
     "show-cpu",
     "show-memory",
     "show-network-down",
     "show-network-up",
     "show-gpu",
     "show-gpu-vram",
+    "show-disk-usage",
+    "show-disk-active",
 ];
 pub const MENU_SETTINGS: &str = "settings";
 pub const MENU_EXIT: &str = "exit";
@@ -50,13 +52,15 @@ fn placeholder(metric: Metric) -> Reading {
 /// 트레이 아이콘의 고정 GUID. `Metric::ALL` 순서와 같아야 하고, 버전이 바뀌어도
 /// 절대 바꾸면 안 된다. Windows가 이 값으로 "작업 표시줄에 항상 표시" 설정을
 /// 저장하므로, 실행 경로가 바뀌는 MSIX 업데이트에서도 승격 설정이 유지된다.
-const TRAY_GUIDS: [u128; 6] = [
+const TRAY_GUIDS: [u128; 8] = [
     0x08d913012075905f3b765d99cc00e07b, // CPU
     0x30146b445a48f8bc812370db292437b9, // MEM
     0x512275b8e98770860fd9c119653456c1, // DN
     0xecb03b17ed4a5b28b5f90f8642431ee3, // UP
     0x451ac7457b5f28feb60d30f69e64b770, // GPU. v0.7.0에서 새로 발급했다.
     0x5a61af487507da6c2d7b7302fd3e2479, // VRM. v0.7.0에서 새로 발급했다.
+    0x628942a3611444deb862bea6c14d26f3, // DSK. v0.11.0에서 새로 발급했다.
+    0x879173999413413caa3b8a9afe792083, // DIO. v0.11.0에서 새로 발급했다.
 ];
 
 /// 지표를 추가하면서 GUID를 빠뜨리면 여기서 컴파일이 멈춘다.

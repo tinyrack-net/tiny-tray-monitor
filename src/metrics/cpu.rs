@@ -3,7 +3,24 @@
 //! 관리자 권한이나 성능 카운터 라이브러리가 필요 없다.
 
 use windows::Win32::Foundation::FILETIME;
-use windows::Win32::System::Threading::GetSystemTimes;
+use windows::Win32::System::Threading::{
+    ALL_PROCESSOR_GROUPS, GetActiveProcessorCount, GetSystemTimes,
+};
+
+/// 프로세서 이름. 설정 창의 정보 줄에 쓴다. 읽지 못하면 `None`.
+pub fn name() -> Option<String> {
+    let name = windows_registry::LOCAL_MACHINE
+        .open(r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+        .and_then(|key| key.get_string("ProcessorNameString"))
+        .ok()?;
+    let name = name.trim().to_string();
+    (!name.is_empty()).then_some(name)
+}
+
+/// 모든 프로세서 그룹의 논리 프로세서 수.
+pub fn logical_processors() -> u32 {
+    unsafe { GetActiveProcessorCount(ALL_PROCESSOR_GROUPS) }
+}
 
 /// 누적 CPU 시간(100ns 단위).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,6 +124,14 @@ mod tests {
         for idle in [0u64, 1, 50, 99, 1000] {
             let v = usage(times(0, 0, 0), times(idle, 100, 100)).unwrap();
             assert!((0.0..=100.0).contains(&v), "{v}");
+        }
+    }
+
+    #[test]
+    fn processor_information_is_readable() {
+        assert!(logical_processors() >= 1);
+        if let Some(name) = name() {
+            assert!(!name.is_empty());
         }
     }
 

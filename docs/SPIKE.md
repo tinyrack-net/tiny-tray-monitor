@@ -674,3 +674,46 @@ system dpi  96  taskbar dpi   96  GetSystemMetrics(SM_CXSMICON) 16px  -> icon 16
 
 값 표본이 없는 지표(GPU가 없는 기기 등)는 `update`가 불리지 않는다. 다음 갱신을 기다리면
 그 아이콘만 옛 크기로 남으므로 `set_px`는 저장된 값으로 바로 다시 그린다.
+
+
+## 17. 디스크 사용량과 로드율 (v0.11.0)
+
+관리자 권한 없이 디스크의 "활성 시간"을 읽을 수 있는지 확인했다. 기기: Windows 11, NVMe
+`SAMSUNG MZVL22T0HBLB`(디스크 0, `C:`), USB 카드 리더(디스크 1, `F:`, 미디어 없음). `admin=False`.
+
+### 접근 권한
+
+| 호출 | 결과 |
+| --- | --- |
+| `CreateFileW("\\.\PhysicalDrive0", 0, READ\|WRITE, OPEN_EXISTING)` | 성공 |
+| `IOCTL_DISK_PERFORMANCE`(0x70020) | 성공. `DISK_PERFORMANCE` 88바이트 |
+| `CreateFileW("\\.\C:", 0, …)` + `IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS` | `extents=1 disk0` |
+| `IOCTL_STORAGE_QUERY_PROPERTY`(StorageDeviceProperty) | 제품 `SAMSUNG MZVL22T0HBLB-00B00`, NVMe는 제조사 칸이 비어 있다 |
+| `\\.\PhysicalDrive2`, `3` | `ERROR_FILE_NOT_FOUND`. 번호는 연속이 아니다 |
+
+접근 권한 0은 메타데이터 질의만 허용한다. 읽기 권한을 달라고 하면 관리자가 필요하다.
+
+### 공식
+
+`IdleTime`과 `QueryTime`은 둘 다 100ns 누적값이다. 1초 동안:
+
+| 디스크 | ΔIdleTime | ΔQueryTime | 활성 | PDH `% Idle Time` |
+| --- | --- | --- | --- | --- |
+| 0 (`C:`) | 8,837,258 | 10,257,306 | 13.84% | 84.84% → 15.16% |
+| 1 (`F:`) | 10,044,992 | 10,048,698 | 0.04% | 100.01% → 0% |
+
+`1 - ΔIdle/ΔQuery`는 작업 관리자 "활성 시간"과 같다. PDH와의 차이(1.3%p)는 두 측정의 구간이
+조금 달라서다. 같은 호출이 `BytesRead`/`BytesWritten`도 주므로 툴팁의 읽기·쓰기 속도는 공짜다.
+
+### 네트워크 인터페이스 목록
+
+`GetIfTable2`는 이 기기에서 59개를 돌려줬다. WFP·QoS 필터 드라이버 인스턴스
+(`Ethernet-WFP Native MAC Layer LightWeight Filter-0000` 등)와 WAN Miniport가 대부분이다.
+`GetAdaptersAddresses`는 `Get-NetAdapter`와 같은 9개(+ 루프백)만 준다. 설정 창 목록은 이쪽을 쓰고,
+집계는 그대로 `GetIfTable2`에서 **같은 별칭**(`Alias`)의 행 하나만 센다. 필터 인스턴스의 별칭은
+`Ethernet-WFP …`처럼 접미사가 붙어 본체와 겹치지 않는다.
+
+### 함정
+
+- 핸들을 열어 두면 USB 드라이브의 "안전하게 제거"가 막힌다. 표본마다 열고 닫는다.
+- 미디어가 없는 이동식 드라이브(`F:`)는 `GetDiskFreeSpaceExW`가 실패한다. 목록에서 뺀다.

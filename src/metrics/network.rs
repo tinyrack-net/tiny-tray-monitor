@@ -1,12 +1,16 @@
 //! 네트워크 처리량. `GetIfTable2`의 인터페이스별 누적 바이트 델타로 계산한다.
 //!
-//! 판정 로직은 순수 함수로 떼어내 테스트한다.
+//! 기본은 집계 대상 인터페이스 전부의 합이고, 설정에서 인터페이스 하나를 고르면 그것만
+//! 잰다. 고른 인터페이스는 별칭(`Ethernet`, `Wi-Fi`)으로 찾는다. 판정 로직은 순수 함수로
+//! 떼어내 테스트한다.
 
 use core::ffi::c_void;
 use std::time::Instant;
 
 use windows::Win32::NetworkManagement::IpHelper::{
-    FreeMibTable, GetIfTable2, MIB_IF_ROW2, MIB_IF_TABLE2,
+    FreeMibTable, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
+    GAA_FLAG_SKIP_UNICAST, GetAdaptersAddresses, GetIfTable2, IP_ADAPTER_ADDRESSES_LH, MIB_IF_ROW2,
+    MIB_IF_TABLE2,
 };
 
 /// `IF_TYPE_SOFTWARE_LOOPBACK`
@@ -113,10 +117,95 @@ pub fn sum_counted(list: &[Adapter]) -> (u64, u64) {
     (rx, tx)
 }
 
-/// 집계 대상 인터페이스의 누적 (수신, 송신) 바이트.
-pub fn totals(exclude_virtual: bool) -> Option<(u64, u64)> {
-    let list = collect(exclude_virtual)?;
-    Some(sum_counted(&list))
+/// 고른 인터페이스만 집계 대상으로 남긴다. 그 별칭이 없으면 그대로 두고 `false`.
+///
+/// 필터 드라이버 인스턴스는 별칭 뒤에 `-WFP ...`가 붙으므로 정확히 같은 별칭은 본체뿐이다.
+pub fn select(list: &mut [Adapter], alias: &str) -> bool {
+    let alias = alias.trim();
+    if alias.is_empty() || !list.iter().any(|a| a.alias == alias) {
+        return false;
+    }
+    for a in list.iter_mut() {
+        a.counted = a.alias == alias;
+    }
+    true
+}
+
+/// 집계 대상 인터페이스의 누적 (수신, 송신) 바이트와, 고른 인터페이스를 찾았는지.
+pub fn totals(exclude_virtual: bool, alias: &str) -> Option<(u64, u64, bool)> {
+    let mut list = collect(exclude_virtual)?;
+    let found = select(&mut list, alias);
+    let (rx, tx) = sum_counted(&list);
+    Some((rx, tx, found))
+}
+
+/// 설정 창의 인터페이스 목록에 쓰는 정보.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Interface {
+    /// 별칭(`Ethernet`). 설정에 이 값이 저장된다.
+    pub alias: String,
+    /// 드라이버 설명(`Intel(R) I211 Gigabit Network Connection`).
+    pub description: String,
+    pub up: bool,
+}
+
+/// 사용자가 고를 만한 인터페이스. `Get-NetAdapter`와 같은 목록에서 루프백만 뺀다.
+///
+/// `GetIfTable2`는 WFP·QoS 필터 인스턴스와 WAN Miniport까지 돌려줘 고르기 어렵다
+/// (실측: 59개 중 사람이 아는 이름은 9개). `GetAdaptersAddresses`는 그 9개만 준다.
+pub fn interfaces() -> Vec<Interface> {
+    let flags = GAA_FLAG_SKIP_UNICAST
+        | GAA_FLAG_SKIP_ANYCAST
+        | GAA_FLAG_SKIP_MULTICAST
+        | GAA_FLAG_SKIP_DNS_SERVER;
+    let mut size = 16 * 1024u32;
+    for _ in 0..3 {
+        // IP_ADAPTER_ADDRESSES는 8바이트 정렬이다.
+        let mut buffer = vec![0u64; (size as usize).div_ceil(8)];
+        let head = buffer.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH;
+        let status = unsafe { GetAdaptersAddresses(0, flags, None, Some(head), &mut size) };
+        match status {
+            0 => return unsafe { read_interfaces(head) },
+            // ERROR_BUFFER_OVERFLOW: size에 필요한 크기가 들어 있다.
+            111 => continue,
+            _ => return Vec::new(),
+        }
+    }
+    Vec::new()
+}
+
+/// `GetAdaptersAddresses`의 연결 리스트를 읽는다.
+///
+/// # Safety
+/// `node`는 성공한 `GetAdaptersAddresses`가 채운 버퍼의 첫 항목이고, 버퍼가 살아 있어야 한다.
+unsafe fn read_interfaces(mut node: *const IP_ADAPTER_ADDRESSES_LH) -> Vec<Interface> {
+    let text = |p: windows::core::PWSTR| {
+        if p.is_null() {
+            String::new()
+        } else {
+            unsafe { p.to_string() }
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }
+    };
+    let mut list = Vec::new();
+    while let Some(entry) = unsafe { node.as_ref() } {
+        if entry.IfType != IF_TYPE_SOFTWARE_LOOPBACK {
+            let alias = text(entry.FriendlyName);
+            if !alias.is_empty() {
+                list.push(Interface {
+                    alias,
+                    description: text(entry.Description),
+                    up: entry.OperStatus.0 == OPER_STATUS_UP,
+                });
+            }
+        }
+        node = entry.Next;
+    }
+    // 연결된 것을 먼저, 그 안에서는 이름 순서.
+    list.sort_by(|a, b| b.up.cmp(&a.up).then_with(|| a.alias.cmp(&b.alias)));
+    list
 }
 
 /// 델타와 경과 시간으로 초당 바이트를 구한다.
@@ -137,20 +226,36 @@ pub struct Rate {
 #[derive(Debug)]
 pub struct NetMeter {
     exclude_virtual: bool,
+    /// 고른 인터페이스의 별칭. 빈 값이면 집계 대상 전부.
+    device: String,
+    /// 직전 표본에서 고른 인터페이스를 찾았는가. 바뀌면 합산 범위가 달라진다.
+    found: bool,
     prev: Option<(u64, u64, Instant)>,
 }
 
 impl NetMeter {
-    pub fn new(exclude_virtual: bool) -> Self {
+    pub fn new(exclude_virtual: bool, device: &str) -> Self {
         Self {
             exclude_virtual,
+            device: device.trim().to_string(),
+            found: false,
             prev: None,
         }
     }
 
+    /// 지금 재는 인터페이스. 고르지 않았거나 찾지 못했으면 `None`(전부의 합).
+    pub fn device(&self) -> Option<&str> {
+        (self.found && !self.device.is_empty()).then_some(self.device.as_str())
+    }
+
     /// 첫 호출은 기준점만 잡고 `None`을 돌려준다.
     pub fn sample(&mut self) -> Option<Rate> {
-        let (rx, tx) = totals(self.exclude_virtual)?;
+        let (rx, tx, found) = totals(self.exclude_virtual, &self.device)?;
+        // 고른 인터페이스가 생기거나 사라지면 합산 범위가 바뀌어 델타가 튄다. 기준점부터 다시.
+        if found != self.found {
+            self.found = found;
+            self.prev = None;
+        }
         let now = Instant::now();
         let (prev_rx, prev_tx, prev_at) = self.prev.replace((rx, tx, now))?;
         let seconds = now.duration_since(prev_at).as_secs_f64();
@@ -167,6 +272,15 @@ impl NetMeter {
     pub fn set_exclude_virtual(&mut self, exclude: bool) {
         if self.exclude_virtual != exclude {
             self.exclude_virtual = exclude;
+            self.reset();
+        }
+    }
+
+    pub fn set_device(&mut self, device: &str) {
+        let device = device.trim();
+        if self.device != device {
+            self.device = device.to_string();
+            self.found = false;
             self.reset();
         }
     }
@@ -211,13 +325,14 @@ mod tests {
 
     #[test]
     fn totals_are_available_on_this_machine() {
-        assert!(totals(true).is_some());
+        let (_, _, found) = totals(true, "").expect("totals");
+        assert!(!found, "고르지 않았으면 찾은 것도 없다");
     }
 
     fn adapter(index: u32, counted: bool, rx: u64, tx: u64) -> Adapter {
         Adapter {
             index,
-            alias: String::new(),
+            alias: format!("if{index}"),
             description: String::new(),
             if_type: 6,
             up: true,
@@ -236,6 +351,38 @@ mod tests {
             adapter(3, true, 1, 2),
         ];
         assert_eq!(sum_counted(&list), (101, 12));
+    }
+
+    #[test]
+    fn select_counts_only_the_chosen_alias() {
+        let mut list = vec![
+            adapter(1, true, 100, 10),
+            adapter(2, false, 7, 3),
+            adapter(3, true, 1, 2),
+        ];
+        // 집계에서 빠져 있던 인터페이스라도 고르면 그것만 센다.
+        assert!(select(&mut list, " if2 "));
+        assert_eq!(sum_counted(&list), (7, 3));
+    }
+
+    #[test]
+    fn select_keeps_the_totals_when_the_alias_is_missing() {
+        let mut list = vec![adapter(1, true, 100, 10), adapter(2, false, 7, 3)];
+        assert!(!select(&mut list, ""));
+        assert!(!select(&mut list, "gone"));
+        assert_eq!(sum_counted(&list), (100, 10));
+    }
+
+    #[test]
+    fn interfaces_have_names_and_no_loopback() {
+        let list = interfaces();
+        for entry in &list {
+            assert!(!entry.alias.is_empty());
+            assert!(!entry.alias.starts_with("Loopback"), "{entry:?}");
+        }
+        // 연결된 인터페이스가 먼저 나온다.
+        let first_down = list.iter().position(|e| !e.up).unwrap_or(list.len());
+        assert!(list[first_down..].iter().all(|e| !e.up));
     }
 
     #[test]
@@ -262,7 +409,7 @@ mod tests {
 
     #[test]
     fn meter_needs_two_samples() {
-        let mut meter = NetMeter::new(true);
+        let mut meter = NetMeter::new(true, "");
         assert!(meter.sample().is_none());
         let rate = meter.sample().expect("두 번째 샘플");
         assert!(rate.down >= 0.0 && rate.up >= 0.0);
