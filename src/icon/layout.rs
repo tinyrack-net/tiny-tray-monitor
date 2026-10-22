@@ -46,6 +46,10 @@ pub enum Metric {
     NetworkUp,
     Gpu,
     GpuVram,
+    /// 드라이브 공간 사용률. v0.11.0에서 추가했다.
+    DiskUsage,
+    /// 드라이브가 놓인 물리 디스크의 활성 시간. v0.11.0에서 추가했다.
+    DiskActive,
 }
 
 impl Metric {
@@ -54,19 +58,28 @@ impl Metric {
     ///
     /// v0.1.0의 세 번째 아이콘(Network)은 [Metric::NetworkDown]이 이어받는다.
     /// 그래야 이미 승격해 둔 사용자가 다운로드 아이콘을 계속 본다.
-    pub const ALL: [Metric; 6] = [
+    ///
+    /// 새 지표는 **반드시 맨 뒤에** 붙인다. 중간에 넣으면 그 뒤 아이콘의 id가 밀린다.
+    pub const ALL: [Metric; 8] = [
         Metric::Cpu,
         Metric::Memory,
         Metric::NetworkDown,
         Metric::NetworkUp,
         Metric::Gpu,
         Metric::GpuVram,
+        Metric::DiskUsage,
+        Metric::DiskActive,
     ];
 
     /// 이 지표가 쓰는 단위. 첫 항목은 아이콘이 처음 뜰 때(첫 표본 전) 쓴다.
     pub fn units(self) -> &'static [&'static str] {
         match self {
-            Metric::Cpu | Metric::Memory | Metric::Gpu | Metric::GpuVram => &["%"],
+            Metric::Cpu
+            | Metric::Memory
+            | Metric::Gpu
+            | Metric::GpuVram
+            | Metric::DiskUsage
+            | Metric::DiskActive => &["%"],
             Metric::NetworkDown | Metric::NetworkUp => &["B", "KB", "MB", "GB"],
         }
     }
@@ -88,6 +101,8 @@ impl Metric {
             Metric::NetworkUp => format!("↑{unit}"),
             Metric::Gpu => "GPU".to_string(),
             Metric::GpuVram => "VRM".to_string(),
+            Metric::DiskUsage => "DSK".to_string(),
+            Metric::DiskActive => "DIO".to_string(),
         }
     }
 
@@ -100,6 +115,8 @@ impl Metric {
             Metric::NetworkUp => "network-up",
             Metric::Gpu => "gpu",
             Metric::GpuVram => "gpu-vram",
+            Metric::DiskUsage => "disk-usage",
+            Metric::DiskActive => "disk-active",
         }
     }
 }
@@ -126,6 +143,8 @@ mod tests {
         assert_eq!(Metric::NetworkUp.caption("B"), "↑B");
         assert_eq!(Metric::Gpu.caption("%"), "GPU");
         assert_eq!(Metric::GpuVram.caption("%"), "VRM");
+        assert_eq!(Metric::DiskUsage.caption("%"), "DSK");
+        assert_eq!(Metric::DiskActive.caption("%"), "DIO");
     }
 
     #[test]
@@ -149,7 +168,9 @@ mod tests {
                 "network-down",
                 "network-up",
                 "gpu",
-                "gpu-vram"
+                "gpu-vram",
+                "disk-usage",
+                "disk-active"
             ],
             "순서가 바뀌면 트레이 승격 설정이 어긋난다"
         );

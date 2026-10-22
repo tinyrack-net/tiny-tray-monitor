@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**tray-monitor** shows CPU, memory and network readouts in the Windows system tray.
+**tray-monitor** shows CPU, memory, network, GPU and disk readouts in the Windows system tray.
 The Microsoft Store listing is named **TinyTrayManager** (`tinyrack.TinyTrayManager`, Store ID
 `9MT22CHX25FD`). The exe name, install path and config folders stay `tray-monitor` so existing
 installs keep their tray promotion.
@@ -45,14 +45,14 @@ Run the validation loop after changes:
 | `src/app.rs` | State and the update cycle |
 | `src/runtime.rs` | The `App` in thread-local storage, shared by the timer and the message loop |
 | `src/timer.rs` | Hidden window that owns the refresh timer |
-| `src/metrics/` | CPU, memory and network sampling plus value formatting |
+| `src/metrics/` | CPU, memory, network, GPU and disk sampling plus value formatting |
 | `src/icon/` | 1-bit glyph table, pixel renderer, layout policy and the glyph cache |
 | `src/tray/` | Tray slots, the context menu and the per-metric registration GUIDs |
 | `src/config.rs` | `config.toml` |
 | `src/i18n.rs` | The English / Korean / Japanese string tables and the current language |
 | `src/platform.rs` | Package detection and the config/data locations (`LocalState` for MSIX) |
 | `src/theme.rs` | Taskbar theme detection and the colour palettes |
-| `src/settings/` | The settings window: a pure model, the Win32 dialog and the icon preview |
+| `src/settings/` | The settings window: a pure model, the page table and device choices (`pages.rs`) and the Win32 dialog |
 | `src/ipc.rs` | Hidden window that hands a second launch over to the running instance |
 | `src/win32.rs` | The remaining `unsafe` helpers, including the unofficial dark-mode calls |
 | `src/devtools.rs` | `--probe`, `--interfaces`, `--dump` |
@@ -176,6 +176,21 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     never recreating an icon (rule 1). From 2x up the 16px master is drawn at an integer
     multiple and centred (`render::fit`, 36px = 2x + 2px margin), so strokes stay uniform.
     `tray-monitor --dpi --watch` shows the values live. `docs/SPIKE.md` §16.
+26. **Open disk devices with no access rights and close them every sample.** `CreateFileW` on
+    `\\.\PhysicalDriveN` or `\\.\C:` with `dwDesiredAccess = 0` answers
+    `IOCTL_DISK_PERFORMANCE` and `IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS` without administrator
+    rights; asking for read access needs elevation. A handle kept open blocks "safely remove"
+    for a USB drive, so `metrics::disk` opens and closes per sample. Disk numbers are not
+    contiguous (`PhysicalDrive2` can be missing while `3` exists). `docs/SPIKE.md` §17.
+27. **The settings pages share one set of controls.** Every control of every page lives in
+    `IDD_SETTINGS`; `settings::dialog::show_page` shows the current page's set and hides the
+    rest, and the device group is resized per page from `settings::pages::device_layout`. Keep
+    `GENERAL_CONTROLS` and `METRIC_CONTROLS` disjoint (a test checks it), and do not grey out
+    static text on the dark background: disabled statics draw embossed and become unreadable.
+    Every group follows one grid (8 DLU side padding, hint at +11, rows from +24 every 14,
+    7 below the last row, 6 between groups); the comment above the groups in `resources/app.rc`
+    states it and `settings::dialog::tests::groups_follow_one_grid` fails on any control that
+    drifts off it. Move a control by whole rows, never by eye.
 
 ## Merging
 
@@ -224,8 +239,8 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
 - Pure logic (value formatting, delta arithmetic, layout selection, config parsing, the glyph
   table and glyph caching) is unit tested with `cargo test` and needs no display.
 - The pixel font is deterministic, so icon rendering is tested with exact pixels plus invariants
-  (glyph table shape, string widths, output stays 1-bit at every scale). The only GDI left is the
-  preview DIB, where handle leaks are checked.
+  (glyph table shape, string widths, output stays 1-bit at every scale). No GDI is left in the
+  icon path.
 - The tray itself has no automated test. Use `make run`, then check the readouts, the context
   menu and `%LOCALAPPDATA%\tray-monitor\log.txt`. The log records a heartbeat every 60 updates
   with the current values and the glyph cache hit rate.

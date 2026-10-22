@@ -105,11 +105,13 @@ fn query_stats_fn() -> Option<PfnD3dKmtQueryStatistics> {
     }
 }
 
-/// 시스템의 GPU 중 전용 메모리가 가장 큰 대표 어댑터를 선택한다.
-pub fn detect_primary_adapter() -> Option<GpuAdapter> {
+/// 하드웨어 GPU 어댑터 목록. DXGI 열거 순서다.
+pub fn adapters() -> Vec<GpuAdapter> {
+    let mut list = Vec::new();
     unsafe {
-        let factory: IDXGIFactory4 = CreateDXGIFactory1().ok()?;
-        let mut best: Option<GpuAdapter> = None;
+        let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory4>() else {
+            return list;
+        };
 
         let mut i = 0;
         while let Ok(adapter1) = factory.EnumAdapters1(i) {
@@ -136,23 +138,32 @@ pub fn detect_primary_adapter() -> Option<GpuAdapter> {
             let name = String::from_utf16_lossy(&desc.Description[..len]);
             let dedicated = desc.DedicatedVideoMemory as u64;
 
-            let adapter = GpuAdapter {
+            list.push(GpuAdapter {
                 luid: desc.AdapterLuid,
                 name,
                 dedicated_vram: dedicated,
-            };
-
-            if let Some(prev) = &best {
-                if adapter.dedicated_vram > prev.dedicated_vram {
-                    best = Some(adapter);
-                }
-            } else {
-                best = Some(adapter);
-            }
+            });
         }
-
-        best
     }
+    list
+}
+
+/// 이름이 같은 어댑터를 고른다. 이름이 비었거나 없으면 전용 메모리가 가장 큰 대표
+/// 어댑터이고, 크기가 같으면 먼저 나온 것이다.
+pub fn pick(list: Vec<GpuAdapter>, wanted: &str) -> Option<GpuAdapter> {
+    let wanted = wanted.trim();
+    if !wanted.is_empty() {
+        if let Some(found) = list.iter().find(|adapter| adapter.name == wanted) {
+            return Some(found.clone());
+        }
+    }
+    list.into_iter().reduce(|best, next| {
+        if next.dedicated_vram > best.dedicated_vram {
+            next
+        } else {
+            best
+        }
+    })
 }
 
 /// 직전 샘플을 보관하며 GPU 사용률과 VRAM 사용량을 측정한다.
@@ -167,8 +178,9 @@ pub struct GpuMeter {
 }
 
 impl GpuMeter {
-    pub fn new() -> Self {
-        let adapter = detect_primary_adapter();
+    /// `wanted`는 어댑터 이름이다. 빈 값이거나 없는 이름이면 대표 어댑터로 물러선다.
+    pub fn new(wanted: &str) -> Self {
+        let adapter = pick(adapters(), wanted);
         let pfn_query = query_stats_fn();
 
         let mut meter = Self {
@@ -196,6 +208,11 @@ impl GpuMeter {
 
     pub fn adapter(&self) -> Option<&GpuAdapter> {
         self.adapter.as_ref()
+    }
+
+    /// 다른 어댑터로 바꾼다. 노드·세그먼트 수가 어댑터마다 달라 처음부터 다시 잡는다.
+    pub fn set_adapter(&mut self, wanted: &str) {
+        *self = Self::new(wanted);
     }
 
     /// 어댑터의 노드 수와 세그먼트 수를 초기 조회한다.
@@ -372,9 +389,34 @@ mod tests {
         assert_eq!(offset_of!(D3dKmtQueryStatistics, query_id), 800);
     }
 
+    fn adapter(name: &str, vram: u64) -> GpuAdapter {
+        GpuAdapter {
+            luid: LUID::default(),
+            name: name.to_string(),
+            dedicated_vram: vram,
+        }
+    }
+
+    #[test]
+    fn pick_prefers_the_named_adapter() {
+        let list = || {
+            vec![
+                adapter("iGPU", 128),
+                adapter("dGPU", 8192),
+                adapter("eGPU", 8192),
+            ]
+        };
+        assert_eq!(pick(list(), "iGPU").unwrap().name, "iGPU");
+        assert_eq!(pick(list(), " iGPU ").unwrap().name, "iGPU");
+        // 이름이 비었거나 사라졌으면 가장 큰 전용 메모리, 같으면 먼저 나온 것.
+        assert_eq!(pick(list(), "").unwrap().name, "dGPU");
+        assert_eq!(pick(list(), "gone").unwrap().name, "dGPU");
+        assert!(pick(Vec::new(), "").is_none());
+    }
+
     #[test]
     fn adapter_detection_reports_a_name() {
-        if let Some(adapter) = detect_primary_adapter() {
+        if let Some(adapter) = pick(adapters(), "") {
             assert!(!adapter.name.is_empty());
         }
     }
@@ -382,7 +424,7 @@ mod tests {
     /// 실제 드라이버를 호출하는 스모크 테스트. GPU가 없으면 검사할 값도 없다.
     #[test]
     fn meter_reports_values_in_range() {
-        let mut meter = GpuMeter::new();
+        let mut meter = GpuMeter::new("");
         std::thread::sleep(std::time::Duration::from_millis(100));
         let sample = meter.sample();
         if meter.adapter().is_some() {

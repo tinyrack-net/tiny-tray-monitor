@@ -1,11 +1,12 @@
 //! 설정 창.
 //!
 //! - [model]: 화면과 저장 구조 사이의 순수 계층(값 보정, 마지막 지표 규칙, 바뀐 항목 뽑기)
+//! - [pages]: 왼쪽 목록의 페이지, 페이지별 컨트롤과 장치 선택지(순수)
 //! - [dialog]: `resources/app.rc`의 `IDD_SETTINGS`를 띄우는 Win32 대화상자
 
 pub mod dialog;
 pub mod model;
-pub mod preview;
+pub mod pages;
 
 /// 설정 창을 연다.
 ///

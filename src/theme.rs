@@ -3,7 +3,9 @@
 //! 트레이 아이콘은 작업 표시줄 배경 위에 그려진다. 배경이 밝은데 흰 글자를 쓰면
 //! 보이지 않으므로, Windows 모드(`SystemUsesLightTheme`)를 읽어 색을 뒤집는다.
 
-use crate::config::ColorMode;
+use std::cell::Cell;
+
+use crate::config::{ColorMode, UiTheme};
 use crate::icon::{Color, Metric};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,6 +22,8 @@ pub struct Palette {
     pub network_up: Color,
     pub gpu: Color,
     pub gpu_vram: Color,
+    pub disk_usage: Color,
+    pub disk_active: Color,
     pub light: bool,
 }
 
@@ -35,6 +39,8 @@ impl Palette {
             network_up: Color(190, 150, 255),
             gpu: Color(255, 130, 180),
             gpu_vram: Color(130, 230, 230),
+            disk_usage: Color(240, 220, 100),
+            disk_active: Color(255, 120, 100),
             light: false,
         }
     }
@@ -50,6 +56,8 @@ impl Palette {
             network_up: Color(95, 40, 165),
             gpu: Color(180, 20, 100),
             gpu_vram: Color(0, 130, 130),
+            disk_usage: Color(130, 110, 0),
+            disk_active: Color(185, 35, 20),
             light: true,
         }
     }
@@ -62,6 +70,8 @@ impl Palette {
             Metric::NetworkUp => self.network_up,
             Metric::Gpu => self.gpu,
             Metric::GpuVram => self.gpu_vram,
+            Metric::DiskUsage => self.disk_usage,
+            Metric::DiskActive => self.disk_active,
         }
     }
 
@@ -73,7 +83,8 @@ impl Palette {
         }
     }
 
-    /// 작업 표시줄 배경색. 미리보기가 아이콘을 올려 그리는 바탕이다.
+    /// 작업 표시줄 배경색. 대비 테스트가 아이콘 색을 이 위에서 판정한다.
+    #[cfg(test)]
     pub const fn taskbar(&self) -> Color {
         if self.light {
             Color(243, 243, 243)
@@ -92,6 +103,41 @@ pub fn is_light() -> bool {
         .and_then(|key| key.get_u32("SystemUsesLightTheme"))
         .map(|value| value == 1)
         .unwrap_or(false)
+}
+
+thread_local! {
+    /// 설정 창과 트레이 메뉴의 밝기. `App`이 설정에서 읽어 넣는다.
+    static UI_THEME: Cell<UiTheme> = const { Cell::new(UiTheme::Auto) };
+}
+
+/// 창·메뉴 테마를 바꾼다. 아이콘 색([current])에는 영향이 없다.
+pub fn set_ui_theme(theme: UiTheme) {
+    UI_THEME.with(|cell| cell.set(theme));
+}
+
+/// 설정 창과 트레이 메뉴를 어둡게 그리는가.
+///
+/// 아이콘은 작업 표시줄 위에 놓이므로 늘 실제 배경을 따르지만, 창은 사용자가 고를 수 있다.
+pub fn ui_dark() -> bool {
+    resolve_dark(UI_THEME.with(Cell::get), is_light())
+}
+
+/// 고른 테마와 작업 표시줄 밝기로 창을 어둡게 그릴지 정한다.
+pub fn resolve_dark(theme: UiTheme, taskbar_light: bool) -> bool {
+    match theme {
+        UiTheme::Auto => !taskbar_light,
+        UiTheme::Light => false,
+        UiTheme::Dark => true,
+    }
+}
+
+/// 창과 같은 밝기의 색 묶음. 설정 창의 미리보기와 목록 색에 쓴다.
+pub fn ui_palette() -> Palette {
+    if ui_dark() {
+        Palette::dark()
+    } else {
+        Palette::light()
+    }
 }
 
 /// 현재 테마에 맞는 색 묶음.
@@ -117,6 +163,8 @@ mod tests {
                 palette.value(Metric::NetworkUp),
                 palette.value(Metric::Gpu),
                 palette.value(Metric::GpuVram),
+                palette.value(Metric::DiskUsage),
+                palette.value(Metric::DiskActive),
             ];
             for (i, a) in colors.iter().enumerate() {
                 for b in &colors[i + 1..] {
@@ -149,6 +197,8 @@ mod tests {
                 ("network up", palette.value(Metric::NetworkUp), 1.0),
                 ("gpu", palette.value(Metric::Gpu), 1.0),
                 ("gpu vram", palette.value(Metric::GpuVram), 1.0),
+                ("disk usage", palette.value(Metric::DiskUsage), 1.0),
+                ("disk active", palette.value(Metric::DiskActive), 1.0),
             ];
             for (name, color, alpha) in cases {
                 let on_screen = luminance(color) * alpha + background_luminance * (1.0 - alpha);
@@ -186,6 +236,15 @@ mod tests {
         assert_ne!(color(Metric::Cpu), color(Metric::Memory));
         assert_ne!(color(Metric::Memory), color(Metric::NetworkDown));
         assert_ne!(color(Metric::NetworkDown), color(Metric::NetworkUp));
+    }
+
+    #[test]
+    fn ui_theme_overrides_the_taskbar() {
+        for taskbar_light in [true, false] {
+            assert_eq!(resolve_dark(UiTheme::Auto, taskbar_light), !taskbar_light);
+            assert!(!resolve_dark(UiTheme::Light, taskbar_light));
+            assert!(resolve_dark(UiTheme::Dark, taskbar_light));
+        }
     }
 
     /// 미리보기 바탕은 아이콘이 실제로 놓이는 배경과 같아야 한다.

@@ -96,7 +96,46 @@ pub struct Text {
     pub metric_network_up: &'static str,
     pub metric_gpu: &'static str,
     pub metric_gpu_vram: &'static str,
+    pub metric_disk_usage: &'static str,
+    pub metric_disk_active: &'static str,
     pub last_readout_error: &'static str,
+
+    // 탭(왼쪽 목록)과 페이지 설명
+    pub group_tray: &'static str,
+    pub hint_page_general: &'static str,
+    pub nav_general: &'static str,
+    pub nav_cpu: &'static str,
+    pub nav_memory: &'static str,
+    pub nav_gpu: &'static str,
+    pub nav_network: &'static str,
+    pub nav_disk: &'static str,
+    pub hint_page_cpu: &'static str,
+    pub hint_page_memory: &'static str,
+    pub hint_page_gpu: &'static str,
+    pub hint_page_network: &'static str,
+    pub hint_page_disk: &'static str,
+
+    // 장치
+    pub group_device: &'static str,
+    pub label_device: &'static str,
+    pub hint_device_cpu: &'static str,
+    pub hint_device_memory: &'static str,
+    pub hint_device_gpu: &'static str,
+    pub hint_device_network: &'static str,
+    pub hint_device_disk: &'static str,
+    pub device_gpu_auto: &'static str,
+    pub device_network_all: &'static str,
+    pub device_disk_auto: &'static str,
+    pub device_missing: &'static str,
+    pub device_offline: &'static str,
+    pub drive_local: &'static str,
+    pub drive_removable: &'static str,
+    pub info_cpu: &'static str,
+    pub info_memory: &'static str,
+    pub info_gpu: &'static str,
+    pub info_no_gpu: &'static str,
+    pub info_network_all: &'static str,
+    pub info_disk: &'static str,
 
     // 갱신 주기
     pub group_update: &'static str,
@@ -114,6 +153,11 @@ pub struct Text {
     pub hint_appearance: &'static str,
     pub color_metric: &'static str,
     pub color_theme: &'static str,
+    pub label_icon_color: &'static str,
+    pub label_window_theme: &'static str,
+    pub theme_auto: &'static str,
+    pub theme_light: &'static str,
+    pub theme_dark: &'static str,
 
     // 시작 및 언어
     pub group_startup: &'static str,
@@ -135,6 +179,9 @@ pub struct Text {
     pub network_tooltip: &'static str,
     pub gpu_tooltip: &'static str,
     pub vram_tooltip: &'static str,
+    pub network_device_tooltip: &'static str,
+    pub disk_usage_tooltip: &'static str,
+    pub disk_active_tooltip: &'static str,
 
     // 시작 실패·중복 실행
     pub already_running: &'static str,
@@ -163,7 +210,44 @@ pub const EN: Text = Text {
     metric_network_up: "Network up",
     metric_gpu: "GPU",
     metric_gpu_vram: "GPU VRAM",
+    metric_disk_usage: "Disk usage",
+    metric_disk_active: "Disk activity",
     last_readout_error: "The last readout cannot be turned off.",
+
+    group_tray: "Taskbar",
+    hint_page_general: "Settings shared by every readout.",
+    nav_general: "General",
+    nav_cpu: "CPU",
+    nav_memory: "Memory",
+    nav_gpu: "GPU",
+    nav_network: "Network",
+    nav_disk: "Disk",
+    hint_page_cpu: "Processor load across every core.",
+    hint_page_memory: "Share of physical memory in use.",
+    hint_page_gpu: "Load of the busiest engine and the dedicated memory in use.",
+    hint_page_network: "Bytes received and sent per second.",
+    hint_page_disk: "Space used on a drive and the share of time its disk is busy.",
+
+    group_device: "Device",
+    label_device: "Measure",
+    hint_device_cpu: "Every processor is measured together.",
+    hint_device_memory: "Physical memory of this PC.",
+    hint_device_gpu: "The graphics adapter to measure.",
+    hint_device_network: "Count every adapter together, or just one.",
+    hint_device_disk: "The drive whose space and activity are measured.",
+    device_gpu_auto: "Automatic ({0})",
+    device_network_all: "All adapters",
+    device_disk_auto: "Automatic (system drive {0})",
+    device_missing: "{0} (not found)",
+    device_offline: "{0} (disconnected)",
+    drive_local: "Local Disk",
+    drive_removable: "removable",
+    info_cpu: "{0} · {1} logical processors",
+    info_memory: "{0} installed",
+    info_gpu: "Dedicated memory {0}",
+    info_no_gpu: "No hardware GPU was found.",
+    info_network_all: "Adapters counted: {0}",
+    info_disk: "{0} · {1} used of {2}",
 
     group_update: "Update",
     hint_update: "How often the values are sampled (250-10000 ms).",
@@ -176,9 +260,14 @@ pub const EN: Text = Text {
     interval_range_error: "Enter milliseconds (250-10000).",
 
     group_appearance: "Appearance",
-    hint_appearance: "Colour of the text in the icons.",
+    hint_appearance: "Colours of the tray icons and the theme of this window and the tray menu.",
     color_metric: "Per readout",
     color_theme: "Taskbar theme",
+    label_icon_color: "Icon text",
+    label_window_theme: "Window",
+    theme_auto: "Automatic",
+    theme_light: "Light",
+    theme_dark: "Dark",
 
     group_startup: "Startup & language",
     hint_startup: "Startup and the language of this window, the tray menu and the tooltips.",
@@ -197,6 +286,9 @@ pub const EN: Text = Text {
     network_tooltip: "Network down {0}  up {1}",
     gpu_tooltip: "{0}  {1} busy",
     vram_tooltip: "GPU VRAM {0} used  ({1} of {2})",
+    network_device_tooltip: "{0}  down {1}  up {2}",
+    disk_usage_tooltip: "Disk {0} {1} used  ({2} of {3})",
+    disk_active_tooltip: "Disk {0} {1} active  read {2}  write {3}",
 
     already_running: "{0} is already running.",
     start_failed: "{0} could not start.\n\n{1}",
@@ -223,7 +315,44 @@ pub const KO: Text = Text {
     metric_network_up: "네트워크 업로드",
     metric_gpu: "GPU",
     metric_gpu_vram: "GPU VRAM",
+    metric_disk_usage: "디스크 사용량",
+    metric_disk_active: "디스크 활동",
     last_readout_error: "마지막 남은 항목은 끌 수 없습니다.",
+
+    group_tray: "작업 표시줄",
+    hint_page_general: "모든 항목에 함께 적용되는 설정입니다.",
+    nav_general: "일반",
+    nav_cpu: "CPU",
+    nav_memory: "메모리",
+    nav_gpu: "GPU",
+    nav_network: "네트워크",
+    nav_disk: "디스크",
+    hint_page_cpu: "모든 코어를 합친 프로세서 사용률입니다.",
+    hint_page_memory: "사용 중인 물리 메모리의 비율입니다.",
+    hint_page_gpu: "가장 바쁜 엔진의 사용률과 사용 중인 전용 메모리입니다.",
+    hint_page_network: "초당 받고 보낸 바이트입니다.",
+    hint_page_disk: "드라이브의 공간 사용률과 디스크가 일한 시간의 비율입니다.",
+
+    group_device: "장치",
+    label_device: "대상",
+    hint_device_cpu: "모든 프로세서를 함께 측정합니다.",
+    hint_device_memory: "이 PC의 물리 메모리입니다.",
+    hint_device_gpu: "측정할 그래픽 카드입니다.",
+    hint_device_network: "모든 어댑터를 합치거나 하나만 셉니다.",
+    hint_device_disk: "공간과 활동을 측정할 드라이브입니다.",
+    device_gpu_auto: "자동 ({0})",
+    device_network_all: "모든 어댑터",
+    device_disk_auto: "자동 (시스템 드라이브 {0})",
+    device_missing: "{0} (찾을 수 없음)",
+    device_offline: "{0} (연결 끊김)",
+    drive_local: "로컬 디스크",
+    drive_removable: "이동식",
+    info_cpu: "{0} · 논리 프로세서 {1}개",
+    info_memory: "설치된 메모리 {0}",
+    info_gpu: "전용 메모리 {0}",
+    info_no_gpu: "하드웨어 GPU를 찾지 못했습니다.",
+    info_network_all: "어댑터 {0}개를 합산합니다.",
+    info_disk: "{0} · {2} 중 {1} 사용",
 
     group_update: "갱신",
     hint_update: "값을 읽는 주기입니다 (250~10000ms).",
@@ -236,9 +365,14 @@ pub const KO: Text = Text {
     interval_range_error: "밀리초를 입력하세요 (250~10000).",
 
     group_appearance: "모양",
-    hint_appearance: "아이콘 글자의 색입니다.",
+    hint_appearance: "트레이 아이콘의 색과 이 창·트레이 메뉴의 테마입니다.",
     color_metric: "항목마다 다른 색",
     color_theme: "작업 표시줄 테마",
+    label_icon_color: "아이콘 글자",
+    label_window_theme: "창 테마",
+    theme_auto: "자동",
+    theme_light: "밝게",
+    theme_dark: "어둡게",
 
     group_startup: "시작 및 언어",
     hint_startup: "시작 프로그램과 창·트레이 메뉴·툴팁에 쓸 언어입니다.",
@@ -257,6 +391,9 @@ pub const KO: Text = Text {
     network_tooltip: "네트워크 다운로드 {0}  업로드 {1}",
     gpu_tooltip: "{0}  {1} 사용 중",
     vram_tooltip: "GPU VRAM {0} 사용 중  ({2} 중 {1})",
+    network_device_tooltip: "{0}  다운로드 {1}  업로드 {2}",
+    disk_usage_tooltip: "디스크 {0} {1} 사용 중  ({3} 중 {2})",
+    disk_active_tooltip: "디스크 {0} {1} 활동  읽기 {2}  쓰기 {3}",
 
     already_running: "{0}이(가) 이미 실행 중입니다.",
     start_failed: "{0}을(를) 시작하지 못했습니다.\n\n{1}",
@@ -283,7 +420,44 @@ pub const JA: Text = Text {
     metric_network_up: "ネットワーク上り",
     metric_gpu: "GPU",
     metric_gpu_vram: "GPU VRAM",
+    metric_disk_usage: "ディスク使用量",
+    metric_disk_active: "ディスク アクティビティ",
     last_readout_error: "最後の 1 つはオフにできません。",
+
+    group_tray: "タスクバー",
+    hint_page_general: "すべての項目に共通する設定です。",
+    nav_general: "全般",
+    nav_cpu: "CPU",
+    nav_memory: "メモリ",
+    nav_gpu: "GPU",
+    nav_network: "ネットワーク",
+    nav_disk: "ディスク",
+    hint_page_cpu: "すべてのコアを合わせたプロセッサ使用率です。",
+    hint_page_memory: "使用中の物理メモリの割合です。",
+    hint_page_gpu: "最も忙しいエンジンの使用率と使用中の専用メモリです。",
+    hint_page_network: "1 秒あたりの受信・送信バイト数です。",
+    hint_page_disk: "ドライブの使用領域と、ディスクが動作していた時間の割合です。",
+
+    group_device: "デバイス",
+    label_device: "対象",
+    hint_device_cpu: "すべてのプロセッサをまとめて測定します。",
+    hint_device_memory: "この PC の物理メモリです。",
+    hint_device_gpu: "測定するグラフィックス アダプターです。",
+    hint_device_network: "すべてのアダプターを合計するか、1 つだけを数えます。",
+    hint_device_disk: "領域とアクティビティを測定するドライブです。",
+    device_gpu_auto: "自動 ({0})",
+    device_network_all: "すべてのアダプター",
+    device_disk_auto: "自動 (システム ドライブ {0})",
+    device_missing: "{0} (見つかりません)",
+    device_offline: "{0} (切断)",
+    drive_local: "ローカル ディスク",
+    drive_removable: "リムーバブル",
+    info_cpu: "{0} · 論理プロセッサ {1} 個",
+    info_memory: "搭載メモリ {0}",
+    info_gpu: "専用メモリ {0}",
+    info_no_gpu: "ハードウェア GPU が見つかりません。",
+    info_network_all: "{0} 個のアダプターを合計します。",
+    info_disk: "{0} · {2} 中 {1} 使用",
 
     group_update: "更新",
     hint_update: "値を取得する間隔です (250～10000ms)。",
@@ -296,9 +470,14 @@ pub const JA: Text = Text {
     interval_range_error: "ミリ秒を入力してください (250～10000)。",
 
     group_appearance: "外観",
-    hint_appearance: "アイコン内の文字の色です。",
+    hint_appearance: "トレイ アイコンの色と、このウィンドウ・トレイ メニューのテーマです。",
     color_metric: "項目ごとに色分け",
     color_theme: "タスクバーのテーマ",
+    label_icon_color: "アイコン文字",
+    label_window_theme: "ウィンドウ",
+    theme_auto: "自動",
+    theme_light: "ライト",
+    theme_dark: "ダーク",
 
     group_startup: "スタートアップと言語",
     hint_startup: "スタートアップと、このウィンドウ・トレイメニュー・ツールチップの言語です。",
@@ -317,6 +496,9 @@ pub const JA: Text = Text {
     network_tooltip: "ネットワーク 下り {0}  上り {1}",
     gpu_tooltip: "{0}  {1} 使用中",
     vram_tooltip: "GPU VRAM {0} 使用中  ({2} / {1})",
+    network_device_tooltip: "{0}  下り {1}  上り {2}",
+    disk_usage_tooltip: "ディスク {0} {1} 使用中  ({2} / {3})",
+    disk_active_tooltip: "ディスク {0} {1} 稼働  読み取り {2}  書き込み {3}",
 
     already_running: "{0} は既に実行中です。",
     start_failed: "{0} を起動できませんでした。\n\n{1}",
@@ -404,6 +586,8 @@ pub fn metric_label(metric: Metric) -> &'static str {
         Metric::NetworkUp => text.metric_network_up,
         Metric::Gpu => text.metric_gpu,
         Metric::GpuVram => text.metric_gpu_vram,
+        Metric::DiskUsage => text.metric_disk_usage,
+        Metric::DiskActive => text.metric_disk_active,
     }
 }
 
@@ -437,6 +621,66 @@ pub fn gpu_tooltip(adapter: &str, percent: &str) -> String {
 
 pub fn vram_tooltip(percent: &str, used: &str, total: &str) -> String {
     fill(t().vram_tooltip, &[percent, used, total])
+}
+
+/// 고른 인터페이스 하나의 처리량.
+pub fn network_device_tooltip(device: &str, down: &str, up: &str) -> String {
+    fill(t().network_device_tooltip, &[device, down, up])
+}
+
+/// 드라이브(`C:`)의 공간 사용률.
+pub fn disk_usage_tooltip(drive: &str, percent: &str, used: &str, total: &str) -> String {
+    fill(t().disk_usage_tooltip, &[drive, percent, used, total])
+}
+
+/// 드라이브가 놓인 디스크의 활성 시간과 처리량.
+pub fn disk_active_tooltip(drive: &str, percent: &str, read: &str, write: &str) -> String {
+    fill(t().disk_active_tooltip, &[drive, percent, read, write])
+}
+
+/// GPU 콤보의 자동 항목. 지금 자동으로 고르는 어댑터를 괄호에 넣는다.
+pub fn device_gpu_auto(adapter: &str) -> String {
+    fill(t().device_gpu_auto, &[adapter])
+}
+
+/// 디스크 콤보의 자동 항목. (`C:`)
+pub fn device_disk_auto(drive: &str) -> String {
+    fill(t().device_disk_auto, &[drive])
+}
+
+/// 설정에는 있지만 지금 없는 장치.
+pub fn device_missing(name: &str) -> String {
+    fill(t().device_missing, &[name])
+}
+
+/// 있지만 연결되지 않은 네트워크 인터페이스.
+pub fn device_offline(name: &str) -> String {
+    fill(t().device_offline, &[name])
+}
+
+/// CPU 페이지의 정보 줄.
+pub fn info_cpu(name: &str, logical: u32) -> String {
+    fill(t().info_cpu, &[name, &logical.to_string()])
+}
+
+/// 메모리 페이지의 정보 줄.
+pub fn info_memory(total: &str) -> String {
+    fill(t().info_memory, &[total])
+}
+
+/// GPU 페이지의 정보 줄.
+pub fn info_gpu(vram: &str) -> String {
+    fill(t().info_gpu, &[vram])
+}
+
+/// 네트워크 페이지에서 모든 어댑터를 셀 때의 정보 줄.
+pub fn info_network_all(count: usize) -> String {
+    fill(t().info_network_all, &[&count.to_string()])
+}
+
+/// 디스크 페이지의 정보 줄. (모델, 사용, 전체)
+pub fn info_disk(model: &str, used: &str, total: &str) -> String {
+    fill(t().info_disk, &[model, used, total])
 }
 
 /// 중복 실행 알림.
@@ -495,7 +739,42 @@ mod tests {
             ("metric_network_up", text.metric_network_up),
             ("metric_gpu", text.metric_gpu),
             ("metric_gpu_vram", text.metric_gpu_vram),
+            ("metric_disk_usage", text.metric_disk_usage),
+            ("metric_disk_active", text.metric_disk_active),
             ("last_readout_error", text.last_readout_error),
+            ("group_tray", text.group_tray),
+            ("hint_page_general", text.hint_page_general),
+            ("nav_general", text.nav_general),
+            ("nav_cpu", text.nav_cpu),
+            ("nav_memory", text.nav_memory),
+            ("nav_gpu", text.nav_gpu),
+            ("nav_network", text.nav_network),
+            ("nav_disk", text.nav_disk),
+            ("hint_page_cpu", text.hint_page_cpu),
+            ("hint_page_memory", text.hint_page_memory),
+            ("hint_page_gpu", text.hint_page_gpu),
+            ("hint_page_network", text.hint_page_network),
+            ("hint_page_disk", text.hint_page_disk),
+            ("group_device", text.group_device),
+            ("label_device", text.label_device),
+            ("hint_device_cpu", text.hint_device_cpu),
+            ("hint_device_memory", text.hint_device_memory),
+            ("hint_device_gpu", text.hint_device_gpu),
+            ("hint_device_network", text.hint_device_network),
+            ("hint_device_disk", text.hint_device_disk),
+            ("device_gpu_auto", text.device_gpu_auto),
+            ("device_network_all", text.device_network_all),
+            ("device_disk_auto", text.device_disk_auto),
+            ("device_missing", text.device_missing),
+            ("device_offline", text.device_offline),
+            ("drive_local", text.drive_local),
+            ("drive_removable", text.drive_removable),
+            ("info_cpu", text.info_cpu),
+            ("info_memory", text.info_memory),
+            ("info_gpu", text.info_gpu),
+            ("info_no_gpu", text.info_no_gpu),
+            ("info_network_all", text.info_network_all),
+            ("info_disk", text.info_disk),
             ("group_update", text.group_update),
             ("hint_update", text.hint_update),
             ("label_interval", text.label_interval),
@@ -509,6 +788,11 @@ mod tests {
             ("hint_appearance", text.hint_appearance),
             ("color_metric", text.color_metric),
             ("color_theme", text.color_theme),
+            ("label_icon_color", text.label_icon_color),
+            ("label_window_theme", text.label_window_theme),
+            ("theme_auto", text.theme_auto),
+            ("theme_light", text.theme_light),
+            ("theme_dark", text.theme_dark),
             ("group_startup", text.group_startup),
             ("hint_startup", text.hint_startup),
             ("count_virtual", text.count_virtual),
@@ -524,6 +808,9 @@ mod tests {
             ("network_tooltip", text.network_tooltip),
             ("gpu_tooltip", text.gpu_tooltip),
             ("vram_tooltip", text.vram_tooltip),
+            ("network_device_tooltip", text.network_device_tooltip),
+            ("disk_usage_tooltip", text.disk_usage_tooltip),
+            ("disk_active_tooltip", text.disk_active_tooltip),
             ("already_running", text.already_running),
             ("start_failed", text.start_failed),
             ("save_failed", text.save_failed),
@@ -677,6 +964,18 @@ mod tests {
                 network_tooltip("1.2 MB/s", "340 KB/s"),
                 gpu_tooltip("NVIDIA GeForce RTX 4060", "14%"),
                 vram_tooltip("87%", "6.9 GB", "7.8 GB"),
+                network_device_tooltip("Ethernet", "1.2 MB/s", "340 KB/s"),
+                disk_usage_tooltip("C:", "58%", "1.07 TB", "1.86 TB"),
+                disk_active_tooltip("C:", "14%", "51 MB/s", "56 MB/s"),
+                device_gpu_auto("NVIDIA GeForce RTX 4060"),
+                device_disk_auto("C:"),
+                device_missing("F:"),
+                device_offline("Wi-Fi"),
+                info_cpu("AMD Ryzen 9 5950X", 32),
+                info_memory("64.0 GB"),
+                info_gpu("8.00 GB"),
+                info_network_all(3),
+                info_disk("Samsung SSD", "1.07 TB", "1.86 TB"),
                 already_running("TinyTrayManager"),
                 start_failed("TinyTrayManager", "boom"),
                 save_failed("denied"),

@@ -8,12 +8,10 @@
 //! - [render]: `Bitmap`과 배율(nearest-neighbor)
 //! - [layout]: master 레이아웃 정책과 지표 정의
 //! - [cache]: 표시 문자열 캐시
-//! - [gdi]: 미리보기용 DIB 변환만 남긴다
 //!
 //! 글리프는 16px master 하나뿐이다. 아이콘 px는 [render::scale_fit]으로 파생한다.
 
 pub mod cache;
-pub mod gdi;
 pub mod glyphs;
 pub mod layout;
 pub mod pixel;

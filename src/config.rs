@@ -27,6 +27,23 @@ pub enum ColorMode {
     Metric,
 }
 
+/// 설정 창과 트레이 메뉴의 밝기. 트레이 아이콘 색은 이 값과 무관하게 작업 표시줄을 따른다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UiTheme {
+    /// 작업 표시줄(`SystemUsesLightTheme`)을 따른다.
+    #[default]
+    Auto,
+    Light,
+    Dark,
+}
+
+impl UiTheme {
+    /// 라디오 버튼의 순서. 설정 창의 테스트가 대조한다.
+    #[cfg(test)]
+    pub const ALL: [UiTheme; 3] = [UiTheme::Auto, UiTheme::Light, UiTheme::Dark];
+}
+
 /// 어떤 지표를 트레이에 표시할지.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -37,6 +54,8 @@ pub struct Show {
     pub network_up: bool,
     pub gpu: bool,
     pub gpu_vram: bool,
+    pub disk_usage: bool,
+    pub disk_active: bool,
     /// v0.1.0의 단일 `network` 항목. 읽어서 아래 두 항목으로 옮기고 다시 쓰지는 않는다.
     #[serde(default, skip_serializing)]
     pub network: Option<bool>,
@@ -51,6 +70,8 @@ impl Default for Show {
             network_up: true,
             gpu: true,
             gpu_vram: true,
+            disk_usage: true,
+            disk_active: true,
             network: None,
         }
     }
@@ -65,6 +86,8 @@ impl Show {
             Metric::NetworkUp => self.network_up,
             Metric::Gpu => self.gpu,
             Metric::GpuVram => self.gpu_vram,
+            Metric::DiskUsage => self.disk_usage,
+            Metric::DiskActive => self.disk_active,
         }
     }
 
@@ -76,6 +99,8 @@ impl Show {
             Metric::NetworkUp => self.network_up = value,
             Metric::Gpu => self.gpu = value,
             Metric::GpuVram => self.gpu_vram = value,
+            Metric::DiskUsage => self.disk_usage = value,
+            Metric::DiskActive => self.disk_active = value,
         }
     }
 
@@ -87,11 +112,28 @@ impl Show {
             self.network_up,
             self.gpu,
             self.gpu_vram,
+            self.disk_usage,
+            self.disk_active,
         ]
         .into_iter()
         .filter(|enabled| *enabled)
         .count()
     }
+}
+
+/// 분야별로 잴 장치. 빈 값은 자동이다.
+///
+/// 이름으로 저장한다. 장치가 사라지면(USB 제거, 어댑터 이름 변경) 자동으로 물러서되 값은
+/// 지우지 않는다. 다시 꽂으면 그대로 따라간다.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Devices {
+    /// GPU 어댑터 이름(DXGI 설명). 자동은 전용 메모리가 가장 큰 어댑터다.
+    pub gpu: String,
+    /// 네트워크 인터페이스 이름(`Ethernet`, `Wi-Fi`). 자동은 모든 어댑터의 합이다.
+    pub network: String,
+    /// 드라이브(`D:`). 자동은 Windows가 설치된 드라이브다.
+    pub disk: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,11 +143,15 @@ pub struct Config {
     pub poll_interval_ms: u64,
     pub show: Show,
     pub color_mode: ColorMode,
+    /// 설정 창과 트레이 메뉴의 밝기.
+    pub ui_theme: UiTheme,
     /// 가상 어댑터를 집계에서 뺀다. 물리 NIC와 가상 스위치가 같은 트래픽을
     /// 두 번 세는 것을 막는다.
     pub exclude_virtual_adapters: bool,
     /// UI 언어. `Auto`는 Windows 표시 언어를 따른다.
     pub language: Language,
+    /// 분야별 장치. TOML 표라서 단순 값보다 뒤에 둬야 한다.
+    pub devices: Devices,
 }
 
 impl Default for Config {
@@ -114,8 +160,10 @@ impl Default for Config {
             poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
             show: Show::default(),
             color_mode: ColorMode::default(),
+            ui_theme: UiTheme::default(),
             exclude_virtual_adapters: true,
             language: Language::default(),
+            devices: Devices::default(),
         }
     }
 }
@@ -233,7 +281,7 @@ mod tests {
         let mut config = Config::default();
         assert!(config.validate().is_empty());
         assert_eq!(config.poll_interval_ms, DEFAULT_POLL_INTERVAL_MS);
-        assert_eq!(config.show.count(), 6);
+        assert_eq!(config.show.count(), 8);
         assert!(config.exclude_virtual_adapters);
     }
 
@@ -264,6 +312,8 @@ mod tests {
                 network_up: false,
                 gpu: false,
                 gpu_vram: false,
+                disk_usage: false,
+                disk_active: false,
                 network: None,
             },
             ..Default::default()
@@ -287,11 +337,19 @@ mod tests {
                 network_up: false,
                 gpu: false,
                 gpu_vram: false,
+                disk_usage: false,
+                disk_active: false,
                 network: None,
             },
             color_mode: ColorMode::Theme,
+            ui_theme: UiTheme::Dark,
             exclude_virtual_adapters: false,
             language: Language::Ja,
+            devices: Devices {
+                gpu: "NVIDIA GeForce RTX 4060".into(),
+                network: "Wi-Fi".into(),
+                disk: "D:".into(),
+            },
         };
         let text = toml::to_string_pretty(&config).expect("serialize");
         let parsed: Config = toml::from_str(&text).expect("deserialize");
@@ -318,12 +376,18 @@ network = false
         assert!(!config.show.network_up);
 
         let written = toml::to_string_pretty(&config).expect("serialize");
+        // `[devices]`에도 `network`가 있으므로 `[show]` 표만 본다.
+        let show = written
+            .split("[show]")
+            .nth(1)
+            .and_then(|rest| rest.split("\n[").next())
+            .expect("[show]");
         assert!(
-            !written.contains("network ="),
+            !show.contains("network ="),
             "legacy 항목은 다시 쓰지 않는다:
 {written}"
         );
-        assert!(written.contains("network_down = false"));
+        assert!(show.contains("network_down = false"));
     }
 
     /// v0.5.0까지 있던 `show_labels`/`show_units`는 읽을 때 버리고 다시 쓰지 않는다.
@@ -343,7 +407,8 @@ network = false
         let text = "poll_interval_ms = 2000\nfuture_option = true\n";
         let config: Config = toml::from_str(text).expect("알 수 없는 키는 무시한다");
         assert_eq!(config.poll_interval_ms, 2000);
-        assert_eq!(config.show.count(), 6, "빠진 항목은 기본값");
+        assert_eq!(config.show.count(), 8, "빠진 항목은 기본값");
+        assert_eq!(config.devices, Devices::default(), "장치는 자동");
     }
 
     #[test]

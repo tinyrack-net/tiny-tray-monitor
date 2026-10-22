@@ -16,11 +16,10 @@
  * 글자는 비워 둔다. 런타임에 src/i18n.rs의 표에서 골라 WM_INITDIALOG에서 채운다.
  * 그래야 창을 닫지 않고 언어를 바꿀 수 있고, 레이아웃은 이 파일 하나로 유지된다. */
 #define IDD_SETTINGS            101
-#define IDC_CPU                 1001
-#define IDC_MEMORY              1002
-#define IDC_NETWORK_DOWN        1003
-#define IDC_NETWORK_UP          1004
-#define IDC_PREVIEW             1005
+#define IDC_SHOW_1              1001
+#define IDC_SHOW_2              1002
+#define IDC_NAV                 1003
+#define IDC_PAGE_TITLE          1004
 #define IDC_INTERVAL            1006
 #define IDC_INTERVAL_EDIT       1007
 #define IDC_INTERVAL_UNIT       1008
@@ -30,8 +29,8 @@
 #define IDC_AUTOSTART           1012
 #define IDC_STATUS              1013
 #define IDC_VERSION             1014
-#define IDC_GPU                 1015
-#define IDC_GPU_VRAM            1016
+#define IDC_PAGE_HINT           1015
+#define IDC_SEPARATOR           1016
 #define IDC_RESET               1017
 #define IDC_GROUP_READOUTS      1018
 #define IDC_HINT_READOUTS       1019
@@ -48,6 +47,17 @@
 #define IDC_HINT_LANGUAGE       1030
 #define IDC_HINT_TASKBAR        1031
 #define IDC_OPEN_TASKBAR        1032
+#define IDC_GROUP_TRAY          1033
+#define IDC_GROUP_DEVICE        1034
+#define IDC_HINT_DEVICE         1035
+#define IDC_LABEL_DEVICE        1036
+#define IDC_DEVICE              1037
+#define IDC_DEVICE_INFO         1038
+#define IDC_LABEL_ICON_COLOR    1039
+#define IDC_LABEL_WINDOW_THEME  1040
+#define IDC_THEME_AUTO          1041
+#define IDC_THEME_LIGHT         1042
+#define IDC_THEME_DARK          1043
 
 /* RT_MANIFEST = 24, CREATEPROCESS_MANIFEST_RESOURCE_ID = 1 */
 1 24 "resources/app.manifest"
@@ -69,7 +79,7 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "tinyrack"
-            VALUE "FileDescription", "CPU, memory, network and GPU readouts in the Windows system tray"
+            VALUE "FileDescription", "CPU, memory, network, GPU and disk readouts in the Windows system tray"
             VALUE "FileVersion", APP_VERSION_STRING
             VALUE "InternalName", "tray-monitor"
             VALUE "LegalCopyright", "Copyright (c) 2026 winetree94"
@@ -84,49 +94,82 @@ BEGIN
     END
 END
 
-/* 설정 창. 그룹 + 설명 한 줄 + 컨트롤로 나눈다. 모든 글자는 비워 두고 코드가 채운다. */
-IDD_SETTINGS DIALOGEX 0, 0, 300, 297
+/* 설정 창. 왼쪽 목록으로 페이지를 고르고 오른쪽에 그 페이지의 그룹을 보여 준다.
+ *
+ * 모든 페이지의 컨트롤이 여기 함께 있고, src/settings/dialog.rs가 지금 페이지의 것만 보인다.
+ * 분야 페이지(CPU·메모리·GPU·네트워크·디스크)는 같은 컨트롤을 돌려 쓴다. 장치 그룹의 높이는
+ * 페이지마다 달라 코드가 옮긴다(src/settings/pages.rs의 device_layout). 상태줄과 버튼은
+ * 모든 페이지에 공통이다. 모든 글자는 비워 두고 코드가 채운다. */
+IDD_SETTINGS DIALOGEX 0, 0, 400, 284
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION ""
 FONT 9, "Segoe UI", 400, 0, 0x0
 BEGIN
-    /* 표시 항목. 두 번째 줄은 트레이에 고정하는 방법을 알려 준다. */
-    GROUPBOX        "", IDC_GROUP_READOUTS, 7, 6, 286, 99
-    LTEXT           "", IDC_HINT_READOUTS, 15, 17, 270, 9
-    LTEXT           "", IDC_HINT_TASKBAR, 15, 26, 270, 9
-    CONTROL         "", IDC_CPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 17, 39, 84, 10
-    CONTROL         "", IDC_MEMORY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 107, 39, 84, 10
-    CONTROL         "", IDC_GPU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 197, 39, 84, 10
-    CONTROL         "", IDC_NETWORK_DOWN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 51, 84, 10
-    CONTROL         "", IDC_NETWORK_UP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 107, 51, 84, 10
-    CONTROL         "", IDC_GPU_VRAM, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 197, 51, 84, 10
-    /* 미리보기는 창이 뜨면 코드가 비트맵을 넣는다(SS_BITMAP). */
-    CONTROL         "", IDC_PREVIEW, "Static", SS_BITMAP | SS_CENTERIMAGE | WS_BORDER | WS_GROUP, 17, 64, 266, 36
-    /* 갱신 주기 */
-    GROUPBOX        "", IDC_GROUP_UPDATE, 7, 111, 286, 36
-    LTEXT           "", IDC_HINT_UPDATE, 15, 122, 270, 9
-    LTEXT           "", IDC_LABEL_INTERVAL, 17, 134, 48, 9
-    COMBOBOX        IDC_INTERVAL, 68, 132, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
-    EDITTEXT        IDC_INTERVAL_EDIT, 192, 132, 42, 13, ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL
-    LTEXT           "", IDC_INTERVAL_UNIT, 238, 134, 30, 9
-    /* 모양 */
-    GROUPBOX        "", IDC_GROUP_APPEARANCE, 7, 153, 286, 36
-    LTEXT           "", IDC_HINT_APPEARANCE, 15, 164, 270, 9
-    CONTROL         "", IDC_COLOR_METRIC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 17, 176, 100, 10
-    CONTROL         "", IDC_COLOR_THEME, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 124, 176, 110, 10
-    /* 시작 및 언어 */
-    GROUPBOX        "", IDC_GROUP_STARTUP, 7, 195, 286, 62
-    LTEXT           "", IDC_HINT_STARTUP, 15, 206, 270, 9
-    CONTROL         "", IDC_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 17, 218, 130, 10
-    LTEXT           "", IDC_HINT_VIRTUAL, 150, 219, 135, 9
-    CONTROL         "", IDC_AUTOSTART, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 231, 130, 10
-    LTEXT           "", IDC_LABEL_LANGUAGE, 17, 244, 48, 9
-    COMBOBOX        IDC_LANGUAGE, 68, 242, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "", IDC_HINT_LANGUAGE, 192, 244, 95, 9
-    /* 상태줄·바닥 */
-    LTEXT           "", IDC_STATUS, 10, 263, 200, 9
-    RTEXT           "", IDC_VERSION, 232, 263, 60, 9
-    PUSHBUTTON      "", IDC_RESET, 10, 275, 74, 14, WS_TABSTOP | WS_GROUP
-    PUSHBUTTON      "", IDC_OPEN_TASKBAR, 90, 275, 130, 14, WS_TABSTOP
-    DEFPUSHBUTTON   "", IDCANCEL, 244, 275, 48, 14
+    /* 왼쪽 목록. 항목은 코드가 그린다(LBS_OWNERDRAWFIXED). */
+    LISTBOX         IDC_NAV, 7, 7, 86, 237, LBS_OWNERDRAWFIXED | LBS_HASSTRINGS | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_TABSTOP | WS_GROUP | NOT WS_BORDER
+    CONTROL         "", IDC_SEPARATOR, "Static", SS_ETCHEDVERT, 99, 7, 1, 249
+    CTEXT           "", IDC_VERSION, 7, 248, 86, 9
+
+    /* 페이지 제목과 한 줄 설명. 그룹 테두리(x=104)와 같은 선에서 시작한다. */
+    LTEXT           "", IDC_PAGE_TITLE, 104, 6, 289, 14, SS_NOPREFIX
+    LTEXT           "", IDC_PAGE_HINT, 104, 22, 289, 9
+
+    /* 그룹 격자(DLU). src/settings/dialog.rs의 group_grid 테스트가 지킨다.
+     *
+     *   그룹      x=104, 폭 289, 그룹 사이 6
+     *   안쪽      좌우 여백 8: 내용은 x=112~385
+     *   설명      그룹 위 +11
+     *   줄        그룹 위 +24부터 14 간격. 콤보·입력·버튼은 줄 위에, 체크·라디오는 +1, 글자는 +2
+     *   아래 여백 마지막 줄(높이 12) 아래 7: 높이 = 29 + 14 x 줄 수
+     *   열        라벨 112(폭 48), 값 164, 두 번째 열 274. 세 칸 라디오는 164/238/312
+     *             콤보 뒤의 칸(입력·단위·설명)은 284에서 시작하고 모두 385에서 끝난다 */
+
+    /* General: 갱신 주기 (1줄) */
+    GROUPBOX        "", IDC_GROUP_UPDATE, 104, 36, 289, 43
+    LTEXT           "", IDC_HINT_UPDATE, 112, 47, 273, 9
+    LTEXT           "", IDC_LABEL_INTERVAL, 112, 62, 48, 9
+    COMBOBOX        IDC_INTERVAL, 164, 60, 116, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
+    EDITTEXT        IDC_INTERVAL_EDIT, 284, 60, 40, 12, ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL
+    LTEXT           "", IDC_INTERVAL_UNIT, 328, 62, 57, 9
+    /* General: 모양 (2줄). 라디오 두 묶음은 각자 WS_GROUP으로 시작한다. */
+    GROUPBOX        "", IDC_GROUP_APPEARANCE, 104, 85, 289, 57
+    LTEXT           "", IDC_HINT_APPEARANCE, 112, 96, 273, 9
+    LTEXT           "", IDC_LABEL_ICON_COLOR, 112, 111, 48, 9
+    CONTROL         "", IDC_COLOR_METRIC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 164, 110, 106, 10
+    CONTROL         "", IDC_COLOR_THEME, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 274, 110, 111, 10
+    LTEXT           "", IDC_LABEL_WINDOW_THEME, 112, 125, 48, 9
+    CONTROL         "", IDC_THEME_AUTO, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP | WS_GROUP, 164, 124, 70, 10
+    CONTROL         "", IDC_THEME_LIGHT, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 238, 124, 70, 10
+    CONTROL         "", IDC_THEME_DARK, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 312, 124, 73, 10
+    /* General: 시작 및 언어 (2줄) */
+    GROUPBOX        "", IDC_GROUP_STARTUP, 104, 148, 289, 57
+    LTEXT           "", IDC_HINT_STARTUP, 112, 159, 273, 9
+    CONTROL         "", IDC_AUTOSTART, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 112, 173, 273, 10
+    LTEXT           "", IDC_LABEL_LANGUAGE, 112, 188, 48, 9
+    COMBOBOX        IDC_LANGUAGE, 164, 186, 116, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_HINT_LANGUAGE, 284, 188, 101, 9
+    /* General: 트레이 고정 안내 (1줄) */
+    GROUPBOX        "", IDC_GROUP_TRAY, 104, 211, 289, 43
+    LTEXT           "", IDC_HINT_TASKBAR, 112, 222, 273, 9
+    PUSHBUTTON      "", IDC_OPEN_TASKBAR, 112, 235, 130, 12, WS_TABSTOP | WS_GROUP
+
+    /* 분야 페이지: 표시 항목 (1줄) */
+    GROUPBOX        "", IDC_GROUP_READOUTS, 104, 36, 289, 43
+    LTEXT           "", IDC_HINT_READOUTS, 112, 47, 273, 9
+    CONTROL         "", IDC_SHOW_1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 112, 61, 158, 10
+    CONTROL         "", IDC_SHOW_2, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 274, 61, 111, 10
+    /* 분야 페이지: 장치. 여기 적힌 것은 줄이 가장 많은 네트워크 페이지(3줄)다. 다른 페이지는
+     * 코드가 그룹 높이와 정보 줄 위치를 줄 수에 맞춘다(src/settings/pages.rs의 device_layout). */
+    GROUPBOX        "", IDC_GROUP_DEVICE, 104, 85, 289, 71
+    LTEXT           "", IDC_HINT_DEVICE, 112, 96, 273, 9
+    LTEXT           "", IDC_LABEL_DEVICE, 112, 111, 48, 9
+    COMBOBOX        IDC_DEVICE, 164, 109, 221, 120, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
+    CONTROL         "", IDC_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 164, 124, 106, 10
+    LTEXT           "", IDC_HINT_VIRTUAL, 274, 125, 111, 9
+    LTEXT           "", IDC_DEVICE_INFO, 112, 139, 273, 9, SS_NOPREFIX | SS_ENDELLIPSIS
+
+    /* 공통: 상태줄과 버튼 */
+    LTEXT           "", IDC_STATUS, 104, 266, 235, 9
+    PUSHBUTTON      "", IDC_RESET, 7, 263, 86, 14, WS_TABSTOP | WS_GROUP
+    DEFPUSHBUTTON   "", IDCANCEL, 345, 263, 48, 14
 END
