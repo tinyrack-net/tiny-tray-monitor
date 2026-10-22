@@ -38,7 +38,7 @@ v0.3.1 exe로 확인했다.
 | 설정 창 | 패키지 앱에서 정상 표시 |
 | IPC | 두 번째 실행이 첫 인스턴스에 설정 창을 열게 함(`설정 창을 열었다` 로그) |
 | 자동 시작 | `uap5:Extension windows.startupTask` + `StartupTask::RequestEnableAsync` → `Enabled(2)` |
-| 단일 인스턴스 | `Local\tray-monitor-single-instance` mutex가 패키지/비패키지 사이에서 공유됨 |
+| 단일 인스턴스 | `Local\TinyTrayMonitor.SingleInstance` mutex가 패키지/비패키지 사이에서 공유됨 |
 | 서명 없음 | 설치 불가: `0x800B0100`(unsigned), `0x800B0109`(신뢰되지 않은 자체 서명) |
 
 manifest 최소 형태(검증됨):
@@ -64,9 +64,9 @@ manifest 최소 형태(검증됨):
   </Dependencies>
   <Capabilities><rescap:Capability Name="runFullTrust" /></Capabilities>
   <Applications>
-    <Application Id="TrayMonitor" Executable="tiny-tray-monitor.exe"
+    <Application Id="TinyTrayMonitor" Executable="tiny-tray-monitor.exe"
                  EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="tray-monitor" Description="…"
+      <uap:VisualElements DisplayName="TinyTrayMonitor" Description="…"
         Square44x44Logo="Assets\Square44x44Logo.png"
         Square150x150Logo="Assets\Square150x150Logo.png" BackgroundColor="transparent">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
@@ -75,8 +75,8 @@ manifest 최소 형태(검증됨):
         <uap5:Extension Category="windows.startupTask"
                         Executable="tiny-tray-monitor.exe"
                         EntryPoint="Windows.FullTrustApplication">
-          <uap5:StartupTask TaskId="TrayMonitorStartup" Enabled="true"
-                            DisplayName="tray-monitor" />
+          <uap5:StartupTask TaskId="TinyTrayMonitorStartup" Enabled="true"
+                            DisplayName="TinyTrayMonitor" />
         </uap5:Extension>
       </Extensions>
     </Application>
@@ -122,7 +122,7 @@ manifest 최소 형태(검증됨):
 | 컴파일 | Inno Setup 6.7.3, 1.3초 |
 | 무인 설치 | `/VERYSILENT /CURRENTUSER /DIR=…` → exe, Uninstall 키, 시작 메뉴 바로가기 |
 | 제거 | `unins000.exe /VERYSILENT` → 파일·Uninstall 키 제거 |
-| AppMutex | `Local\tray-monitor-single-instance` 컴파일 확인 |
+| AppMutex | `Local\TinyTrayMonitor.SingleInstance` 컴파일 확인 |
 | Run 값 정리 | `[Registry] … Flags: uninsdeletevalue` 컴파일 확인 |
 | CI 러너 | `windows-2025`에 InnoSetup 6.7.1 사전 설치(`C:\Program Files (x86)\Inno Setup 6`) |
 | 로컬 설치 위치 | winget 설치 시 `%LOCALAPPDATA%\Programs\Inno Setup 6` → 두 경로 모두 탐색 필요 |
@@ -213,7 +213,7 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 `src/startup.rs`:
 
-- `platform::packaged()`이면 `StartupTask::GetAsync("TrayMonitorStartup")` → 상태 조회/설정.
+- `platform::packaged()`이면 `StartupTask::GetAsync("TinyTrayMonitorStartup")` → 상태 조회/설정.
 - 블로킹 대기 헬퍼: `IAsyncInfo::Status()`를 10ms 간격으로 폴링, 5초 타임아웃.
 - 상태 매핑:
   - `Enabled`/`EnabledByPolicy` → 켜짐
@@ -236,12 +236,12 @@ pub fn data_dir() -> PathBuf;         // 패키지: LocalState, 그 외: %LOCALA
 
 - `AppId` 고정 GUID, `DefaultDirName={autopf}\TinyTrayMonitor`,
   `PrivilegesRequired=lowest`, `PrivilegesRequiredOverridesAllowed=commandline dialog`.
-- `AppMutex=Local\tray-monitor-single-instance`,
+- `AppMutex=Local\TinyTrayMonitor.SingleInstance`,
   `CloseApplications=yes`, `RestartApplications=no`.
 - `[Code] PrepareToInstall`:
-  - `FindWindow('tray-monitor-ipc', '')` → `PostMessage(WM_CLOSE)`.
+  - `FindWindow('TinyTrayMonitor.Ipc', '')` → `PostMessage(WM_CLOSE)`.
   - 창이 사라질 때까지 최대 5초 대기. 그래도 있으면 종료를 요청하는 메시지.
-- `[Registry]`: 언인스톨 시 `HKCU\...\Run\TinyTrayMonitor` 제거(옛 `tray-monitor` 값도)(`uninsdeletevalue`).
+- `[Registry]`: 언인스톨 시 `HKCU\...\Run\TinyTrayMonitor` 제거(`uninsdeletevalue`).
   설정 파일(`%APPDATA%\TinyTrayMonitor`)은 남긴다.
 - `[Icons]`: 시작 메뉴 바로가기, 선택적 바탕 화면 아이콘.
 - `[Run]`: `runasoriginaluser`, `skipifsilent`로 설치 후 실행.
@@ -458,22 +458,22 @@ GUID만으로 성립했다.
   `is_enabled_named`가 문자열을 그대로 비교한다.
 - 포터블 zip은 설치 단계가 없어 예전처럼 꺼진 상태로 시작한다.
 
-## 12. v0.11.0 이름 변경 (TinyTrayManager / tray-monitor.exe → TinyTrayMonitor / tiny-tray-monitor.exe)
+## 12. 이름 (v0.11.0 → v0.12.0)
 
-한 번만 하는 변경이다. 바뀐 것과 그대로 둔 것을 구분해 적는다.
+v0.11.0에서 TinyTrayManager / `tray-monitor.exe`를 TinyTrayMonitor / `tiny-tray-monitor.exe`로 바꾸며 옛 이름을
+옮기는 코드를 넣었다가, v0.12.0에서 하위 호환을 버리고 전부 걷어 냈다. 옛 버전은 제거한 뒤 새로 설치한다.
 
-| 항목 | 이전 | 이후 | 이유 |
-| --- | --- | --- | --- |
-| exe | `tray-monitor.exe` | `tiny-tray-monitor.exe` | 작업 관리자 표시 |
-| `FileDescription` / `ProductName` | 긴 설명 / `TinyTrayManager` | `TinyTrayMonitor` | 작업 관리자와 "기타 시스템 트레이 아이콘"이 `FileDescription`을 보여 준다(SPIKE §18) |
-| 설정·로그 폴더 | `%APPDATA%`/`%LOCALAPPDATA%\tray-monitor` | `...\TinyTrayMonitor` | 첫 실행에서 `platform::migrate_legacy_dirs`가 폴더를 옮긴다. 옛 버전이 떠 있어 옮기지 못하면 `config.toml`만 복사 |
-| `Run` 값 | `tray-monitor` | `TinyTrayMonitor` | installer `CurStepChanged`와 앱 `startup::migrate_legacy`가 둘 다 옮긴다(압축본 사용자는 앱이 옮긴다) |
-| 새 설치 폴더 | `{autopf}\tray-monitor` | `{autopf}\TinyTrayMonitor` | 업그레이드는 `UsePreviousAppDir`로 기존 폴더를 그대로 쓴다 |
-| 옛 exe·바로 가기 | | `[InstallDelete]`로 삭제 | 시작 메뉴에 옛 이름이 남지 않게 |
-| 릴리스 파일 | `tray-monitor-<ver>-…` | `tiny-tray-monitor-<ver>-…` | |
-| MSIX `DisplayName` | `TinyTrayManager` | `TinyTrayMonitor` | Partner Center에 `TinyTrayMonitor` 이름을 추가 예약했다 |
-| **그대로** MSIX `Identity Name` | `tinyrack.TinyTrayManager` | 같음 | 바꾸면 새 제품이다(구매·업데이트·`LocalState`가 끊긴다) |
-| **그대로** `Application Id`, `TaskId` | `TrayMonitor`, `TrayMonitorStartup` | 같음 | 시작 메뉴 고정·자동 시작 상태 유지 |
-| **그대로** installer `AppId` | `{3E1D7B2A-…}` | 같음 | 업그레이드로 인식 |
-| **그대로** mutex, IPC 창 클래스 | `Local\tray-monitor-single-instance`, `tray-monitor-ipc` | 같음 | 옛 버전과 새 버전이 서로를 찾고, installer가 옛 버전도 종료시킨다 |
-| **그대로** 트레이 GUID | `tray::TRAY_GUIDS` | 같음 | 고정 유지(실측: exe 이름만 바꿔도 8개 모두 `IsPromoted=1` 유지) |
+| 대상 | 이름 | 관례 |
+| --- | --- | --- |
+| 표시 이름, `FileDescription`, `ProductName`, MSIX `DisplayName` | `TinyTrayMonitor` | 제품 이름 |
+| 설치 폴더 | `{autopf}\TinyTrayMonitor` (`UsePreviousAppDir=no`) | `Program Files`·`Programs` 아래는 제품 이름 |
+| 설정·로그 폴더 | `%APPDATA%`·`%LOCALAPPDATA%\TinyTrayMonitor` | 제품 이름 |
+| 시작 메뉴·바탕 화면 바로 가기, `Run` 값 | `TinyTrayMonitor` | 제품 이름 |
+| MSIX `Application Id` / `TaskId` | `TinyTrayMonitor` / `TinyTrayMonitorStartup` | 영숫자만 허용 |
+| mutex, 창 클래스 | `Local\TinyTrayMonitor.SingleInstance`, `TinyTrayMonitor.Ipc`, `TinyTrayMonitor.Timer` | `제품.용도` |
+| 실행 파일, crate, 릴리스 파일 | `tiny-tray-monitor` | 명령줄 도구 관례(소문자·하이픈) |
+| **예외** MSIX `Identity Name` | `tinyrack.TinyTrayManager` | Partner Center가 제품마다 정한다. 바꾸면 새 제품 |
+| installer `AppId` | `{3E1D7B2A-…}` | GUID라 이름과 무관 |
+
+트레이 아이콘 GUID(`tray::TRAY_GUIDS`)도 그대로다. exe 이름을 바꿔도 8개 고정이 모두 유지되는 것을 쟀다
+(`docs/SPIKE.md` §18).

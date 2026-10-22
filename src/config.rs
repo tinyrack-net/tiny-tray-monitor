@@ -220,7 +220,7 @@ pub struct Store {
 impl Store {
     pub fn load() -> Self {
         // 패키지 첫 실행이면 이전 설치의 설정을 LocalState로 옮긴다.
-        crate::platform::migrate_legacy_data();
+        crate::platform::copy_unpackaged_config();
         Self::load_from(config_dir())
     }
 

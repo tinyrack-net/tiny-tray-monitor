@@ -19,10 +19,8 @@
   #error OutputDir is required
 #endif
 
-; v0.11.0에서 이름을 TinyTrayMonitor / tiny-tray-monitor.exe로 바꿨다. 트레이 고정은
-; 아이콘 GUID에 묶여 있어 exe 이름이 바뀌어도 유지된다(docs/SPIKE.md §18).
-; 업그레이드는 이전 설치 폴더를 그대로 쓰므로(UsePreviousAppDir) 옛 사용자의 폴더는
-; `tray-monitor`로 남고, 새 설치만 `TinyTrayMonitor` 폴더에 들어간다.
+; 폴더·바로 가기·Run 값은 Windows 관례대로 제품 이름(TinyTrayMonitor)을, 실행 파일과
+; 릴리스 파일은 명령줄 관례대로 소문자 이름(tiny-tray-monitor)을 쓴다.
 #define AppDisplayName "TinyTrayMonitor"
 #define AppName "tiny-tray-monitor"
 #define AppExeName "tiny-tray-monitor.exe"
@@ -30,10 +28,6 @@
 #define AppUrl "https://github.com/tinyrack-net/tiny-tray-monitor"
 ; Run 값 이름. startup.rs의 VALUE_NAME과 같아야 한다.
 #define RunValueName "TinyTrayMonitor"
-; v0.11.0 이전 이름. 업그레이드에서 지우거나 옮긴다.
-#define LegacyDisplayName "TinyTrayManager"
-#define LegacyExeName "tray-monitor.exe"
-#define LegacyRunValueName "tray-monitor"
 
 [Setup]
 ; AppId는 절대 바꾸지 않는다. 바꾸면 업그레이드가 아니라 새 프로그램으로 설치된다.
@@ -46,6 +40,8 @@ AppPublisherURL={#AppUrl}
 AppSupportURL={#AppUrl}
 AppUpdatesURL={#AppUrl}/releases
 DefaultDirName={autopf}\{#AppDisplayName}
+; 이전 설치 폴더를 이어 쓰지 않는다. 설치 폴더는 언제나 DefaultDirName이다.
+UsePreviousAppDir=no
 DefaultGroupName={#AppDisplayName}
 DisableProgramGroupPage=yes
 LicenseFile={#SourceRoot}\LICENSE
@@ -87,13 +83,6 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; 업그레이드가 앱 설정에서 바꾼 자동 시작 선택을 덮어쓰지 않는다.
 Name: "autostart"; Description: "{cm:Autostart}"; GroupDescription: "{cm:StartupGroup}"; Flags: checkedonce
 
-[InstallDelete]
-; v0.11.0 이전 설치가 남긴 바로 가기. 남겨 두면 시작 메뉴에 옛 이름이 함께 보인다.
-; 옛 exe는 종료 직후 잠깐 잠겨 있어 여기서는 지워지지 않는다(실측). DeleteLegacyExe가
-; 설치 뒤에 다시 시도하며 지운다.
-Type: files; Name: "{autoprograms}\{#LegacyDisplayName}.lnk"
-Type: files; Name: "{autodesktop}\{#LegacyDisplayName}.lnk"
-
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
 Source: "{#SourceRoot}\README.md"; DestDir: "{app}"; Flags: ignoreversion
@@ -114,11 +103,9 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppDisplayNam
 [Code]
 const
   WM_CLOSE = $0010;
-  WM_COMMAND = $0111;
-  { IPC 창 클래스는 이름 변경 전 그대로다(ipc.rs). 그래서 옛 버전도 이 창으로 종료된다. }
-  IPC_CLASS = 'tray-monitor-ipc';
+  { ipc.rs의 CLASS_NAME과 같아야 한다. }
+  IPC_CLASS = 'TinyTrayMonitor.Ipc';
   SETTINGS_CAPTION = '{#AppDisplayName} settings';
-  LEGACY_SETTINGS_CAPTION = '{#LegacyDisplayName} settings';
   RUN_KEY = 'Software\Microsoft\Windows\CurrentVersion\Run';
 
 function FindWindowW(lpClassName, lpWindowName: string): HWND;
@@ -139,22 +126,11 @@ begin
   Hwnd := FindWindowW('#32770', SETTINGS_CAPTION);
   if Hwnd <> 0 then
     PostMessageW(Hwnd, WM_CLOSE, 0, 0);
-  Hwnd := FindWindowW('#32770', LEGACY_SETTINGS_CAPTION);
-  if Hwnd <> 0 then
-    PostMessageW(Hwnd, WM_CLOSE, 0, 0);
 
-  { 0.8.0 이하의 첫 실행 안내는 같은 제목의 MB_YESNO 상자로 떴고, MB_YESNO는
-    WM_CLOSE를 무시하므로 IDNO(7)를 먼저 보낸다. 지금은 오류 상자만 같은 제목을 쓴다. }
+  { 오류 상자(MessageBox)는 제품 이름을 제목으로 쓴다. }
   Hwnd := FindWindowW('#32770', '{#AppDisplayName}');
-  if Hwnd = 0 then
-    Hwnd := FindWindowW('#32770', '{#LegacyDisplayName}');
-  if Hwnd = 0 then
-    Hwnd := FindWindowW('#32770', 'tray-monitor');
   if Hwnd <> 0 then
-  begin
-    PostMessageW(Hwnd, WM_COMMAND, 7, 0);
     PostMessageW(Hwnd, WM_CLOSE, 0, 0);
-  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -175,51 +151,10 @@ begin
   Result := '{#AppDisplayName} is still running. Close it from the tray menu and run Setup again.';
 end;
 
-{ v0.11.0 이전의 Run 값(tray-monitor)은 옛 exe를 가리킨다. 자동 시작을 켜 둔 사용자라는
-  뜻이므로 새 이름과 새 exe 경로로 옮긴다. 업그레이드에서는 autostart 작업이 체크되지 않아
-  Registry 섹션이 값을 쓰지 않으므로 여기서 직접 쓴다. }
-{ 옛 exe를 지운다. 방금 종료된 옛 프로세스가 이미지 파일을 잠깐 쥐고 있으므로 최대 5초
-  동안 다시 시도한다. }
-procedure DeleteLegacyExe();
-var
-  Path: String;
-  I: Integer;
-begin
-  Path := ExpandConstant('{app}\{#LegacyExeName}');
-  for I := 1 to 50 do
-  begin
-    if not FileExists(Path) then
-      Exit;
-    if DeleteFile(Path) then
-    begin
-      Log('Deleted the old executable ' + Path);
-      Exit;
-    end;
-    Sleep(100);
-  end;
-  Log('Could not delete the old executable ' + Path);
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  Old: String;
-begin
-  if CurStep <> ssPostInstall then
-    Exit;
-  DeleteLegacyExe();
-  if not RegQueryStringValue(HKCU, RUN_KEY, '{#LegacyRunValueName}', Old) then
-    Exit;
-  RegWriteStringValue(HKCU, RUN_KEY, '{#RunValueName}', '"' + ExpandConstant('{app}\{#AppExeName}') + '"');
-  RegDeleteValue(HKCU, RUN_KEY, '{#LegacyRunValueName}');
-end;
-
 { 설치가 만든 값은 [Registry]의 uninsdeletevalue가 지운다. 여기서는 사용자가 앱 설정에서
   직접 켠 경우까지 포함해 남은 값을 확실히 지운다. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
-  begin
     RegDeleteValue(HKCU, RUN_KEY, '{#RunValueName}');
-    RegDeleteValue(HKCU, RUN_KEY, '{#LegacyRunValueName}');
-  end;
 end;

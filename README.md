@@ -32,11 +32,9 @@ per-user install under `%LOCALAPPDATA%\Programs\TinyTrayMonitor`, so no UAC prom
 install path stays the same across upgrades. `/ALLUSERS` (or the wizard) can install it for every
 user instead. Uninstalling keeps `%APPDATA%\TinyTrayMonitor`.
 
-Until v0.10 the app was called **TinyTrayManager** and the executable `tray-monitor.exe`. Upgrading
-with the installer replaces the old executable in the folder you installed to, moves
-`%APPDATA%\tray-monitor` and `%LOCALAPPDATA%\tray-monitor` to the new names on the first run and
-carries over **Run at sign-in**. Pinned readouts stay pinned: Windows keys them on the per-readout
-GUIDs, not on the file name.
+Before v0.11.0 the app was called **TinyTrayManager** (`tray-monitor.exe`). Versions from v0.12.0 on
+do not carry anything over from that name: uninstall the old version, then install this one.
+Pinned readouts stay pinned, because Windows keys them on the per-readout GUIDs.
 
 The wizard turns on **Run at sign-in** by default, so the readouts are back after a reboot.
 Uncheck the task on the wizard page to skip it. An upgrade keeps whatever you chose afterwards.
@@ -52,8 +50,8 @@ Releases also contain `tiny-tray-monitor-<version>-windows-x64.msix`. It is **un
 not install the file directly. The Store signs the submitted package; for local testing, unpack it
 and run `Add-AppxPackage -Register AppxManifest.xml` in developer mode. A packaged build keeps its
 config and log in
-`%LOCALAPPDATA%\Packages\tinyrack.TinyTrayManager_<hash>\LocalState` (the package identity keeps
-its first name so the Store treats it as the same product), uses the Windows startup-task API
+`%LOCALAPPDATA%\Packages\tinyrack.TinyTrayManager_<hash>\LocalState` (Partner Center fixes the
+package identity per product, so it keeps the first name), uses the Windows startup-task API
 instead of the `Run` key, and keeps the tray promotion across package updates because each
 readout registers with a fixed GUID that Windows keys the setting on. The package is enabled at
 sign-in on first install, and turning it off in Settings or Task Manager survives later updates.

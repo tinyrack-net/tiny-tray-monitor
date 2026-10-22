@@ -14,12 +14,11 @@ use windows_registry::CURRENT_USER;
 use crate::platform;
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+/// `Run` 값 이름. installer의 `RunValueName`과 같아야 한다.
 const VALUE_NAME: &str = "TinyTrayMonitor";
-/// v0.11.0 이전의 `Run` 값 이름. [`migrate_legacy`]가 새 이름으로 옮긴다.
-const LEGACY_VALUE_NAME: &str = "tray-monitor";
 
 /// AppxManifest.xml의 `uap5:StartupTask TaskId`와 같아야 한다.
-const TASK_ID: &str = "TrayMonitorStartup";
+const TASK_ID: &str = "TinyTrayMonitorStartup";
 /// 비동기 작업을 기다리는 최대 시간. 넘으면 실패로 보고 UI를 막지 않는다.
 const TASK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -50,30 +49,6 @@ pub fn set(enabled: bool) -> Result<(), String> {
         return set_task(enabled);
     }
     set_named(VALUE_NAME, enabled)
-}
-
-/// v0.11.0 이전 `Run` 값(`tray-monitor`)을 지금 실행 파일의 새 값으로 옮긴다.
-///
-/// 압축본을 같은 폴더에 풀어 업데이트하면 옛 `tray-monitor.exe`가 남고, 옛 값이 그것을
-/// 가리켜 로그인할 때 옛 버전이 뜬다. 옛 값이 있었다는 것은 사용자가 자동 실행을 켰다는
-/// 뜻이므로 지금 실행 파일로 다시 등록한다. 한 일을 로그에 남길 문장으로 돌려준다.
-pub fn migrate_legacy() -> Option<String> {
-    if platform::packaged() {
-        return None;
-    }
-    let key = CURRENT_USER.create(RUN_KEY).ok()?;
-    let old = key.get_string(LEGACY_VALUE_NAME).ok()?;
-    if let Err(error) = set_named(VALUE_NAME, true) {
-        return Some(format!("could not move the startup entry ({old}): {error}"));
-    }
-    match key.remove_value(LEGACY_VALUE_NAME) {
-        Ok(()) => Some(format!(
-            "moved the startup entry from {LEGACY_VALUE_NAME} ({old}) to {VALUE_NAME}"
-        )),
-        Err(error) => Some(format!(
-            "registered {VALUE_NAME} but could not remove {LEGACY_VALUE_NAME}: {error}"
-        )),
-    }
 }
 
 fn is_enabled_named(name: &str) -> bool {

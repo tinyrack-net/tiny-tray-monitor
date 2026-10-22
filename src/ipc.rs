@@ -9,11 +9,8 @@ use crate::logging;
 use crate::runtime;
 use crate::win32;
 
-/// 창 클래스 이름. 두 프로세스가 같은 값을 봐야 한다.
-///
-/// v0.11.0에서 앱 이름을 바꿨지만 이 값은 그대로 둔다. 설치 프로그램이 이 창으로 옛
-/// 버전을 종료시키고, 옛 버전과 새 버전의 두 번째 실행도 서로를 찾는다.
-const CLASS_NAME: &str = "tray-monitor-ipc";
+/// 창 클래스 이름. 두 프로세스와 installer(`IPC_CLASS`)가 같은 값을 봐야 한다.
+const CLASS_NAME: &str = "TinyTrayMonitor.Ipc";
 
 /// 두 번째 실행이 보내는 메시지. `WM_APP` 영역이라 다른 메시지와 겹치지 않는다.
 const WM_APP_OPEN_SETTINGS: u32 = 0x8000 + 1;

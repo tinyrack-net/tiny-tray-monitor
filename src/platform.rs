@@ -7,10 +7,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-/// 설정·로그 폴더 이름.
+/// 설정·로그 폴더 이름. Windows 관례대로 제품 이름을 쓴다.
 pub const DIR_NAME: &str = "TinyTrayMonitor";
-/// v0.11.0 이전의 폴더 이름. 첫 실행에서 [`migrate_legacy_dirs`]가 옮긴다.
-pub const LEGACY_DIR_NAME: &str = "tray-monitor";
 
 use windows::Win32::Foundation::WIN32_ERROR;
 use windows::Win32::Storage::Packaging::Appx::{
@@ -63,79 +61,24 @@ pub fn data_dir() -> PathBuf {
     data
 }
 
-/// 비패키지 실행에서 v0.11.0 이전 폴더(`tray-monitor`)를 새 이름으로 옮긴다.
-///
-/// 로그가 이 폴더에 쌓이므로 `logging::init`보다 먼저 불러야 한다. 새 폴더가 이미 있으면
-/// 손대지 않는다. 옛 버전이 아직 떠 있어 폴더를 옮기지 못하면 설정 파일만 복사한다.
-/// 결과는 로그가 열린 뒤에 남길 수 있게 문장으로 돌려준다.
-pub fn migrate_legacy_dirs() -> Vec<String> {
-    if packaged() {
-        return Vec::new();
-    }
-    let mut notes = Vec::new();
-    for base in [env("APPDATA"), env("LOCALAPPDATA")].into_iter().flatten() {
-        if let Some(note) = move_legacy_dir(&base.join(LEGACY_DIR_NAME), &base.join(DIR_NAME)) {
-            notes.push(note);
-        }
-    }
-    notes
-}
-
-/// `legacy`를 `target`으로 옮긴다. 할 일이 없으면 `None`.
-fn move_legacy_dir(legacy: &Path, target: &Path) -> Option<String> {
-    if !legacy.is_dir() || target.exists() {
-        return None;
-    }
-    match std::fs::rename(legacy, target) {
-        Ok(()) => Some(format!(
-            "moved {} to {}",
-            legacy.display(),
-            target.display()
-        )),
-        Err(error) => {
-            let source = legacy.join("config.toml");
-            if !source.exists() {
-                return Some(format!("could not move {}: {error}", legacy.display()));
-            }
-            let copied = std::fs::create_dir_all(target)
-                .and_then(|_| std::fs::copy(&source, target.join("config.toml")));
-            Some(match copied {
-                Ok(_) => format!(
-                    "could not move {} ({error}), copied config.toml instead",
-                    legacy.display()
-                ),
-                Err(copy) => format!("could not move or copy {}: {copy}", legacy.display()),
-            })
-        }
-    }
-}
-
-/// 패키지 첫 실행에서 예전(비패키지) 설정을 `LocalState`로 한 번 복사한다.
+/// 패키지 첫 실행에서 비패키지 설치의 설정을 `LocalState`로 한 번 복사한다.
 ///
 /// 패키지 앱의 `%APPDATA%` 읽기는 가상화된 `LocalCache\Roaming`을 볼 수 있는데,
 /// 그곳은 이전 MSIX 빌드가 남긴 설정이므로 복사 대상으로 맞다.
-pub fn migrate_legacy_data() {
+pub fn copy_unpackaged_config() {
     if !packaged() {
         return;
     }
     let Some(target) = local_state_dir() else {
         return;
     };
-    let Some(appdata) = env("APPDATA") else {
+    let Some(source) = env("APPDATA").map(|base| base.join(DIR_NAME).join("config.toml")) else {
         return;
     };
     let destination = target.join("config.toml");
-    if destination.exists() {
+    if destination.exists() || !source.exists() {
         return;
     }
-    // 새 이름을 먼저 본다. 비패키지 설치가 v0.11.0 이상으로 돌았다면 그쪽이 최신이다.
-    let Some(source) = [DIR_NAME, LEGACY_DIR_NAME]
-        .iter()
-        .map(|name| appdata.join(name).join("config.toml"))
-        .find(|path| path.exists())
-    else {
-        return;
-    };
     if std::fs::create_dir_all(&target).is_err() {
         return;
     }
@@ -263,56 +206,6 @@ mod tests {
         let (config, data) = base_dirs(false, None, None, None, Path::new(r"C:\Temp"));
         assert_eq!(config, PathBuf::from(r"C:\Temp\TinyTrayMonitor"));
         assert_eq!(data, PathBuf::from(r"C:\Temp\TinyTrayMonitor"));
-    }
-
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "tiny-tray-monitor-test-{name}-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("임시 폴더");
-        dir
-    }
-
-    /// 옛 폴더는 통째로 새 이름으로 옮겨진다.
-    #[test]
-    fn the_legacy_folder_moves_to_the_new_name() {
-        let base = scratch("move");
-        let legacy = base.join(LEGACY_DIR_NAME);
-        let target = base.join(DIR_NAME);
-        std::fs::create_dir_all(&legacy).unwrap();
-        std::fs::write(legacy.join("config.toml"), "language = \"en\"\n").unwrap();
-
-        assert!(move_legacy_dir(&legacy, &target).is_some());
-        assert!(!legacy.exists());
-        assert_eq!(
-            std::fs::read_to_string(target.join("config.toml")).unwrap(),
-            "language = \"en\"\n"
-        );
-
-        // 두 번째 실행에서는 할 일이 없다.
-        assert!(move_legacy_dir(&legacy, &target).is_none());
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    /// 새 폴더가 이미 있으면 옛 폴더로 덮지 않는다.
-    #[test]
-    fn an_existing_new_folder_wins() {
-        let base = scratch("keep");
-        let legacy = base.join(LEGACY_DIR_NAME);
-        let target = base.join(DIR_NAME);
-        std::fs::create_dir_all(&legacy).unwrap();
-        std::fs::create_dir_all(&target).unwrap();
-        std::fs::write(legacy.join("config.toml"), "old").unwrap();
-        std::fs::write(target.join("config.toml"), "new").unwrap();
-
-        assert!(move_legacy_dir(&legacy, &target).is_none());
-        assert_eq!(
-            std::fs::read_to_string(target.join("config.toml")).unwrap(),
-            "new"
-        );
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// 이 테스트 프로세스는 패키지 밖에서 돈다.

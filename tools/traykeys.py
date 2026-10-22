@@ -39,8 +39,7 @@ def query():
 
     rows = []
     for key, v in blocks.items():
-        # 옛 tray-monitor.exe 와 새 tiny-tray-monitor.exe 를 함께 잡는다.
-        if "tray-monitor" in v.get("ExecutablePath", "").lower():
+        if "tiny-tray-monitor" in v.get("ExecutablePath", "").lower():
             rows.append(
                 (
                     v.get("InitialTooltip", "<none>"),
