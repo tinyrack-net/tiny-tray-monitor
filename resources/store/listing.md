@@ -53,9 +53,11 @@ TinyTrayMonitor is open source (MIT). The Microsoft Store build uses the Windows
 
 Requires Windows 10 version 1809 or later.
 
-## What's new (0.10.1)
+## What's new (0.11.0)
 
-- The readouts stay sharp when you change the display scale while the app is running. Before, they
-kept their old size and Windows stretched them until the app was restarted.
-- At 200% and above the digits are drawn at a whole multiple, so every stroke has the same width
-(at 225%, for example, they are drawn at 2x with a small margin instead of being stretched to 2.25x).
+- TinyTrayManager is now **TinyTrayMonitor**. Task Manager and the taskbar settings show the new
+name. Your settings and pinned readouts carry over.
+- Two new readouts: disk usage (DSK) and disk activity (DIO), for the system drive or the drive
+you pick.
+- Pick which graphics card, network adapter and drive each readout measures.
+- A new settings window with a page per readout, and a light, dark or automatic window theme.
