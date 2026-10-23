@@ -57,7 +57,11 @@ manifest 최소 형태(검증됨):
     <PublisherDisplayName>tinyrack</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
-  <Resources><Resource Language="en-us" /></Resources>
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="ko-kr" />
+    <Resource Language="ja-jp" />
+  </Resources>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop"
       MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
@@ -477,3 +481,22 @@ v0.11.0에서 TinyTrayManager / `tray-monitor.exe`를 TinyTrayMonitor / `tiny-tr
 
 트레이 아이콘 GUID(`tray::TRAY_GUIDS`)도 그대로다. exe 이름을 바꿔도 8개 고정이 모두 유지되는 것을 쟀다
 (`docs/SPIKE.md` §18).
+
+## 13. 패키지 언어와 Store의 "지원되는 언어" (v0.12.1)
+
+같은 언어라도 세 곳이 따로 움직인다. 하나를 바꾸면 나머지도 확인한다.
+
+| 위치 | 무엇을 정하나 | 이 저장소 |
+| --- | --- | --- |
+| `src/i18n.rs` | 앱 UI·트레이 메뉴·툴팁의 언어 | en, ko, ja (+ auto) |
+| `resources/store/listing.md`, `listing.ko.md`, `listing.ja.md` + Partner Center 등록 정보 언어 | 고객에게 보이는 설명·스크린샷. **스크린샷은 언어마다 필요하다** | en-US, ko-KR, ja-JP |
+| `packaging/windows/AppxManifest.xml`의 `<Resources>` | **Store 페이지의 "지원되는 언어" 목록**과 Windows가 보는 앱 언어 | en-us, ko-kr, ja-jp |
+
+핵심은 세 번째다. Microsoft 문서(*Understand user profile languages and app manifest
+languages*): "When your app is in the Microsoft Store, the languages in the app manifest language
+list are the ones that are displayed to customers." 즉 등록 정보 언어를 늘려도 매니페스트에
+없으면 스토어 페이지에는 그 언어가 나오지 않는다(실측: v0.12.0에서 ko·ja 등록 정보를 추가해도
+"지원되는 언어"는 English 하나였다).
+
+`build-msix.ps1`이 세 언어가 선언됐는지 검사하고 빠지면 빌드를 실패시킨다. 첫 `<Resource>`가
+기본 언어이므로 `en-us`를 맨 앞에 둔다.

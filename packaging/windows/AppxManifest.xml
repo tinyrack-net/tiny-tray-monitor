@@ -25,7 +25,11 @@
   </Properties>
 
   <Resources>
+    <!-- 앱 UI가 지원하는 언어. Store는 등록 정보 언어가 아니라 이 목록을 "지원되는 언어"로
+         보여 준다(docs/PACKAGING.md §13). 첫 항목이 기본 언어다. src/i18n.rs와 맞춰야 한다. -->
     <Resource Language="en-us" />
+    <Resource Language="ko-kr" />
+    <Resource Language="ja-jp" />
   </Resources>
 
   <Dependencies>

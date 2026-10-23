@@ -128,6 +128,14 @@ $task = $xml.Package.Applications.Application.Extensions.ChildNodes |
 if (-not $task -or $task.StartupTask.TaskId -ne 'TinyTrayMonitorStartup') {
     throw 'Manifest is missing the TinyTrayMonitorStartup startup task.'
 }
+# Store shows the manifest language list as the supported languages, so a missing entry
+# silently drops a language from the listing. i18n.rs supports exactly these three.
+$declared = @($xml.Package.Resources.Resource | ForEach-Object { $_.Language })
+foreach ($language in @('en-us', 'ko-kr', 'ja-jp')) {
+    if ($declared -notcontains $language) {
+        throw "Manifest does not declare the $language language (has: $($declared -join ', '))."
+    }
+}
 
 function Find-MakeAppx {
     $bases = @(

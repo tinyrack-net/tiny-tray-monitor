@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "tiny-tray-monitor"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "embed-resource",
  "serde",
