@@ -499,6 +499,42 @@ v0.9.0에서 확인된 값: 초안 `PriceId=Tier1022`, `IsAdvancedPricingModel=f
 UI의 Packages 화면은 API가 올린 새 패키지를 `PendingUpload` 동안 보여 주지 않았다. 둘이 어긋나도
 커밋 전에는 어느 쪽이 실린다고 단정하지 않는다.
 
+### 8-11. 가격 예약은 Developer API를 막는다 (v0.12.1, 2026-10-23)
+
+v0.12.1 릴리스의 `store-draft`가 **"Refuse to run with a pending submission"** 단계에서 실패했다.
+`msstore submission get`이 상태를 못 읽어 `$json.Status`가 빈 값이 됐기 때문이다. `-v`로 원인을 봤다.
+
+```
+HTTP GET .../submissions/1152921505702200218 → 400
+{"code":"InvalidOperation", ..., "message":"Price Schedules are not supported for Developer API",
+ "source":"Ingestion Api", "target":"appSubmission"}
+```
+
+즉 **가격 예약(Price schedule)이 있는 제품은 제출 API로 조회·생성이 안 된다.** `-m listings`,
+`-m availability`처럼 모듈을 좁혀도 같다. 마지막 게시본을 읽는 단계에서 거부되므로 초안 생성도
+불가능하다. 정의 수수료·가격 모델 문제가 아니라 API 제약이다.
+
+v0.12.1에서 실제로 한 일:
+
+| 단계 | 방법 |
+| --- | --- |
+| Git 태그 → GitHub 릴리스 | 평소대로 성공(`release` 잡) |
+| `store-draft` | **실패** (위 400). 이 잡은 가격 예약이 있는 동안 항상 실패한다 |
+| 스토어 초안 | Partner Center `Start update`(Submission 14) |
+| 패키지 업로드 | Packages 화면의 드래그 앤 드롭 영역에 MSIX를 넣고 `Save`. 0.12.1이 순위 1, 0.12.0이 순위 2로 남는다 |
+| 제출 | `Submit for certification` |
+
+`runFullTrust` 승인 경고는 정상이다(이미 승인된 능력이라 제출은 그대로 진행된다).
+
+정리:
+
+- **가격 예약이 걸려 있는 동안은 태그만으로 스토어 초안을 만들 수 없다.** 초안·제출은 Partner Center에서 한다.
+  2027-01-01에 예약이 끝나고 나면 API가 다시 동작하는지 다음 릴리스에서 확인한다.
+- 그래서 `store-draft` 잡의 실패는 릴리스 자체(아티팩트·GitHub 릴리스)를 막지 않는다. 다만 태그 푸시 후
+  **빨간 X가 뜨는 것이 정상**이므로, 실패 원인이 이 400인지 확인하고 넘어간다.
+- 브라우저 자동화로 패키지를 올릴 때는 파일 선택 도구가 아니라 페이지 JS로 `DataTransfer`에 파일을
+  넣어 `change` 이벤트를 보낸다. 이 저장소의 실제 업로드는 380 KB여서 한 번에 넣을 수 있었다.
+
 ## 9. 결정 필요 / 미검증
 
 해결됨:
