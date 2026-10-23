@@ -145,9 +145,6 @@ pub struct Config {
     pub color_mode: ColorMode,
     /// 설정 창과 트레이 메뉴의 밝기.
     pub ui_theme: UiTheme,
-    /// 가상 어댑터를 집계에서 뺀다. 물리 NIC와 가상 스위치가 같은 트래픽을
-    /// 두 번 세는 것을 막는다.
-    pub exclude_virtual_adapters: bool,
     /// UI 언어. `Auto`는 Windows 표시 언어를 따른다.
     pub language: Language,
     /// 분야별 장치. TOML 표라서 단순 값보다 뒤에 둬야 한다.
@@ -161,7 +158,6 @@ impl Default for Config {
             show: Show::default(),
             color_mode: ColorMode::default(),
             ui_theme: UiTheme::default(),
-            exclude_virtual_adapters: true,
             language: Language::default(),
             devices: Devices::default(),
         }
@@ -282,7 +278,6 @@ mod tests {
         assert!(config.validate().is_empty());
         assert_eq!(config.poll_interval_ms, DEFAULT_POLL_INTERVAL_MS);
         assert_eq!(config.show.count(), 8);
-        assert!(config.exclude_virtual_adapters);
     }
 
     #[test]
@@ -343,7 +338,6 @@ mod tests {
             },
             color_mode: ColorMode::Theme,
             ui_theme: UiTheme::Dark,
-            exclude_virtual_adapters: false,
             language: Language::Ja,
             devices: Devices {
                 gpu: "NVIDIA GeForce RTX 4060".into(),
@@ -400,6 +394,17 @@ network = false
         let written = toml::to_string_pretty(&config).expect("serialize");
         assert!(!written.contains("show_labels"), "{written}");
         assert!(!written.contains("show_units"), "{written}");
+    }
+
+    /// v0.12.1까지 있던 `exclude_virtual_adapters`는 읽을 때 버리고 다시 쓰지 않는다.
+    #[test]
+    fn removed_virtual_adapter_toggle_is_dropped() {
+        let text = "exclude_virtual_adapters = false\npoll_interval_ms = 500\n";
+        let config: Config = toml::from_str(text).expect("예전 설정도 읽힌다");
+        assert_eq!(config.poll_interval_ms, 500);
+
+        let written = toml::to_string_pretty(&config).expect("serialize");
+        assert!(!written.contains("exclude_virtual_adapters"), "{written}");
     }
 
     #[test]

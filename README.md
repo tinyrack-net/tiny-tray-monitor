@@ -107,7 +107,7 @@ only ever one settings window:
 | General | Language | `Automatic (system)`, English, 한국어 or 日本語. Applies at once to the window, the tray menu and the tooltips |
 | CPU, Memory | Readouts | Show or hide the readout. The device line names the processor or the installed memory |
 | GPU | Device | `Automatic` measures the adapter with the most dedicated memory; or pick one adapter |
-| Network | Device | `All adapters` sums every counted adapter; or pick one, such as `Ethernet` or `Wi-Fi`. `Count virtual adapters` (Hyper-V, VPN, vSwitch) applies to the sum |
+| Network | Device | `All adapters` sums the physical adapters (virtual ones only when no physical adapter is connected); or pick one, such as `Ethernet`, `Wi-Fi` or a VPN / `vEthernet` adapter |
 | Disk | Device | `Automatic` measures the drive Windows is installed on; or pick a drive. Activity is the busy time of the physical disk behind that drive |
 | Every page | Readouts | The last visible readout cannot be turned off |
 | Buttons | Reset to defaults | Reset everything in `config.toml` to the defaults |
@@ -128,7 +128,6 @@ config from `%APPDATA%\TinyTrayMonitor` is copied there on the first packaged ru
 
 ```toml
 poll_interval_ms = 1000          # 250 ~ 10000
-exclude_virtual_adapters = true  # skip adapters that mirror physical traffic
 color_mode = "metric"            # "metric" = one colour per readout, "theme" = single colour
 ui_theme = "auto"                # window and tray menu: "auto" | "light" | "dark"
 language = "auto"                # "auto" | "en" | "ko" | "ja"
@@ -177,6 +176,7 @@ keyboard launchers.
 `--interfaces` is the quickest way to understand the network number:
 
 ```
+2 counted (All adapters)
   idx    type   up     hardware  counted description
   7      6      true   true      true    Intel(R) I211 Gigabit Network Connection (Ethernet)
   16     71     true   true      true    Intel(R) Wi-Fi 6 AX200 160MHz (Wi-Fi)

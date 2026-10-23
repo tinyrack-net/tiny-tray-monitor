@@ -49,7 +49,7 @@ Each readout is a single tray icon with a coloured value, so you can read the nu
 - Per-readout colours, or follow the taskbar theme.
 - Update interval from one second up.
 - "Run at sign-in" is on by default, so the readouts are there after a reboot. Turn it off in Settings.
-- Option to ignore virtual adapters (VPNs, Hyper-V switches) so the numbers match the physical NIC.
+- The network total counts physical adapters only, so VPNs and Hyper-V switches do not count the same traffic twice.
 - A hint in the settings window that shows where to pin the readouts, with a button that opens the
 taskbar settings.
 - No account, no telemetry, no network access. Settings and logs stay on your PC.
@@ -59,7 +59,7 @@ TinyTrayMonitor is open source (MIT). The Microsoft Store build uses the Windows
 
 Requires Windows 10 version 1809 or later.
 
-## What's new (0.12.0)
+## What's new (0.13.0)
 
-- Every part of the app now uses the TinyTrayMonitor name, including its startup entry.
-- If the readouts no longer start at sign-in after this update, turn on "Run at sign-in" in Settings once.
+- The "Count virtual adapters" setting is gone. "All adapters" now always sums the physical network adapters, so VPNs and Hyper-V switches no longer inflate the total.
+- To watch a VPN or virtual adapter, pick it as the network device in Settings.
