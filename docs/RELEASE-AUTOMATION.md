@@ -535,6 +535,21 @@ v0.12.1에서 실제로 한 일:
 - 브라우저 자동화로 패키지를 올릴 때는 파일 선택 도구가 아니라 페이지 JS로 `DataTransfer`에 파일을
   넣어 `change` 이벤트를 보낸다. 이 저장소의 실제 업로드는 380 KB여서 한 번에 넣을 수 있었다.
 
+### 8-12. v0.13.0 — 같은 경로를 두 번째로 (2026-10-23)
+
+`Count virtual adapters` 설정을 없앤 릴리스. 목록 문구도 바뀌었으므로 §8-10 규칙대로 Partner Center에서만 제출했다.
+
+| 단계 | 내용 |
+| --- | --- |
+| 태그 실행 | `Package`의 설치 관리자 smoke test가 `uninstaller left the executable behind`로 한 번 실패했다. PR에서는 같은 코드가 통과했고, 실패한 잡만 다시 돌리자 통과했다. Inno Setup 제거 프로그램은 임시 사본을 다시 띄우므로 `unins000.exe`가 끝난 시점에 파일이 남아 있을 수 있다. smoke test가 30초까지 기다리도록 고쳤다 |
+| `store-draft` | §8-11과 같이 실패(`Status`가 빈 값). 마지막 게시본(Submission 14)은 `Published`였으므로 남은 초안 때문이 아니다 |
+| 초안 | `Start update` → Submission 15 |
+| 패키지 | `upload` 도구로 숨은 `input[type=file]`에 경로를 넣으면 **0 Bytes로 멈춘다**(브라우저가 파일을 읽지 못함). 그 항목을 `Cancel`하고 §8-11의 `DataTransfer` 방식으로 넣었다(base64 조각으로 페이지에 옮기고 SHA-256 대조). 취소한 항목이 남아 있는 동안 `Save`가 비활성이라 새로 고친 뒤 저장했다. 0.13.0이 순위 1 |
+| 목록 | en/ko/ja의 설명 한 줄, 기능 한 줄, What's new를 `resources/store/listing*.md`와 같게 고쳤다 |
+| Submission options | **`runFullTrust` 사유 칸이 필수로 비어 있어** `Submit for certification`이 비활성이었다(v0.12.1에서는 경고만 떴다). Win32 데스크톱 앱이고 어떤 API를 쓰는지 적어 저장하자 활성화됐다 |
+| 가격 | `Unchanged`. 기본가 0, 2027-01-01 USD 1.99 예약 그대로 |
+| 제출 | `Submit for certification` → `In certification` |
+
 ## 9. 결정 필요 / 미검증
 
 해결됨:
