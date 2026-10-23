@@ -245,6 +245,11 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
   **Store** workflow (`action=commit`). Since v0.9.0 the published submission carries
   `PriceId=Tier1022` and the Store keeps advanced pricing, so the next release may not need the tier
   at all. See [docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-8.
+- **A price schedule blocks the Store submission API.** While the product has a scheduled price
+  change, `msstore submission get` answers `400 Price Schedules are not supported for Developer
+  API`, so the `store-draft` job fails and no draft is created. Upload the package and submit by
+  hand in Partner Center, and expect the tag run to show that job red
+  ([docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-11).
 - A listing change must not ride along with that commit: `msstore submission publish` resets the
   listings to the last published values, so edit the copy and submit from Partner Center instead
   ([docs/RELEASE-AUTOMATION.md](docs/RELEASE-AUTOMATION.md) §8-9, §8-10).
