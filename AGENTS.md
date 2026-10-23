@@ -205,6 +205,13 @@ Every item below was measured, not assumed. `docs/SPIKE.md` records the evidence
     use `tray-monitor` on its own. The one exception is the MSIX identity
     `tinyrack.TinyTrayManager`: Partner Center fixes it per product, and a new identity is a new
     Store product. `docs/SPIKE.md` §18, `docs/PACKAGING.md` §12.
+29. **Three lists decide a language, and only the manifest one reaches the Store page.** The app
+    strings live in `src/i18n.rs` (en/ko/ja), the copy in `resources/store/listing*.md` plus the
+    Partner Center listings, and the supported languages on the Store page come from
+    `<Resources><Resource Language=.../>` in `packaging/windows/AppxManifest.xml` — adding a
+    listing language alone leaves the page showing only the languages the manifest declares
+    (measured on v0.12.0). `packaging/windows/build-msix.ps1` fails the build when one of the
+    three is missing. `docs/PACKAGING.md` §13.
 
 ## Merging
 
