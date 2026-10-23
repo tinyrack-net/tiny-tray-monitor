@@ -130,6 +130,10 @@ jobs:
           $uninstall = Start-Process -FilePath (Join-Path $dir 'unins000.exe') `
             -ArgumentList '/VERYSILENT' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "uninstaller exited with $($uninstall.ExitCode)" }
+          # Inno Setup's uninstaller re-launches a temporary copy of itself, so the
+          # files can still be there when unins000.exe returns (v0.13.0 tag run).
+          $deadline = (Get-Date).AddSeconds(30)
+          while ((Test-Path $exe) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
           if (Test-Path $exe) { throw 'uninstaller left the executable behind' }
       - uses: actions/upload-artifact@v4
         with:

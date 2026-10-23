@@ -63,3 +63,15 @@ Requires Windows 10 version 1809 or later.
 
 - The "Count virtual adapters" setting is gone. "All adapters" now always sums the physical network adapters, so VPNs and Hyper-V switches no longer inflate the total.
 - To watch a VPN or virtual adapter, pick it as the network device in Settings.
+
+## Product features
+
+- CPU, memory, network, GPU, VRAM and disk readouts in the tray
+- Eight independent readouts you can turn on or off
+- Choose the graphics card, network adapter and drive
+- Per-readout colours or taskbar theme; light or dark window
+- Update interval from one second
+- Run at sign-in is on by default
+- Network total counts physical adapters only
+- No account, no telemetry, no network access
+- Native Win32 and GDI, no Electron; open source (MIT)
