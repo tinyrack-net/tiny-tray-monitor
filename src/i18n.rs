@@ -162,8 +162,6 @@ pub struct Text {
     // 시작 및 언어
     pub group_startup: &'static str,
     pub hint_startup: &'static str,
-    pub count_virtual: &'static str,
-    pub hint_virtual: &'static str,
     pub autostart: &'static str,
     pub label_language: &'static str,
     pub hint_language: &'static str,
@@ -271,8 +269,6 @@ pub const EN: Text = Text {
 
     group_startup: "Startup & language",
     hint_startup: "Startup and the language of this window, the tray menu and the tooltips.",
-    count_virtual: "Count virtual adapters",
-    hint_virtual: "(VPN / Hyper-V switches)",
     autostart: "Run at sign-in",
     label_language: "Language",
     hint_language: "Applies immediately.",
@@ -376,8 +372,6 @@ pub const KO: Text = Text {
 
     group_startup: "시작 및 언어",
     hint_startup: "시작 프로그램과 창·트레이 메뉴·툴팁에 쓸 언어입니다.",
-    count_virtual: "가상 어댑터 포함",
-    hint_virtual: "(VPN / Hyper-V 스위치)",
     autostart: "로그인할 때 실행",
     label_language: "언어",
     hint_language: "바로 적용됩니다.",
@@ -481,8 +475,6 @@ pub const JA: Text = Text {
 
     group_startup: "スタートアップと言語",
     hint_startup: "スタートアップと、このウィンドウ・トレイメニュー・ツールチップの言語です。",
-    count_virtual: "仮想アダプターを含める",
-    hint_virtual: "(VPN / Hyper-V スイッチ)",
     autostart: "サインイン時に実行",
     label_language: "言語",
     hint_language: "すぐに反映されます。",
@@ -795,8 +787,6 @@ mod tests {
             ("theme_dark", text.theme_dark),
             ("group_startup", text.group_startup),
             ("hint_startup", text.hint_startup),
-            ("count_virtual", text.count_virtual),
-            ("hint_virtual", text.hint_virtual),
             ("autostart", text.autostart),
             ("label_language", text.label_language),
             ("hint_language", text.hint_language),

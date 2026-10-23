@@ -19,8 +19,6 @@ pub struct SettingsDraft {
     pub show: Show,
     pub color_mode: ColorMode,
     pub ui_theme: UiTheme,
-    /// 가상 어댑터를 집계에 넣는가. `Config`에는 반대 의미로 저장된다.
-    pub count_virtual: bool,
     pub autostart: bool,
     pub language: Language,
     /// 분야별 장치. 빈 값은 자동이다.
@@ -46,7 +44,6 @@ impl SettingsDraft {
             show: config.show,
             color_mode: config.color_mode,
             ui_theme: config.ui_theme,
-            count_virtual: !config.exclude_virtual_adapters,
             autostart,
             language: config.language,
             devices: config.devices.clone(),
@@ -84,7 +81,6 @@ pub enum Effect {
     Visible(Metric, bool),
     ColorMode(ColorMode),
     UiTheme(UiTheme),
-    CountVirtual(bool),
     Autostart(bool),
     Language(Language),
     /// GPU 어댑터 이름. 빈 값은 자동.
@@ -105,7 +101,6 @@ impl Effect {
             Effect::Visible(metric, visible) => config.show.set(*metric, *visible),
             Effect::ColorMode(mode) => config.color_mode = *mode,
             Effect::UiTheme(theme) => config.ui_theme = *theme,
-            Effect::CountVirtual(count) => config.exclude_virtual_adapters = !*count,
             Effect::Language(language) => config.language = *language,
             Effect::GpuDevice(name) => config.devices.gpu = name.clone(),
             Effect::NetworkDevice(name) => config.devices.network = name.clone(),
@@ -153,10 +148,6 @@ pub fn diff(applied: &SettingsDraft, next: &SettingsDraft) -> Vec<Effect> {
 
     if applied.ui_theme != next.ui_theme {
         effects.push(Effect::UiTheme(next.ui_theme));
-    }
-
-    if applied.count_virtual != next.count_virtual {
-        effects.push(Effect::CountVirtual(next.count_virtual));
     }
 
     if applied.autostart != next.autostart {
@@ -294,13 +285,6 @@ mod tests {
             vec![Effect::UiTheme(UiTheme::Light)]
         );
 
-        let mut virtual_adapters = applied.clone();
-        virtual_adapters.count_virtual = true;
-        assert_eq!(
-            diff(&applied, &virtual_adapters),
-            vec![Effect::CountVirtual(true)]
-        );
-
         let mut autostart = applied.clone();
         autostart.autostart = true;
         assert_eq!(diff(&applied, &autostart), vec![Effect::Autostart(true)]);
@@ -321,7 +305,7 @@ mod tests {
         next.poll_interval_ms = 500;
         next.show.cpu = false;
         next.show.memory = false;
-        next.count_virtual = true;
+        next.color_mode = ColorMode::Theme;
 
         assert_eq!(
             diff(&applied, &next),
@@ -329,7 +313,7 @@ mod tests {
                 Effect::Interval(500),
                 Effect::Visible(Metric::Cpu, false),
                 Effect::Visible(Metric::Memory, false),
-                Effect::CountVirtual(true),
+                Effect::ColorMode(ColorMode::Theme),
             ]
         );
     }
@@ -342,7 +326,6 @@ mod tests {
         Effect::Visible(Metric::NetworkDown, false).apply_to_config(&mut config);
         Effect::ColorMode(ColorMode::Theme).apply_to_config(&mut config);
         Effect::UiTheme(UiTheme::Dark).apply_to_config(&mut config);
-        Effect::CountVirtual(true).apply_to_config(&mut config);
         Effect::Language(Language::Ko).apply_to_config(&mut config);
         Effect::Autostart(true).apply_to_config(&mut config);
 
@@ -351,7 +334,6 @@ mod tests {
         assert_eq!(config.color_mode, ColorMode::Theme);
         assert_eq!(config.ui_theme, UiTheme::Dark);
         assert_eq!(config.language, Language::Ko);
-        assert!(!config.exclude_virtual_adapters, "count와 exclude는 반대다");
         assert!(config.show.cpu, "자동 실행은 설정 파일과 무관하다");
     }
 
@@ -373,7 +355,6 @@ mod tests {
             },
             color_mode: ColorMode::Theme,
             ui_theme: UiTheme::Light,
-            exclude_virtual_adapters: false,
             language: Language::Ja,
             devices: Devices {
                 gpu: "Radeon".into(),
@@ -382,7 +363,6 @@ mod tests {
             },
         };
         let draft = SettingsDraft::from_config(&config, true);
-        assert!(draft.count_virtual, "exclude=false 이면 집계에 포함한다");
         assert!(draft.autostart);
         assert_eq!(draft.language, Language::Ja);
 

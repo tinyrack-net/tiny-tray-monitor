@@ -184,7 +184,6 @@ pub mod dialog {
         BST_CHECKED, DRAWITEMSTRUCT, ICC_STANDARD_CLASSES, INITCOMMONCONTROLSEX,
         InitCommonControlsEx, MEASUREITEMSTRUCT, ODS_SELECTED,
     };
-    use windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
     use windows::Win32::UI::WindowsAndMessaging::{
         BM_GETCHECK, BM_SETCHECK, CB_ADDSTRING, CB_GETCURSEL, CB_RESETCONTENT, CB_SETCURSEL,
         DialogBoxParamW, EndDialog, GetCursorPos, GetDlgItem, GetDlgItemTextW, GetWindowRect,
@@ -374,13 +373,6 @@ pub mod dialog {
     pub fn show_control(hwnd: HWND, id: i32, visible: bool) {
         if let Ok(control) = unsafe { GetDlgItem(Some(hwnd), id) } {
             let _ = unsafe { ShowWindow(control, if visible { SW_SHOW } else { SW_HIDE }) };
-        }
-    }
-
-    /// 컨트롤을 켜거나 끈다(회색).
-    pub fn enable_control(hwnd: HWND, id: i32, enabled: bool) {
-        if let Ok(control) = unsafe { GetDlgItem(Some(hwnd), id) } {
-            let _ = unsafe { EnableWindow(control, enabled) };
         }
     }
 

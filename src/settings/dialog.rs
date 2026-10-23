@@ -48,7 +48,6 @@ pub const IDC_INTERVAL_EDIT: i32 = 1007;
 pub const IDC_INTERVAL_UNIT: i32 = 1008;
 pub const IDC_COLOR_METRIC: i32 = 1009;
 pub const IDC_COLOR_THEME: i32 = 1010;
-pub const IDC_VIRTUAL: i32 = 1011;
 pub const IDC_AUTOSTART: i32 = 1012;
 pub const IDC_STATUS: i32 = 1013;
 pub const IDC_VERSION: i32 = 1014;
@@ -68,7 +67,6 @@ pub const IDC_HINT_STARTUP: i32 = 1025;
 pub const IDC_LABEL_INTERVAL: i32 = 1026;
 pub const IDC_LABEL_LANGUAGE: i32 = 1027;
 pub const IDC_LANGUAGE: i32 = 1028;
-pub const IDC_HINT_VIRTUAL: i32 = 1029;
 pub const IDC_HINT_LANGUAGE: i32 = 1030;
 pub const IDC_HINT_TASKBAR: i32 = 1031;
 pub const IDC_OPEN_TASKBAR: i32 = 1032;
@@ -126,7 +124,7 @@ const GENERAL_CONTROLS: [i32; 24] = [
 ];
 
 /// 분야 페이지에 보이는 컨트롤. 일부는 페이지에 따라 다시 숨긴다([show_page]).
-const METRIC_CONTROLS: [i32; 11] = [
+const METRIC_CONTROLS: [i32; 9] = [
     IDC_GROUP_READOUTS,
     IDC_HINT_READOUTS,
     IDC_SHOW_1,
@@ -135,8 +133,6 @@ const METRIC_CONTROLS: [i32; 11] = [
     IDC_HINT_DEVICE,
     IDC_LABEL_DEVICE,
     IDC_DEVICE,
-    IDC_VIRTUAL,
-    IDC_HINT_VIRTUAL,
     IDC_DEVICE_INFO,
 ];
 
@@ -420,10 +416,6 @@ fn on_command(hwnd: HWND, wparam: WPARAM) {
             Ok(())
         }),
         IDC_THEME_AUTO | IDC_THEME_LIGHT | IDC_THEME_DARK => theme_selected(hwnd, id),
-        IDC_VIRTUAL => commit(hwnd, |draft| {
-            draft.count_virtual = !draft.count_virtual;
-            Ok(())
-        }),
         IDC_AUTOSTART => {
             // WM_COMMAND은 input-synchronous 호출이다. 여기서 StartupTask의
             // RequestEnableAsync를 부르면 RPC_E_CANTCALLOUT_ININPUTSYNCCALL로
@@ -504,8 +496,6 @@ fn apply_text(hwnd: HWND, draft: &SettingsDraft) {
     win32::dialog::set_text(hwnd, IDC_HINT_STARTUP, text.hint_startup);
     win32::dialog::set_text(hwnd, IDC_GROUP_DEVICE, text.group_device);
     win32::dialog::set_text(hwnd, IDC_LABEL_DEVICE, text.label_device);
-    win32::dialog::set_text(hwnd, IDC_VIRTUAL, text.count_virtual);
-    win32::dialog::set_text(hwnd, IDC_HINT_VIRTUAL, text.hint_virtual);
     win32::dialog::set_text(hwnd, IDC_AUTOSTART, text.autostart);
     win32::dialog::set_text(hwnd, IDC_LABEL_LANGUAGE, text.label_language);
     win32::dialog::set_text(hwnd, IDC_HINT_LANGUAGE, text.hint_language);
@@ -561,7 +551,6 @@ fn sync_controls(hwnd: HWND, draft: &SettingsDraft) {
     for (id, choice) in THEME_CONTROLS {
         win32::dialog::set_check(hwnd, id, draft.ui_theme == choice);
     }
-    win32::dialog::set_check(hwnd, IDC_VIRTUAL, draft.count_virtual);
     win32::dialog::set_check(hwnd, IDC_AUTOSTART, draft.autostart);
     sync_interval(hwnd, draft.poll_interval_ms);
     sync_page(hwnd, draft);
@@ -588,9 +577,6 @@ fn show_page(hwnd: HWND, page: Page, draft: &SettingsDraft) {
         let selectable = kind != DeviceKind::Fixed;
         win32::dialog::show_control(hwnd, IDC_LABEL_DEVICE, selectable);
         win32::dialog::show_control(hwnd, IDC_DEVICE, selectable);
-        let network = kind == DeviceKind::Network;
-        win32::dialog::show_control(hwnd, IDC_VIRTUAL, network);
-        win32::dialog::show_control(hwnd, IDC_HINT_VIRTUAL, network);
 
         let layout = pages::device_layout(kind);
         win32::dialog::place_control(
@@ -627,10 +613,6 @@ fn sync_page(hwnd: HWND, draft: &SettingsDraft) {
         }
     }
     win32::dialog::set_text(hwnd, IDC_HINT_DEVICE, page.device_hint());
-    // 인터페이스 하나를 고르면 가상 어댑터 포함 여부는 의미가 없다.
-    // 정적 글자는 끄지 않는다: 다크 배경에서 회색 글자가 양각으로 깨진다(실측).
-    let all_adapters = draft.devices.network.trim().is_empty();
-    win32::dialog::enable_control(hwnd, IDC_VIRTUAL, all_adapters);
 
     // 장치 콤보의 선택은 값에 맞춘다(되돌리기·트레이 메뉴).
     if page.device() != DeviceKind::Fixed {
@@ -715,7 +697,7 @@ fn device_info(page: Page, draft: &SettingsDraft) -> String {
             match interfaces.iter().find(|entry| entry.alias == device) {
                 Some(entry) => entry.description.clone(),
                 None => {
-                    let counted = metrics::network::adapters(!draft.count_virtual)
+                    let counted = metrics::network::adapters()
                         .iter()
                         .filter(|adapter| adapter.counted)
                         .count();
@@ -1041,13 +1023,7 @@ mod tests {
             (
                 "IDC_GROUP_DEVICE",
                 "IDC_HINT_DEVICE",
-                &[
-                    "IDC_LABEL_DEVICE",
-                    "IDC_DEVICE",
-                    "IDC_VIRTUAL",
-                    "IDC_HINT_VIRTUAL",
-                    "IDC_DEVICE_INFO",
-                ],
+                &["IDC_LABEL_DEVICE", "IDC_DEVICE", "IDC_DEVICE_INFO"],
             ),
         ];
 
@@ -1143,7 +1119,6 @@ mod tests {
             ("IDC_INTERVAL_UNIT", IDC_INTERVAL_UNIT),
             ("IDC_COLOR_METRIC", IDC_COLOR_METRIC),
             ("IDC_COLOR_THEME", IDC_COLOR_THEME),
-            ("IDC_VIRTUAL", IDC_VIRTUAL),
             ("IDC_AUTOSTART", IDC_AUTOSTART),
             ("IDC_STATUS", IDC_STATUS),
             ("IDC_VERSION", IDC_VERSION),
@@ -1161,7 +1136,6 @@ mod tests {
             ("IDC_LABEL_INTERVAL", IDC_LABEL_INTERVAL),
             ("IDC_LABEL_LANGUAGE", IDC_LABEL_LANGUAGE),
             ("IDC_LANGUAGE", IDC_LANGUAGE),
-            ("IDC_HINT_VIRTUAL", IDC_HINT_VIRTUAL),
             ("IDC_HINT_LANGUAGE", IDC_HINT_LANGUAGE),
             ("IDC_HINT_TASKBAR", IDC_HINT_TASKBAR),
             ("IDC_OPEN_TASKBAR", IDC_OPEN_TASKBAR),

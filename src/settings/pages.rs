@@ -159,9 +159,7 @@ pub const fn device_rows(kind: DeviceKind) -> i32 {
         // 정보 줄
         DeviceKind::Fixed => 1,
         // 콤보, 정보 줄
-        DeviceKind::Gpu | DeviceKind::Disk => 2,
-        // 콤보, 가상 어댑터, 정보 줄
-        DeviceKind::Network => 3,
+        DeviceKind::Gpu | DeviceKind::Network | DeviceKind::Disk => 2,
     }
 }
 
@@ -348,8 +346,8 @@ mod tests {
         let fixed = device_layout(DeviceKind::Fixed);
         assert_eq!(fixed.info_y, DEVICE_GROUP_TOP + 26);
         let network = device_layout(DeviceKind::Network);
-        assert_eq!(network.group_height, 71);
-        assert_eq!(network.info_y, DEVICE_GROUP_TOP + 54);
+        assert_eq!(network.group_height, 57);
+        assert_eq!(network.info_y, DEVICE_GROUP_TOP + 40);
     }
 
     /// `.rc`의 그룹 위치와 이 파일의 상수가 어긋나면 정보 줄이 그룹 밖으로 나간다.

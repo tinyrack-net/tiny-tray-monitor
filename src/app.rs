@@ -53,16 +53,15 @@ impl App {
         theme::set_ui_theme(store.config.ui_theme);
         crate::win32::dark::set_app_mode(theme::ui_dark());
         logging::info(format!(
-            "config poll={}ms show={:?} color={:?} exclude_virtual={} autostart={autostart} language={:?}",
+            "config poll={}ms show={:?} color={:?} autostart={autostart} language={:?}",
             store.config.poll_interval_ms,
             store.config.show,
             store.config.color_mode,
-            store.config.exclude_virtual_adapters,
             store.config.language
         ));
 
         let tray = Tray::new(px, &store.config, palette)?;
-        let sampler = Sampler::new(store.config.exclude_virtual_adapters, &store.config.devices);
+        let sampler = Sampler::new(&store.config.devices);
 
         // 기본값 파일을 남겨 사용자가 편집할 수 있게 한다.
         if let Err(error) = store.save_config() {
@@ -363,11 +362,6 @@ impl App {
                 theme::set_ui_theme(*ui_theme);
                 crate::win32::dark::set_app_mode(theme::ui_dark());
                 logging::info(format!("window theme = {ui_theme:?}"));
-                None
-            }
-            Effect::CountVirtual(count) => {
-                self.sampler.set_exclude_virtual_adapters(!count);
-                logging::info(format!("count virtual adapters = {count}"));
                 None
             }
             Effect::Language(language) => {

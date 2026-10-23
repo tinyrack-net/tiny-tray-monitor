@@ -48,11 +48,12 @@ pub fn is_traffic_type(if_type: u32) -> bool {
 
 /// 집계 대상 판정.
 ///
-/// `exclude_virtual`이면 하드웨어 인터페이스만 센다. 가상 스위치와 물리 NIC가
+/// `hardware_only`이면 하드웨어 인터페이스만 센다. 가상 스위치·필터 인스턴스와 물리 NIC가
 /// 같은 트래픽을 두 번 세는 것을 막기 위함이다. 다만 물리 인터페이스가 하나도
 /// 활성 상태가 아니면(예: VPN 전용 환경) 가상 인터페이스라도 세야 값이 나온다.
-pub fn is_counted(if_type: u32, up: bool, hardware: bool, exclude_virtual: bool) -> bool {
-    up && is_traffic_type(if_type) && (!exclude_virtual || hardware)
+/// 가상 인터페이스만 재고 싶으면 설정에서 그 인터페이스를 고른다([select]).
+pub fn is_counted(if_type: u32, up: bool, hardware: bool, hardware_only: bool) -> bool {
+    up && is_traffic_type(if_type) && (!hardware_only || hardware)
 }
 
 fn read_adapters() -> Option<Vec<Adapter>> {
@@ -85,23 +86,23 @@ unsafe fn adapter_from_row(row: &MIB_IF_ROW2) -> Adapter {
 }
 
 /// 인터페이스 목록과 `counted` 판정을 함께 만든다.
-fn collect(exclude_virtual: bool) -> Option<Vec<Adapter>> {
+fn collect() -> Option<Vec<Adapter>> {
     let mut list = read_adapters()?;
     let hardware_up = list
         .iter()
         .filter(|a| a.up && a.hardware && is_traffic_type(a.if_type))
         .count();
-    let use_filter = exclude_virtual && hardware_up > 0;
+    let hardware_only = hardware_up > 0;
     for a in &mut list {
-        a.counted = is_counted(a.if_type, a.up, a.hardware, use_filter);
+        a.counted = is_counted(a.if_type, a.up, a.hardware, hardware_only);
     }
     list.sort_by_key(|a| a.index);
     Some(list)
 }
 
 /// 진단용 인터페이스 목록.
-pub fn adapters(exclude_virtual: bool) -> Vec<Adapter> {
-    collect(exclude_virtual).unwrap_or_default()
+pub fn adapters() -> Vec<Adapter> {
+    collect().unwrap_or_default()
 }
 
 /// 집계 대상으로 표시된 인터페이스의 누적 (수신, 송신) 바이트를 더한다.
@@ -132,8 +133,8 @@ pub fn select(list: &mut [Adapter], alias: &str) -> bool {
 }
 
 /// 집계 대상 인터페이스의 누적 (수신, 송신) 바이트와, 고른 인터페이스를 찾았는지.
-pub fn totals(exclude_virtual: bool, alias: &str) -> Option<(u64, u64, bool)> {
-    let mut list = collect(exclude_virtual)?;
+pub fn totals(alias: &str) -> Option<(u64, u64, bool)> {
+    let mut list = collect()?;
     let found = select(&mut list, alias);
     let (rx, tx) = sum_counted(&list);
     Some((rx, tx, found))
@@ -225,7 +226,6 @@ pub struct Rate {
 
 #[derive(Debug)]
 pub struct NetMeter {
-    exclude_virtual: bool,
     /// 고른 인터페이스의 별칭. 빈 값이면 집계 대상 전부.
     device: String,
     /// 직전 표본에서 고른 인터페이스를 찾았는가. 바뀌면 합산 범위가 달라진다.
@@ -234,9 +234,8 @@ pub struct NetMeter {
 }
 
 impl NetMeter {
-    pub fn new(exclude_virtual: bool, device: &str) -> Self {
+    pub fn new(device: &str) -> Self {
         Self {
-            exclude_virtual,
             device: device.trim().to_string(),
             found: false,
             prev: None,
@@ -250,7 +249,7 @@ impl NetMeter {
 
     /// 첫 호출은 기준점만 잡고 `None`을 돌려준다.
     pub fn sample(&mut self) -> Option<Rate> {
-        let (rx, tx, found) = totals(self.exclude_virtual, &self.device)?;
+        let (rx, tx, found) = totals(&self.device)?;
         // 고른 인터페이스가 생기거나 사라지면 합산 범위가 바뀌어 델타가 튄다. 기준점부터 다시.
         if found != self.found {
             self.found = found;
@@ -269,13 +268,6 @@ impl NetMeter {
         self.prev = None;
     }
 
-    pub fn set_exclude_virtual(&mut self, exclude: bool) {
-        if self.exclude_virtual != exclude {
-            self.exclude_virtual = exclude;
-            self.reset();
-        }
-    }
-
     pub fn set_device(&mut self, device: &str) {
         let device = device.trim();
         if self.device != device {
@@ -292,14 +284,14 @@ mod tests {
 
     #[test]
     fn loopback_and_tunnel_are_never_counted() {
-        for exclude_virtual in [true, false] {
+        for hardware_only in [true, false] {
             assert!(!is_counted(
                 IF_TYPE_SOFTWARE_LOOPBACK,
                 true,
                 true,
-                exclude_virtual
+                hardware_only
             ));
-            assert!(!is_counted(IF_TYPE_TUNNEL, true, true, exclude_virtual));
+            assert!(!is_counted(IF_TYPE_TUNNEL, true, true, hardware_only));
         }
     }
 
@@ -309,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn virtual_interfaces_follow_the_flag() {
+    fn virtual_interfaces_count_only_without_hardware() {
         assert!(!is_counted(6, true, false, true));
         assert!(is_counted(6, true, false, false));
         assert!(is_counted(6, true, true, true));
@@ -325,7 +317,7 @@ mod tests {
 
     #[test]
     fn totals_are_available_on_this_machine() {
-        let (_, _, found) = totals(true, "").expect("totals");
+        let (_, _, found) = totals("").expect("totals");
         assert!(!found, "고르지 않았으면 찾은 것도 없다");
     }
 
@@ -387,7 +379,7 @@ mod tests {
 
     #[test]
     fn counted_bytes_never_exceed_total_bytes() {
-        let list = collect(true).expect("collect");
+        let list = collect().expect("collect");
         let all_rx: u64 = list.iter().map(|a| a.rx).sum();
         let all_tx: u64 = list.iter().map(|a| a.tx).sum();
         let (rx, tx) = sum_counted(&list);
@@ -396,7 +388,7 @@ mod tests {
 
     #[test]
     fn counted_flags_match_the_is_counted_rule() {
-        let list = collect(true).expect("collect");
+        let list = collect().expect("collect");
         let hardware_up = list
             .iter()
             .filter(|a| a.up && a.hardware && is_traffic_type(a.if_type))
@@ -409,7 +401,7 @@ mod tests {
 
     #[test]
     fn meter_needs_two_samples() {
-        let mut meter = NetMeter::new(true, "");
+        let mut meter = NetMeter::new("");
         assert!(meter.sample().is_none());
         let rate = meter.sample().expect("두 번째 샘플");
         assert!(rate.down >= 0.0 && rate.up >= 0.0);

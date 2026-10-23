@@ -25,7 +25,6 @@
 #define IDC_INTERVAL_UNIT       1008
 #define IDC_COLOR_METRIC        1009
 #define IDC_COLOR_THEME         1010
-#define IDC_VIRTUAL             1011
 #define IDC_AUTOSTART           1012
 #define IDC_STATUS              1013
 #define IDC_VERSION             1014
@@ -43,7 +42,6 @@
 #define IDC_LABEL_INTERVAL      1026
 #define IDC_LABEL_LANGUAGE      1027
 #define IDC_LANGUAGE            1028
-#define IDC_HINT_VIRTUAL        1029
 #define IDC_HINT_LANGUAGE       1030
 #define IDC_HINT_TASKBAR        1031
 #define IDC_OPEN_TASKBAR        1032
@@ -158,15 +156,13 @@ BEGIN
     LTEXT           "", IDC_HINT_READOUTS, 112, 47, 273, 9
     CONTROL         "", IDC_SHOW_1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 112, 61, 158, 10
     CONTROL         "", IDC_SHOW_2, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 274, 61, 111, 10
-    /* 분야 페이지: 장치. 여기 적힌 것은 줄이 가장 많은 네트워크 페이지(3줄)다. 다른 페이지는
+    /* 분야 페이지: 장치. 여기 적힌 것은 콤보가 있는 페이지(2줄)다. 콤보가 없는 페이지는
      * 코드가 그룹 높이와 정보 줄 위치를 줄 수에 맞춘다(src/settings/pages.rs의 device_layout). */
-    GROUPBOX        "", IDC_GROUP_DEVICE, 104, 85, 289, 71
+    GROUPBOX        "", IDC_GROUP_DEVICE, 104, 85, 289, 57
     LTEXT           "", IDC_HINT_DEVICE, 112, 96, 273, 9
     LTEXT           "", IDC_LABEL_DEVICE, 112, 111, 48, 9
     COMBOBOX        IDC_DEVICE, 164, 109, 221, 120, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
-    CONTROL         "", IDC_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 164, 124, 106, 10
-    LTEXT           "", IDC_HINT_VIRTUAL, 274, 125, 111, 9
-    LTEXT           "", IDC_DEVICE_INFO, 112, 139, 273, 9, SS_NOPREFIX | SS_ENDELLIPSIS
+    LTEXT           "", IDC_DEVICE_INFO, 112, 125, 273, 9, SS_NOPREFIX | SS_ENDELLIPSIS
 
     /* 공통: 상태줄과 버튼 */
     LTEXT           "", IDC_STATUS, 104, 266, 235, 9

@@ -266,7 +266,7 @@ pub fn dump() {
 /// 1초마다 지표를 출력한다.
 pub fn probe() {
     let config = crate::config::Store::load().config;
-    let mut sampler = metrics::Sampler::new(config.exclude_virtual_adapters, &config.devices);
+    let mut sampler = metrics::Sampler::new(&config.devices);
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         let sample = sampler.sample();
@@ -350,23 +350,20 @@ pub fn probe() {
 
 /// 네트워크 인터페이스와 집계 대상 여부를 출력한다.
 pub fn interfaces() {
-    for exclude_virtual in [true, false] {
-        let list = metrics::network::adapters(exclude_virtual);
+    let list = metrics::network::adapters();
+    println!(
+        "{} counted (All adapters)",
+        list.iter().filter(|a| a.counted).count()
+    );
+    println!(
+        "  {:<4} {:<6} {:<6} {:<9} {:<6} description",
+        "idx", "type", "up", "hardware", "counted"
+    );
+    for a in list {
         println!(
-            "exclude_virtual_adapters = {exclude_virtual} ({} counted)",
-            list.iter().filter(|a| a.counted).count()
+            "  {:<4} {:<6} {:<6} {:<9} {:<6} {} ({})",
+            a.index, a.if_type, a.up, a.hardware, a.counted, a.description, a.alias
         );
-        println!(
-            "  {:<4} {:<6} {:<6} {:<9} {:<6} description",
-            "idx", "type", "up", "hardware", "counted"
-        );
-        for a in list {
-            println!(
-                "  {:<4} {:<6} {:<6} {:<9} {:<6} {} ({})",
-                a.index, a.if_type, a.up, a.hardware, a.counted, a.description, a.alias
-            );
-        }
-        println!();
     }
 }
 

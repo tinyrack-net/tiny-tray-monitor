@@ -973,6 +973,7 @@ pub fn text(lang: Lang) -> &'static Text;
 - 페이지 제목은 지표 색(창 테마의 팔레트)으로, 목록 항목은 지표 색 점과 선택 막대로 그린다.
 - 다크 모드 제목 표시줄은 `DWMWA_USE_IMMERSIVE_DARK_MODE`(공개 API)로 맞춘다.
 - 네트워크에서 인터페이스 하나를 고르면 `Count virtual adapters` 체크박스를 끈다(합산에만 의미).
+  v0.13.0에서 이 설정을 없앴다(§20).
 - 그룹 안 배치는 격자 하나를 따른다: 좌우 여백 8, 설명 +11, 줄은 +24부터 14 간격, 마지막 줄 아래
   7, 그룹 사이 6, 열은 라벨 112 / 값 164 / 두 번째 열 274(DLU). 그룹 높이는 `29 + 14 × 줄 수`라
   장치 그룹도 `pages::grid`로 같은 규칙을 따른다. `groups_follow_one_grid`·`groups_are_evenly_spaced`
@@ -1002,3 +1003,13 @@ pub fn text(lang: Lang) -> &'static Text;
 - 아이콘별 이름은 Windows가 지원하지 않아 하지 않는다. 근거와 그대로 둔 이름은 `docs/SPIKE.md` §18,
   `docs/PACKAGING.md` §12.
 - 저장소 `tinyrack-net/tray-monitor` → `tinyrack-net/tiny-tray-monitor`.
+
+## 20. `Count virtual adapters` 제거 (v0.13.0)
+
+- 설정 창의 `Count virtual adapters` 체크박스와 `config.toml`의 `exclude_virtual_adapters`를 없앴다.
+  예전 파일에 남은 키는 읽을 때 버리고 다시 쓰지 않는다.
+- `All adapters` 합산은 늘 하드웨어 인터페이스만 센다. 가상 스위치·WFP 필터 인스턴스는 물리 NIC와
+  같은 트래픽을 다시 보여 줘서, 켜면 값이 부풀 뿐 더 정확해지는 경우가 거의 없었다. 연결된 물리
+  인터페이스가 없으면(VPN 전용 등) 지금처럼 가상 인터페이스를 센다.
+- VM·VPN 트래픽만 보고 싶으면 장치 콤보에서 그 인터페이스(`vEthernet (WSL)`, VPN 어댑터)를 고른다.
+- 네트워크 장치 그룹은 콤보·정보 줄 두 줄로 줄어 GPU·디스크 페이지와 같은 높이가 됐다.
