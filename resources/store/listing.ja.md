@@ -8,7 +8,7 @@ Partner Center → Store listing → 日本語(日本)。英語の `listing.md` 
 
 **Keywords:** トレイ, CPU, メモリ, ネットワーク, GPU, ディスク, システム モニター
 
-**Screenshots:** `screenshots/ja/01-settings.png`, `screenshots/ja/02-tray.png`
+**Screenshots:** `screenshots/ja/01-taskbar.png`, `screenshots/ja/02-settings.png`, `screenshots/ja/03-tray.png`
 
 ## Description
 

@@ -8,7 +8,7 @@ Partner Center → Store listing → 한국어(대한민국). 영어 `listing.md
 
 **Keywords:** 트레이, CPU, 메모리, 네트워크, GPU, 디스크, 시스템 모니터
 
-**Screenshots:** `screenshots/ko/01-settings.png`, `screenshots/ko/02-tray.png`
+**Screenshots:** `screenshots/ko/01-taskbar.png`, `screenshots/ko/02-settings.png`, `screenshots/ko/03-tray.png`
 
 ## Description
 
