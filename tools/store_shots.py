@@ -3,9 +3,7 @@
 입력은 모두 실제 앱과 Windows가 만든 픽셀이다.
 - `out/screen.png`: 지표 8개를 고정한 작업 표시줄이 보이는 전체 화면을 225% 배율에서
   `tools/capture_screen.ps1`로 캡처한 것. 아래 `TASKBAR`의 좌표는 이 캡처에서 잰 값이다.
-- `out/shot-<lang>.png`: 해당 언어의 설정 창을 PrintWindow로 1:1 캡처한 것
-  (`resources/store/README.md`의 절차).
-- `out/dark_px16_<TAG>@16x.bmp`: `tiny-tray-monitor --dump`가 그린 16px 트레이 아이콘.
+- `out/shot-<lang>.png`: 해당 언어의 설정 창을 `tools/capture_settings.ps1`로 1:1 캡처한 것.
 
 결과는 `resources/store/screenshots/<lang>/01-taskbar.png`, `02-settings.png`, `03-tray.png`.
 
@@ -58,66 +56,81 @@ COPY = {
         "brand": "TINYTRAYMONITOR",
         "hero": ["Your PC at a glance,", "right in the taskbar"],
         "hero_sub": "CPU, memory, network, GPU and disk as eight tray icons",
-        "headline": ["CPU, memory, network,", "GPU and disk", "in your system tray"],
+        "settings_head": ["Set it up", "your way"],
+        "settings_sub": "Every option in one small native window",
         "bullets": [
-            "Eight readouts, one tray icon each",
+            "Turn each of the eight readouts on or off",
             "Pick the GPU, network adapter and drive",
             "Colour per readout or taskbar theme",
-            "Light, dark or automatic settings window",
+            "Light, dark or automatic window",
             "No account, no telemetry, no network access",
         ],
-        "strip": "Lives in your taskbar",
-        "title2": "Read the numbers at a glance",
-        "sub2": "Eight independent readouts in your system tray",
+        "tray_head": "Eight readouts, one icon each",
+        "tray_sub": "Each one lives in its own tray icon. Turn off the ones you do not need.",
         "labels": {
             "CPU": "CPU", "MEM": "Memory", "NETD": "Download", "NETU": "Upload",
             "GPU": "GPU", "VRM": "VRAM", "DSK": "Disk usage", "DIO": "Disk activity",
         },
-        "foot2": "Turn off the ones you do not need.",
+        "desc": {
+            "CPU": "Processor load in %", "MEM": "Memory in use in %",
+            "NETD": "Download speed", "NETU": "Upload speed",
+            "GPU": "Graphics load in %", "VRM": "Video memory in use in %",
+            "DSK": "Drive space used in %", "DIO": "Drive active time in %",
+        },
     },
     "ko": {
         "font": ("malgun.ttf", "malgunbd.ttf"),
         "brand": "TINYTRAYMONITOR",
         "hero": ["작업 표시줄에서", "바로 보는 PC 상태"],
         "hero_sub": "CPU, 메모리, 네트워크, GPU, 디스크를 트레이 아이콘 8개로",
-        "headline": ["CPU, 메모리, 네트워크,", "GPU와 디스크를", "시스템 트레이에서"],
+        "settings_head": ["원하는 대로", "설정하세요"],
+        "settings_sub": "작고 가벼운 네이티브 설정 창 하나로",
         "bullets": [
-            "8가지 지표, 지표마다 트레이 아이콘 하나",
+            "지표 8개를 하나씩 켜고 끄기",
             "측정할 GPU, 네트워크 어댑터, 드라이브 선택",
             "지표별 색상 또는 작업 표시줄 테마",
-            "밝게, 어둡게, 자동 설정 창",
+            "밝게, 어둡게, 자동 창 테마",
             "계정, 원격 분석, 네트워크 접속 없음",
         ],
-        "strip": "작업 표시줄에 그대로",
-        "title2": "한눈에 읽는 숫자",
-        "sub2": "시스템 트레이의 독립된 지표 8개",
+        "tray_head": "지표 8개, 아이콘도 8개",
+        "tray_sub": "지표마다 트레이 아이콘이 따로 있습니다. 필요 없는 지표는 끌 수 있습니다.",
         "labels": {
             "CPU": "CPU", "MEM": "메모리", "NETD": "다운로드", "NETU": "업로드",
             "GPU": "GPU", "VRM": "VRAM", "DSK": "디스크 사용량", "DIO": "디스크 로드율",
         },
-        "foot2": "필요 없는 지표는 끌 수 있습니다.",
+        "desc": {
+            "CPU": "프로세서 사용률 (%)", "MEM": "메모리 사용률 (%)",
+            "NETD": "다운로드 속도", "NETU": "업로드 속도",
+            "GPU": "그래픽 사용률 (%)", "VRM": "비디오 메모리 사용률 (%)",
+            "DSK": "드라이브 공간 사용률 (%)", "DIO": "드라이브 활성 시간 (%)",
+        },
     },
     "ja": {
         "font": ("YuGothM.ttc", "YuGothB.ttc"),
         "brand": "TINYTRAYMONITOR",
         "hero": ["PC の状態を", "タスクバーでひと目で"],
         "hero_sub": "CPU、メモリ、ネットワーク、GPU、ディスクを 8 つのトレイ アイコンに",
-        "headline": ["CPU、メモリ、", "ネットワーク、GPU、", "ディスクをトレイに"],
+        "settings_head": ["好みに合わせて", "設定できます"],
+        "settings_sub": "小さなネイティブの設定ウィンドウひとつで",
         "bullets": [
-            "8 つの項目を 1 つずつトレイ アイコンに",
+            "8 つの項目を個別にオン・オフ",
             "計測する GPU、アダプター、ドライブを選択",
             "項目ごとの色、またはタスクバーのテーマ",
-            "ライト、ダーク、自動の設定ウィンドウ",
+            "ライト、ダーク、自動のウィンドウ",
             "アカウント不要、テレメトリなし、通信なし",
         ],
-        "strip": "タスクバーに常駐",
-        "title2": "数値をひと目で",
-        "sub2": "システム トレイに並ぶ 8 つの独立した項目",
+        "tray_head": "8 つの項目を 8 つのアイコンで",
+        "tray_sub": "項目ごとに別々のトレイ アイコンです。不要な項目はオフにできます。",
         "labels": {
             "CPU": "CPU", "MEM": "メモリ", "NETD": "ダウンロード", "NETU": "アップロード",
             "GPU": "GPU", "VRM": "VRAM", "DSK": "ディスク使用率", "DIO": "ディスク負荷",
         },
-        "foot2": "不要な項目はオフにできます。",
+        "desc": {
+            "CPU": "プロセッサの使用率 (%)", "MEM": "メモリの使用率 (%)",
+            "NETD": "ダウンロード速度", "NETU": "アップロード速度",
+            "GPU": "グラフィックスの使用率 (%)", "VRM": "ビデオ メモリの使用率 (%)",
+            "DSK": "ドライブ容量の使用率 (%)", "DIO": "ドライブのアクティブ時間 (%)",
+        },
     },
 }
 
@@ -126,96 +139,58 @@ def font(name, size):
     return ImageFont.truetype(os.path.join(FONTS, name), size)
 
 
-def icon(tag, scale):
-    """16px 마스터를 정수 배로 확대한다. 1비트 글꼴이므로 최근접 이웃만 쓴다."""
-    src = Image.open(os.path.join(OUT, f"dark_px16_{tag}@16x.bmp")).convert("RGB")
-    master = src.resize((16, 16), Image.NEAREST)
-    big = master.resize((16 * scale, 16 * scale), Image.NEAREST)
-    # 덤프 배경(작업 표시줄 색)을 스크린샷 배경으로 바꾼다. 모서리가 글자일 수 있으므로
-    # 가장 많은 색을 배경으로 본다.
-    key = max(master.getcolors(256), key=lambda pair: pair[0])[1]
-    px = big.load()
-    for y in range(big.height):
-        for x in range(big.width):
-            if px[x, y] == key:
-                px[x, y] = BG
-    return big
+# 배경 블롭: (x, y, 반지름, 색), 1/8 크기 좌표. 장마다 배치를 바꿔 같은 계열로 보이게 한다.
+BLOBS = {
+    "taskbar": [(175, 150, 95, (36, 74, 168)), (205, 95, 60, (88, 64, 186)),
+                (120, 175, 70, (22, 58, 120)), (235, 165, 50, (60, 110, 210))],
+    "settings": [(170, 60, 90, (36, 74, 168)), (210, 120, 70, (88, 64, 186)),
+                 (110, 140, 60, (22, 58, 120)), (60, 20, 40, (40, 52, 120))],
+    "tray": [(40, 150, 90, (36, 74, 168)), (230, 30, 70, (88, 64, 186)),
+             (130, 170, 60, (22, 58, 120)), (200, 150, 50, (60, 90, 200))],
+}
 
 
-def center_text(draw, y, text, fnt, fill):
-    w = draw.textlength(text, font=fnt)
-    draw.text(((W - w) / 2, y), text, font=fnt, fill=fill)
-
-
-def settings_shot(lang, c):
-    img = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(img)
-    regular, bold = c["font"]
-
-    dialog = Image.open(os.path.join(OUT, f"shot-{lang}.png")).convert("RGB")
-    dx, dy = 150, (H - dialog.height) // 2
-    img.paste(dialog, (dx, dy))
-    d.rectangle([dx - 1, dy - 1, dx + dialog.width, dy + dialog.height], outline=(70, 70, 70))
-
-    x = dx + dialog.width + 110
-    y = 250
-    d.text((x, y), c["brand"], font=font(regular, 22), fill=MUTED)
-    y += 50
-    head = font(bold, 54)
-    for line in c["headline"]:
-        d.text((x, y), line, font=head, fill=FG)
-        y += 70
-    y += 30
-    body = font(regular, 27)
-    for bullet in c["bullets"]:
-        d.text((x, y), "•", font=body, fill=MUTED)
-        d.text((x + 28, y), bullet, font=body, fill=FG)
-        y += 44
-
-    y += 40
-    d.text((x, y), c["strip"], font=font(regular, 22), fill=MUTED)
-    y += 40
-    strip = Image.new("RGB", (len(TAGS) * 64 + 24, 72), (32, 32, 32))
-    for i, tag in enumerate(TAGS):
-        strip.paste(icon(tag, 3), (12 + i * 64 + 8, 12))
-    img.paste(strip, (x, y))
-    return img
-
-
-def tray_shot(lang, c):
-    img = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(img)
-    regular, bold = c["font"]
-    center_text(d, 170, c["title2"], font(bold, 60), FG)
-    center_text(d, 260, c["sub2"], font(regular, 30), MUTED)
-
-    order = list(reversed(TAGS))  # 왼쪽부터 CPU
-    cell = W // (len(order) + 1)
-    lab = font(regular, 24)
-    for i, tag in enumerate(order):
-        big = icon(tag, 8)
-        cx = cell * (i + 1)
-        img.paste(big, (cx - big.width // 2, 400))
-        text = c["labels"][tag]
-        w = d.textlength(text, font=lab)
-        d.text((cx - w / 2, 560), text, font=lab, fill=FG)
-    center_text(d, 760, c["foot2"], font(regular, 26), MUTED)
-    return img
-
-
-def wallpaper():
+def wallpaper(kind="taskbar"):
     """Windows 11 Bloom을 떠올리게 하는 어두운 배경. 작게 그려 흐린 뒤 키운다."""
     small = Image.new("RGB", (W // 8, H // 8), (10, 13, 28))
     d = ImageDraw.Draw(small)
-    for (cx, cy, r, color) in [
-        (175, 150, 95, (36, 74, 168)),
-        (205, 95, 60, (88, 64, 186)),
-        (120, 175, 70, (22, 58, 120)),
-        (235, 165, 50, (60, 110, 210)),
-    ]:
+    for (cx, cy, r, color) in BLOBS[kind]:
         d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
     small = small.filter(ImageFilter.GaussianBlur(28))
     return small.resize((W, H), Image.BICUBIC)
+
+
+def shadow(img, box, radius, blur=30, offset=14, strength=170):
+    """`box` 아래에 부드러운 그림자를 깐다."""
+    mask = Image.new("L", (W, H), 0)
+    x0, y0, x1, y1 = box
+    ImageDraw.Draw(mask).rounded_rectangle([x0, y0 + offset, x1, y1 + offset], radius=radius,
+                                           fill=strength)
+    img.paste((0, 0, 0), (0, 0), mask.filter(ImageFilter.GaussianBlur(blur)))
+
+
+def glass(img, box, radius, tint=(26, 28, 40), alpha=0.72, outline=(80, 84, 104)):
+    """배경을 흐리고 어둡게 덮은 둥근 카드(아크릴 느낌)."""
+    x0, y0, x1, y1 = box
+    region = img.crop(box).filter(ImageFilter.GaussianBlur(24))
+    region = Image.blend(region, Image.new("RGB", region.size, tint), alpha)
+    mask = Image.new("L", region.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, x1 - x0 - 1, y1 - y0 - 1], radius=radius, fill=255)
+    img.paste(region, (x0, y0), mask)
+    ImageDraw.Draw(img).rounded_rectangle(box, radius=radius, outline=outline, width=1)
+
+
+def headline(d, c, x, y, lines, sub, size=72):
+    """브랜드, 두 줄 헤드라인, 부제를 그리고 다음 y를 돌려준다."""
+    regular, bold = c["font"]
+    d.text((x, y), c["brand"], font=font(regular, 24), fill=(190, 200, 225))
+    y += 54
+    head = font(bold, size)
+    for line in lines:
+        d.text((x, y), line, font=head, fill=FG)
+        y += int(size * 1.3)
+    d.text((x, y + 16), sub, font=font(regular, 30), fill=(200, 208, 225))
+    return y + 16 + 50
 
 
 class Capture:
@@ -234,6 +209,22 @@ class Capture:
             tuple(int(statistics.median(self.px[x, y][c] for y in range(y0, y1))) for c in range(3))
             for x in range(self.img.width)
         ]
+
+    def foreground(self, src, gate=24):
+        """`src` 영역에서 배경과 `gate`보다 다른 픽셀만 원래 색 그대로 남긴 RGBA 조각.
+
+        1비트 글꼴 아이콘처럼 안티앨리어싱이 없는 전경에만 쓴다.
+        """
+        x0, y0, x1, y1 = src
+        out = Image.new("RGBA", (x1 - x0, y1 - y0), (0, 0, 0, 0))
+        dst = out.load()
+        for x in range(x0, x1):
+            bg = self.bg[x]
+            for y in range(y0, y1):
+                p = self.px[x, y]
+                if max(abs(p[c] - bg[c]) for c in range(3)) > gate:
+                    dst[x - x0, y - y0] = (*p, 255)
+        return out
 
     def overlay(self, img, src, at, gate=6):
         """캡처의 `src` 영역(x0, y0, x1, y1) 전경을 `img`의 `at` 위치에 더한다.
@@ -345,20 +336,85 @@ def taskbar_shot(lang, c, cap):
     return img
 
 
+def settings_shot(lang, c):
+    img = wallpaper("settings")
+    d = ImageDraw.Draw(img)
+    regular, _ = c["font"]
+
+    y = headline(d, c, 120, 150, c["settings_head"], c["settings_sub"])
+    # 기능 목록: 강조색 점과 함께
+    body = font(regular, 30)
+    y += 40
+    accents = [(108, 214, 120), (110, 160, 255), (255, 170, 80), (190, 140, 255), (120, 220, 230)]
+    for bullet, accent in zip(c["bullets"], accents):
+        d.ellipse([120, y + 14, 132, y + 26], fill=accent)
+        d.text((152, y), bullet, font=body, fill=(230, 234, 245))
+        y += 58
+
+    # 설정 창: 1:1 캡처에 Windows 11처럼 둥근 모서리와 그림자를 준다.
+    dialog = Image.open(os.path.join(OUT, f"shot-{lang}.png")).convert("RGB")
+    dw, dh = dialog.size
+    dx, dy = W - 140 - dw, (H - dh) // 2
+    glow = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(glow).rounded_rectangle([dx - 60, dy - 60, dx + dw + 60, dy + dh + 60],
+                                           radius=80, fill=90)
+    img.paste((70, 90, 200), (0, 0), glow.filter(ImageFilter.GaussianBlur(70)))
+    shadow(img, (dx, dy, dx + dw, dy + dh), radius=8, blur=34, offset=18, strength=200)
+    mask = Image.new("L", dialog.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, dw - 1, dh - 1], radius=8, fill=255)
+    img.paste(dialog, (dx, dy), mask)
+    d.rounded_rectangle([dx, dy, dx + dw - 1, dy + dh - 1], radius=8, outline=(84, 84, 90), width=1)
+    return img
+
+
+def tray_shot(lang, c, cap):
+    img = wallpaper("tray")
+    d = ImageDraw.Draw(img)
+    regular, bold = c["font"]
+    t = TASKBAR
+
+    x0 = 120
+    d.text((x0, 110), c["brand"], font=font(regular, 24), fill=(190, 200, 225))
+    d.text((x0, 160), c["tray_head"], font=font(bold, 64), fill=FG)
+    d.text((x0, 262), c["tray_sub"], font=font(regular, 30), fill=(200, 208, 225))
+
+    # 4x2 카드. 아이콘은 225% 캡처(16px 원본의 2배)를 다시 3배로 키운다.
+    order = list(reversed(TAGS))  # 왼쪽 위부터 CPU
+    cols, gap = 4, 28
+    card_w = (W - x0 * 2 - gap * (cols - 1)) // cols
+    card_h = 300
+    top = 370
+    ry0, ry1 = t["icon_rows"]
+    name_font, desc_font = font(bold, 32), font(regular, 24)
+    for i, tag in enumerate(order):
+        r, k = divmod(i, cols)
+        bx = x0 + k * (card_w + gap)
+        by = top + r * (card_h + gap)
+        box = (bx, by, bx + card_w, by + card_h)
+        shadow(img, box, radius=22, blur=20, offset=10, strength=120)
+        glass(img, box, radius=22)
+        sx0, sx1 = t["icons"][i]
+        fg = cap.foreground((sx0 - 4, ry0, sx1 + 4, ry1))
+        big = fg.resize((fg.width * 3, fg.height * 3), Image.NEAREST)
+        img.paste(big, (bx + 40, by + 40), big)
+        d.text((bx + 40, by + card_h - 112), c["labels"][tag], font=name_font, fill=FG)
+        d.text((bx + 40, by + card_h - 64), c["desc"][tag], font=desc_font, fill=(185, 192, 212))
+    return img
+
+
 def main():
     # 입력이 없는 장은 건너뛴다. 작업 표시줄만 다시 찍었을 때 나머지를 건드리지 않기 위해서다.
     langs = sys.argv[1:] or list(COPY)
     has = lambda name: os.path.exists(os.path.join(OUT, name))  # noqa: E731
     cap = Capture() if has("screen.png") else None
-    dumps = all(has(f"dark_px16_{tag}@16x.bmp") for tag in TAGS)
     for lang in langs:
         c = COPY[lang]
         target = os.path.join(DEST, lang)
         os.makedirs(target, exist_ok=True)
         shots = [
             ("01-taskbar.png", cap is not None, lambda: taskbar_shot(lang, c, cap)),
-            ("02-settings.png", dumps and has(f"shot-{lang}.png"), lambda: settings_shot(lang, c)),
-            ("03-tray.png", dumps, lambda: tray_shot(lang, c)),
+            ("02-settings.png", has(f"shot-{lang}.png"), lambda: settings_shot(lang, c)),
+            ("03-tray.png", cap is not None, lambda: tray_shot(lang, c, cap)),
         ]
         for name, ready, make in shots:
             if ready:
