@@ -21,7 +21,7 @@ listings are in `listing.ko.md` and `listing.ja.md`; keep all three in step.
 
 **System requirements:** Windows 10 version 1809 (build 17763) or later, x64.
 
-**Screenshots:** `screenshots/en/01-settings.png`, `screenshots/en/02-tray.png`
+**Screenshots:** `screenshots/en/01-taskbar.png`, `screenshots/en/02-settings.png`, `screenshots/en/03-tray.png`
 
 **Pricing:** Free; a scheduled change makes it paid (`Tier1022`, USD 1.99) on 2027-01-01 in every market
 (Partner Center → Pricing and availability, time zone *Local*). The listing copy does not mention it.
